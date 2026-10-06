@@ -73,7 +73,12 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await booted?.supervisor?.stopAll?.()?.catch?.(() => {});
-  if (dir) fs.rmSync(dir, { recursive: true, force: true });
+  // AND THE COPY'S OWN TIMER AND WATCHER STOP BEFORE ITS FOLDER GOES, so
+  // nothing can write into the folder while it is being deleted; the retries
+  // cover a write already on its way (see `callStoreTool`).
+  booted?.supervisor?.stop?.();
+  booted?.store?.unwatch?.();
+  if (dir) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 /** Start the store server the way a worker's session does and call one tool. */
@@ -101,8 +106,14 @@ function callStoreTool(server, name, args) {
         }
         if (msg.id === 2) {
           clearTimeout(timer);
+          // ANSWERED ONCE THE SERVER HAS REALLY GONE, not when it is told to
+          // go (2026-10-06). It resolved on the SIGTERM, so a server still
+          // writing its claim on the way out raced the folder being deleted:
+          // GitHub run on 2141d7d, all six tests green and then ENOTEMPTY in
+          // afterAll on store/projects/...-checkout-service.
+          const gone = setTimeout(() => child.kill('SIGKILL'), 5_000);
+          child.once('exit', () => { clearTimeout(gone); resolve(msg.result); });
           child.kill('SIGTERM');
-          resolve(msg.result);
           return;
         }
       }
