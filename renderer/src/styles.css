@@ -6756,10 +6756,10 @@ a.set-ghost { text-decoration: none; display: inline-block; }
   display: inline-flex; align-items: center; gap: 10px;
   margin-top: 12px; padding: 6px 10px 6px 14px;
   font: inherit; font-size: 14px; font-weight: 500; color: var(--text);
-  background: transparent; border: 1px solid var(--line-strong, rgba(255, 255, 255, 0.22));
-  border-radius: 6px; cursor: pointer;
+  background: transparent; border: 1px solid var(--line);
+  border-radius: var(--radius); cursor: pointer;
 }
-.fr-tether .fr-next:hover { background: rgba(255, 255, 255, 0.06); }
+.fr-tether .fr-next:hover { background: var(--bg-hover); }
 .fr-tether .fr-next .cap, .fr-tether .fr-next kbd { margin: 0; }
 /* DOTS, NOT KEYS (2026-10-01): two E caps under "Press E" read as "E E". */
 .fr-tether .fr-lights .fr-dot {
