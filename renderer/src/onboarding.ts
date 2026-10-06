@@ -382,6 +382,16 @@ export function firstRunNeeded(p: { products: number; done: boolean; forced?: bo
   return !p.done && p.products === 0;
 }
 
+/**
+ * THE PROJECTS SOMEBODY MADE, which is what "never been used" counts.
+ *  My Workspace is made by the app at launch since e787f1c (2026-10-05), so a
+ *  brand-new store has one project in it before anybody has done anything, and
+ *  counting it skipped the onboarding for every new user (w-9f6975906c: the
+ *  new-user window and a fresh download both opened on an empty inbox). */
+export function projectsOfTheirOwn(products: Array<{ personal?: boolean }>): number {
+  return products.filter((p) => !p.personal).length;
+}
+
 // ---------------------------------------------------------------------------
 // THE EXAMPLE TASK.
 //

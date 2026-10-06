@@ -460,13 +460,11 @@ export function Palette({ products, supervisorPaused, itemCommands = [], batch =
       label: `Open ${NAME} as a new user`,
       hint: 'nothing set up · yours keeps running',
       keywords: 'new user fresh install stranger onboarding first run clean empty blank test website download nothing of mine agents claude code sessions setup plan codex chatgpt not installed',
-      // NOTHING INSTALLED EITHER (w-9f6975906c, her call 2026-10-05: "It was
-      // just to update the existing row"). It used to borrow her signed-in
-      // Claude Code, so the walk skipped "Which AI plan do you pay for?" and a
-      // new user's setup could not be seen on this Mac. Now it has no Claude
-      // Code of hers and signs in to folders of its own, so a test sign-in
-      // there never replaces hers (main/fresh-user.mjs, `withTools`).
-      run: () => onFreshUser(false, false),
+      // IT KEEPS HER CLAUDE CODE (w-9f6975906c). For one evening it hid it so
+      // the plan question showed, and she answered: "I do have a Claude plan so
+      // it incorrectly failed to detect it". A new user like her has it, and
+      // the plan question is the rare case.
+      run: () => onFreshUser(false),
     },
     {
       id: 'keyhints',

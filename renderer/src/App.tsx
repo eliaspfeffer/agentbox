@@ -103,7 +103,7 @@ import { TutorialOffer } from './components/TutorialOffer';
 import { comeBackTo, neverOffered, offerOnNewProject, rememberOffered } from './tutorial';
 import {
   ANSWER_AFTER_MS, COACHED, COPY as WALK_COPY, FIRST_RUN_LABEL, advance as advanceRun, afterCommand, beatRows, coach, closingRefused, firstRunDone,
-  finishedCleared, firstRunNeeded, inboxCleared, laterCleared, laterId, laterIndex,
+  finishedCleared, firstRunNeeded, projectsOfTheirOwn, inboxCleared, laterCleared, laterId, laterIndex,
   mayOpenInbox, noCodingAgent, practising, restartFirstRun, snoozeRefused, tutorialRun,
   waitingId, waitingIndex,
   finishFirstRun, forcedStep, readFirstRun, walkRows,
@@ -858,7 +858,7 @@ export default function App() {
   useEffect(() => {
     if (run || !snap) return;
     if (walkWaitsForSignIn) return;
-    if (!firstRunNeeded({ products: snap.products.length, done: firstRunDone(localStorage), forced: !!forcedRun.current })) return;
+    if (!firstRunNeeded({ products: projectsOfTheirOwn(snap.products), done: firstRunDone(localStorage), forced: !!forcedRun.current })) return;
     // A half-finished walk resumes where it stopped: the folder and name are
     // saved as answered, so reopening resumes.
     setRun(forcedRun.current ? { ...RUN_START, step: forcedRun.current } : readFirstRun(localStorage));
@@ -4469,7 +4469,7 @@ export default function App() {
     // test the walk itself uses is repeated because the two effects settle on
     // the same commit, and on that one render `run` is still null.
     if (run || firstRunNeeded({
-      products: snap.products.length, done: firstRunDone(localStorage), forced: !!forcedRun.current,
+      products: projectsOfTheirOwn(snap.products), done: firstRunDone(localStorage), forced: !!forcedRun.current,
     })) { setRestored(true); return; }
     const place = wasAt.current;
     if (!placeIsSomewhere(place)) { setRestored(true); return; }
