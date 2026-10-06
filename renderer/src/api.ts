@@ -8,6 +8,7 @@ import type { AgentConversation, AnswerMode, DemoOpened, FolderListing, FreshUse
 import type { LedgerLine } from './thread-history';
 import type { AgentFile as AgentFileRow } from './onboarding';
 import type { AgentFolder, SessionThread } from './agent-import-card';
+import type { EngineSetupState } from './plan-setup';
 import { fixtureAgents, fixtureSnapshot, fixtureDashboards, fixtureRepeats, fixtureRuns, fixtureMock, fixtureMockDashboards, fixtureTraces, fixtureHistory, fixtureSettings, fixtureConversation, fixtureAgentFiles, fixtureSessionThreads } from './fixtures';
 import { fixtureEngineWorld, fixtureEngineSettings, fixtureSecondEngine } from './fixtures';
 import { fixtureFolders } from './fixtures';
@@ -813,6 +814,23 @@ export const api = {
       return { found: !!r.workspace?.found, certain: r.workspace?.certain === true };
     } catch {
       return { found: false, certain: false };
+    }
+  },
+
+  // SETTING UP THEIR PLAN FOR THEM (w-9f6975906c): install a coding agent and
+  // start its own sign-in. A page that cannot reach the main process answers
+  // READY, because a walk that asks a question it can do nothing about is a
+  // walk that traps somebody; the inbox's own checks still stand behind it.
+  async engineSetup(action: 'ready' | 'start' | 'status' | 'again' | 'cancel', engine: 'claude' | 'codex'): Promise<EngineSetupState> {
+    const assumeReady: EngineSetupState = { engine, phase: 'ready', error: null, log: '', found: true, signedIn: true };
+    const zero = window.zero as any;
+    if (!zero?.engineSetup) return assumeReady;
+    try {
+      const r = await zero.engineSetup({ action, engine });
+      if (!r?.ok) return { ...assumeReady, phase: 'failed', found: false, signedIn: false, error: r?.error ?? 'Setup could not start.' };
+      return { engine, phase: r.phase ?? 'idle', error: r.error ?? null, log: r.log ?? '', found: !!r.found, signedIn: !!r.signedIn };
+    } catch (e) {
+      return { ...assumeReady, phase: 'failed', found: false, signedIn: false, error: String((e as Error)?.message ?? e) };
     }
   },
 

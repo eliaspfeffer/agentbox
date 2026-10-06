@@ -326,7 +326,10 @@ describe('the coaching card promises no dead key either', () => {
 
   it('still handles plain Enter on the welcome, which draws it', () => {
     expect(walk).toContain("if (run.step !== 'welcome') return;");
-    expect(walk).toMatch(/e\.key === 'Enter'[\s\S]{0,60}onEvent\(\{ t: 'start' \}\)/);
+    // Enter goes through `begin`, which asks the plan on a Mac with nothing set
+    // up (w-9f6975906c) and otherwise starts the walk, so it always moves.
+    expect(walk).toMatch(/e\.key === 'Enter'[\s\S]{0,60}begin\(\)/);
+    expect(walk).toMatch(/const begin = async \(\) => \{[\s\S]{0,120}onStep\('plan'\)[\s\S]{0,40}else onEvent\(\{ t: 'start' \}\)/);
   });
 });
 
