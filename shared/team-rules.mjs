@@ -85,7 +85,7 @@ export function whatWaits(item, me) {
     threads.push({
       uid, mine: t.by === me, fresh,
       people: [...new Set(news.map((r) => r.by))],
-      text: t.text, last: news[news.length - 1].text,
+      text: t.text, last: news[news.length - 1].text, lastBy: news[news.length - 1].by,
       at: news[news.length - 1].ts,
     });
   }

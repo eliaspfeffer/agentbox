@@ -400,21 +400,23 @@ export function messageLine(item: WorkItem, product: Product | undefined | null,
   let people = [...new Set(everyone)].filter((p) => p && p !== me);
   if (!people.length && item.createdBy && item.createdBy !== me) people = [item.createdBy];
   // A CHAT WITH THREADS SAYS WHAT IS WAITING ON YOU (w-920461cbe6), and so
-  // changes as the chat does: a thread of yours with replies, the chat's own
-  // news beside it, or, with nothing waiting, the chat's newest line. Never a
-  // thread reply standing in for the chat, and never a thread you are not in.
+  // changes as the chat does. One clause, picked 2026-10-05 in her words: "I
+  // prefer Maya in your thread, Sam, your call." So a thread with replies to
+  // you says who wrote the newest one and what they said, and wins over the
+  // chat, because a thread is the easy thing to miss and the chat is in front
+  // of you the moment you open it. With no thread waiting, the chat's newest
+  // line. Never a thread you are not in, and never two things joined by a dot
+  // (the shipped "· 2 new in the chat" was the line she called messy).
   const waits = whatWaits(item, me);
   if (waits && item.talk) {
     const line = (text: string) => firstRealLine(plainWords(text));
-    const [one, ...more] = waits.threads;
-    if (one) {
-      const where = one.mine ? 'your thread' : `“${clip(line(one.text), 48)}”`;
-      const head = more.length ? `Replies in ${waits.threads.length} of your threads` : `${namesOf(one.people, nameOf)} replied in ${where}`;
-      if (waits.chat) return { people, fromMe: false, text: `${head} · ${waits.chat} new in the chat` };
-      return { people, fromMe: false, text: more.length ? head : `${head}: ${line(one.last)}` };
+    const newest = waits.threads[0];
+    if (newest) {
+      const where = newest.mine ? 'your thread' : 'a thread';
+      return { people, fromMe: false, text: `${nameOf(newest.lastBy)} in ${where}: ${line(newest.last)}` };
     }
-    const newest = item.talk.chat[item.talk.chat.length - 1];
-    if (newest) return { people, fromMe: !!me && newest.by === me, text: line(newest.text) };
+    const said = item.talk.chat[item.talk.chat.length - 1];
+    if (said) return { people, fromMe: !!me && said.by === me, text: line(said.text) };
   }
   const answered = !!item.answer && item.answer !== '(withdrawn)';
   // An agent mentioned in the message reads as its words, not its link (w-7b9cb8636a).
@@ -429,21 +431,6 @@ export function messageLine(item: WorkItem, product: Product | undefined | null,
   const text = firstRealLine(plainWords(String((answered ? item.answer : item.body) || item.title || '')));
   const by = (answered ? item.wrote?.answer?.by : item.wrote?.body?.by) ?? item.createdBy ?? null;
   return { people, fromMe: !!me && by === me, text };
-}
-
-/** "Theo", "Theo and Jun", "Theo, Jun and Maya", "Theo, Jun and 2 others". */
-function namesOf(ids: string[], nameOf: (id: string) => string): string {
-  const names = ids.map(nameOf);
-  if (names.length <= 1) return names[0] ?? 'Someone';
-  if (names.length <= 3) return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-  return `${names.slice(0, 2).join(', ')} and ${names.length - 2} others`;
-}
-
-/** A thread's subject, cut at a word with an ellipsis when it runs long. */
-function clip(text: string, most: number): string {
-  if (text.length <= most) return text;
-  const cut = text.slice(0, most);
-  return `${cut.slice(0, cut.lastIndexOf(' ') > most / 2 ? cut.lastIndexOf(' ') : most).trimEnd()}…`;
 }
 
 /**

@@ -230,9 +230,12 @@
 .th-msg-who { font-weight: 600; color: var(--text); }
 .th-msg-who::after { content: '\00a0\00a0'; }
 .th-msg-text { color: var(--text-dim); }
-/* On a card the message wraps under the name, as a card's title does. */
+/* On a card the message sits under the name, ON ONE LINE (w-920461cbe6, her
+   words: "condense it so it always only takes up one line at most"). It used
+   to wrap like a card's title, and "Maya in your thread: Sam, your call?" read
+   best as a single subline. */
 .th-card .th-msg { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 4px; }
-.th-card .th-msg-text { grid-column: 1 / -1; white-space: normal; color: var(--text); }
+.th-card .th-msg-text { grid-column: 1 / -1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .th-card .th-msg-who::after { content: none; }
 .th-card .th-msg .tm-av { margin-right: 0; top: 0; }
 .th-card .m { display: flex; align-items: center; font: 11px var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--text-faint); min-width: 0; }

@@ -27,6 +27,7 @@
 //   5. opening the chat marks the threads with replies to you, and when one
 //      thread is the only news it opens by itself.
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { foldWorkItems } from '../shared/work-items.mjs';
@@ -153,7 +154,7 @@ describe('what is waiting, counted', () => {
   it('counts the chat since you last spoke in it, and each of your threads since you last spoke in it', () => {
     const waits = whatWaits(fold(BUSY()), ME);
     expect(waits.chat).toBe(3);
-    expect(waits.threads).toEqual([{ uid: 'u-ask', mine: true, fresh: 3, people: [THEO, JUN, MAYA], text: 'Two tiers or three for the pricing page?', last: 'Sam, your call?' }]);
+    expect(waits.threads).toEqual([{ uid: 'u-ask', mine: true, fresh: 3, people: [THEO, JUN, MAYA], text: 'Two tiers or three for the pricing page?', last: 'Sam, your call?', lastBy: MAYA }]);
   });
 
   it('counts nothing in a chat you have answered', () => {
@@ -165,13 +166,22 @@ describe('what is waiting, counted', () => {
 describe('the row in the inbox and the card on the board', () => {
   const line = (lines, me = ME) => messageLine(fold(lines), DIRECT, me, nameOf).text;
 
-  it('names your thread and the chat together when both have news', () => {
-    expect(line(BUSY())).toBe('Theo, Jun and Maya replied in your thread · 3 new in the chat');
+  // PICKED 2026-10-05, her words: "I prefer Maya in your thread, Sam, your
+  // call." One clause, the newest reply and who wrote it. The shipped line
+  // before it joined two things with a dot ("Theo, Jun and Maya replied in your
+  // thread · 3 new in the chat") and she found it messy.
+  it('says who wrote the newest reply in your thread, and what they said', () => {
+    expect(line(BUSY())).toBe('Maya in your thread: Sam, your call?');
   });
 
-  it('says the newest reply when your thread is the only news', () => {
+  // THE CASE THAT MUST NOT COME BACK: no second clause about the chat.
+  it('never joins the chat’s news onto the thread’s', () => {
+    expect(line(BUSY())).not.toMatch(/·|new in the chat/);
+  });
+
+  it('says the same when your thread is the only news', () => {
     const lines = [...BUSY(), say(ME, 'u-m1', 'Ship Friday.')];
-    expect(line(lines)).toBe('Theo, Jun and Maya replied in your thread: Sam, your call?');
+    expect(line(lines)).toBe('Maya in your thread: Sam, your call?');
   });
 
   // The main chat's newest line, never a thread reply standing in for it.
@@ -180,35 +190,34 @@ describe('the row in the inbox and the card on the board', () => {
     expect(line(lines)).toBe('Deck is updated.');
   });
 
-  it('names a thread you are in but did not start by what it is about', () => {
+  it('says "a thread" for one you are in but did not start', () => {
     const lines = [open(MAYA, 'Morning.'), say(ANA, 'u-q', 'Who has the press list?'), say(ME, 'u-a1', 'Not me.', 'u-q'), say(ME, 'u-m', 'Ship Friday.'), say(JUN, 'u-a2', 'I do.', 'u-q')];
-    expect(line(lines)).toBe('Jun replied in “Who has the press list?”: I do.');
+    expect(line(lines)).toBe('Jun in a thread: I do.');
   });
 
-  it('counts threads rather than listing them when several wait on you', () => {
+  it('takes the newest reply when several of your threads wait', () => {
     const lines = [...BUSY(), say(ME, 'u-ask2', 'And the launch date?'), say(ANA, 'u-r9', 'The 14th.', 'u-ask2')];
-    // Asking the second question in the chat was your newest word there, so
-    // the chat itself has nothing new.
-    expect(line(lines)).toBe('Replies in 2 of your threads');
+    expect(line(lines)).toBe('Ana in your thread: The 14th.');
   });
 
-  it('shortens a long list of names', () => {
+  it('names only the person whose words it shows', () => {
     const lines = [open(MAYA, 'Morning.'), say(ME, 'u-ask', 'Lunch?'), say(THEO, 'a', 'Yes', 'u-ask'), say(JUN, 'b', 'Yes', 'u-ask'), say(MAYA, 'c', 'No', 'u-ask'), say(ANA, 'd', 'Yes', 'u-ask')];
-    expect(line(lines)).toBe('Theo, Jun and 2 others replied in your thread: Yes');
+    expect(line(lines)).toBe('Ana in your thread: Yes');
   });
 
   // AS THE CHAT EVOLVES, SO DOES THE ROW. The same row, read after each
-  // message, says something different each time something new waits.
+  // message, says what is newest of what waits on you.
   it('changes as the chat does', () => {
     const lines = [open(MAYA, 'Morning.'), say(ME, 'u-ask', 'Two tiers or three?')];
     const said = [];
-    for (const next of [say(THEO, 'r1', 'Three.', 'u-ask'), say(ANA, 'c1', 'Deck is up.'), say(ME, 'r2', 'Agreed.', 'u-ask')]) {
+    for (const next of [say(THEO, 'r1', 'Three.', 'u-ask'), say(JUN, 'r2', 'Two.', 'u-ask'), say(ANA, 'c1', 'Deck is up.'), say(ME, 'r3', 'Three it is.', 'u-ask')]) {
       lines.push(next);
       said.push(line(lines));
     }
     expect(said).toEqual([
-      'Theo replied in your thread: Three.',
-      'Theo replied in your thread · 1 new in the chat',
+      'Theo in your thread: Three.',
+      'Jun in your thread: Two.',
+      'Jun in your thread: Two.',
       'Deck is up.',
     ]);
   });
@@ -218,6 +227,21 @@ describe('the row in the inbox and the card on the board', () => {
     const said = messageLine(fold(lines), DIRECT, ME, nameOf);
     expect(said.text).toBe('Ship Friday.');
     expect(said.fromMe).toBe(true);
+  });
+
+  // ONE LINE AT MOST, her words: "condense it so it always only takes up one
+  // line at most." The words are not cut here (the width decides where); the
+  // line under the names in the list and on the board card stops at its edge
+  // with an ellipsis.
+  it('is drawn on one line with an ellipsis, in the list and on the board', () => {
+    const css = fs.readFileSync(new URL('../renderer/src/threads/pages.css', import.meta.url), 'utf8');
+    const rule = (sel) => { const at = css.indexOf(`${sel} {`); expect(at).toBeGreaterThan(-1); return css.slice(at, css.indexOf('}', at)); };
+    // The list's cell already held its line; the board card's wrapped.
+    for (const sel of ['.th-cell-title', '.th-card .th-msg-text']) {
+      expect(rule(sel)).toContain('white-space: nowrap');
+      expect(rule(sel)).toContain('overflow: hidden');
+      expect(rule(sel)).toContain('text-overflow: ellipsis');
+    }
   });
 });
 
