@@ -20,9 +20,11 @@
 // NOTHING NEW IS STORED AND NOTHING IS WRITTEN. Two files that already exist
 // are read, and the marks a Z left on this Mac (../undo-marks).
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ThreadPanel } from '../team/ThreadPanel';
+import { TeamContext } from '../team/people';
+import { useReactionsNow, type Press } from '../team/reactions-now';
 import { api } from '../api';
 import { changePathFor, type Change } from '../code-artifact';
 import { filedOnTurn } from '../filed-in-thread';
@@ -156,6 +158,13 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
   // timer.
   const [whole, setWhole] = useState(false);
   useEffect(() => { setWhole(false); }, [item.product, item.id]);
+
+  // A REACTION SHOWS THE MOMENT IT IS PRESSED (w-45cbac227a), in the chat and in
+  // the thread panel alike, rather than after the sync and the next snapshot.
+  const me = useContext(TeamContext)?.me ?? null;
+  const sendReaction = useCallback((p: Press) => api.teamReact({ product: item.product, id: item.id, ...p })
+    .then((r) => { if (!r?.ok) throw new Error(r?.error ?? 'that reaction did not save'); }), [item.product, item.id]);
+  const chips = useReactionsNow(item.reactions, me, sendReaction);
 
   // THE Zs PRESSED ON THIS TASK, each drawn as one of her actions
   // (../undo-marks, w-c78d1e1607). Read again the moment a new one is left, so
@@ -325,10 +334,8 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
           // had (w-560647d4db). `reactions` is folded off the row itself, so
           // every press a teammate pushed is on screen the moment the pull
           // lands, with nothing counted here.
-          reactions: item.reactions,
-          onReact: (on: string, emoji: string, off: boolean) => {
-            api.teamReact({ product: item.product, id: item.id, on, emoji, off });
-          },
+          reactions: chips.reactions,
+          onReact: chips.react,
           onQuote,
           onHandToAgent,
           ...(thread ? { replies: built.replies, openThread: thread.open, onOpenThread: thread.onOpen } : {}),
@@ -341,8 +348,8 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
           replies={built.replies[openParent.uid!] ?? []}
           md={(text) => md(clean(text))}
           width={thread.width}
-          reactions={item.reactions}
-          onReact={(on, emoji, off) => { api.teamReact({ product: item.product, id: item.id, on, emoji, off }); }}
+          reactions={chips.reactions}
+          onReact={chips.react}
           onSend={(text) => thread.onSend(openParent.uid!, text)}
           onClose={thread.onClose}
           onResize={thread.onResize}

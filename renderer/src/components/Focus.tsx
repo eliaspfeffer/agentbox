@@ -671,7 +671,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
     const key = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       const at = e.target as HTMLElement | null;
-      if (at?.closest?.('.chat-emoji, .prio-menu, .th-menu, [role="dialog"]')) return;
+      if (at?.closest?.('.chat-emoji, .chat-emoji-all, .prio-menu, .th-menu, [role="dialog"]')) return;
       if (at?.closest?.('textarea, input, [contenteditable="true"]') && !at.closest('.chat-thread-panel')) return;
       e.preventDefault();
       e.stopImmediatePropagation();

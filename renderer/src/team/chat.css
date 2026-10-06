@@ -13,7 +13,10 @@
 
 .chat-msg { display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 14px; }
 .chat-gutter { grid-column: 1; grid-row: 1 / span 3; padding-top: 2px; }
-.chat-msg > .msg-head, .chat-msg > .msg-body, .chat-msg > .chat-more { grid-column: 2; min-width: 0; }
+/* Every part under the name is told its column. The chips were not, and under a
+   long message, which folds and so draws one line more, they dropped into the
+   face's column (w-45cbac227a). */
+.chat-msg > .msg-head, .chat-msg > .msg-body, .chat-msg > .chat-more, .chat-msg > .chat-chips { grid-column: 2; min-width: 0; }
 .chat-msg .msg-head { align-items: baseline; }
 .chat-msg .msg-who { font-size: 14.5px; font-weight: 500; color: var(--text); }
 .chat-msg .msg-when { font: 11px var(--mono); letter-spacing: .03em; color: var(--text-faint); }
@@ -109,6 +112,57 @@
 }
 .chat-emoji-one:hover { background: var(--wash); }
 .chat-emoji-one:focus-visible { outline: 1px solid var(--text-faint); outline-offset: -1px; }
+
+/* THE + AFTER THE EIGHT, and the whole list it opens (w-45cbac227a). The + is
+   one more square, set off by a hairline and drawn in the faint text colour,
+   so it reads as "more" rather than as a ninth emoji. */
+.chat-emoji-one.chat-emoji-more {
+  display: grid; place-items: center; margin-left: 3px;
+  border-left: 1px solid var(--line); color: var(--text-faint);
+}
+.chat-emoji-more svg { width: 12px; height: 12px; }
+.chat-emoji-more:hover, .chat-emoji-more[aria-expanded="true"] { color: var(--text); background: var(--wash); }
+
+/* Floated over the page (placed by ChatActions.tsx), so the thread panel's
+   scroll cannot cut it off. Same plate as the short list, only larger. */
+.chat-emoji-all {
+  position: fixed; z-index: 80; width: 320px; height: 360px; box-sizing: border-box;
+  display: flex; flex-direction: column;
+  border: 1px solid var(--line-strong); border-radius: 0;
+  background: var(--skin-solid, var(--surface)); box-shadow: 0 8px 28px #0006;
+}
+.chat-emoji-search {
+  flex: none; margin: 8px 8px 0; height: 30px; padding: 0 10px; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 0; outline: none; background: var(--wash);
+  font: inherit; font-size: 13px; color: var(--text);
+}
+.chat-emoji-search::placeholder { color: var(--text-faint); }
+.chat-emoji-search:focus { border-color: var(--line-strong); }
+/* The group jumps, grey until pointed at, so the only colour in the panel is
+   the emoji themselves. */
+.chat-emoji-tabs { flex: none; display: flex; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.chat-emoji-tab {
+  flex: 1; height: 28px; padding: 0;
+  appearance: none; background: none; border: 0; border-radius: 0; cursor: pointer;
+  font-size: 15px; line-height: 1; filter: grayscale(1); opacity: .55;
+}
+.chat-emoji-tab:hover { filter: none; opacity: 1; background: var(--wash); }
+.chat-emoji-tab:focus-visible { outline: 1px solid var(--text-faint); outline-offset: -1px; }
+.chat-emoji-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 8px 8px; }
+.chat-emoji-group {
+  position: sticky; top: 0; z-index: 1; padding: 10px 2px 5px;
+  background: var(--skin-solid, var(--surface));
+  font: 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint);
+}
+.chat-emoji-grid { display: grid; grid-template-columns: repeat(9, 1fr); }
+.chat-emoji-cell {
+  height: 32px; padding: 0;
+  appearance: none; background: none; border: 0; border-radius: 0; cursor: pointer;
+  font-size: 19px; line-height: 1;
+}
+.chat-emoji-cell:hover { background: var(--wash-strong, var(--wash)); }
+.chat-emoji-cell:focus-visible { outline: 1px solid var(--text-faint); outline-offset: -1px; }
+.chat-emoji-none { padding: 18px 2px; font-size: 13px; color: var(--text-faint); }
 
 /* ------------------- the formatting bar under the reply box ----------------
    ./FormatBar.tsx, drawn only on a chat. It rides the footer line the reply box

@@ -19,6 +19,7 @@ import { ChatFold } from './ChatFold';
 import { MessageActions, Reactions } from './ChatActions';
 import { clock } from '../thread-history';
 import { THREAD_WIDTH, threadLine } from './chat-threads';
+import { holdTheEdge } from './hold-the-edge';
 import type { AgentTurn } from '../types';
 import './chat.css';
 
@@ -104,24 +105,19 @@ export function ThreadPanel({ parent, replies, md, width, reactions, onReact, on
   };
 
   // THE LEFT EDGE DRAGS, like Slack's. The panel's right edge is the pane's, so
-  // the width is the distance from the pointer to it.
+  // the width is the distance from the pointer to it. Letting go is
+  // ./hold-the-edge.ts, which also lets go if the panel closes mid-drag.
+  const letGo = useRef<(() => void) | null>(null);
+  useEffect(() => () => letGo.current?.(), []);
   const drag = (e: PointerEvent<HTMLDivElement>) => {
     const right = panel.current?.getBoundingClientRect().right;
     if (right == null) return;
     e.preventDefault();
-    const grip = e.currentTarget;
-    grip.setPointerCapture(e.pointerId);
-    document.body.classList.add('chat-thread-dragging');
-    const move = (m: globalThis.PointerEvent) => onResize(right - m.clientX);
-    const up = () => {
-      grip.removeEventListener('pointermove', move);
-      grip.removeEventListener('pointerup', up);
-      grip.removeEventListener('pointercancel', up);
-      document.body.classList.remove('chat-thread-dragging');
-    };
-    grip.addEventListener('pointermove', move);
-    grip.addEventListener('pointerup', up);
-    grip.addEventListener('pointercancel', up);
+    letGo.current?.();
+    letGo.current = holdTheEdge({
+      grip: e.currentTarget, win: window, body: document.body, pointerId: e.pointerId,
+      onMove: (x) => onResize(right - x),
+    });
   };
   const nudge = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'ArrowLeft') { e.preventDefault(); onResize(width + NUDGE); }
