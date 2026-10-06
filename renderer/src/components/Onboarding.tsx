@@ -31,6 +31,8 @@ import FolderPicker from './FolderPicker';
 import { PRACTICE_NAME, PRACTICE_ROWS, PRACTICE_TASK } from '../../../shared/first-run-practice.mjs';
 import { AppMark } from './AppMark';
 import { SidebarIcon } from './SidebarIcon';
+import { PlanQuestion, PlanSetupCard } from './PlanSetup';
+import { needsPlan, type Plan } from '../plan-setup';
 import { NAME, Name } from '../../../shared/product-name.mjs';
 
 /**
@@ -1778,6 +1780,27 @@ export function Onboarding({
       .catch(() => { if (live) setRecent([]); });
     return () => { live = false; };
   }, [wantsRecent, recent, home]);
+  // WHETHER THIS MAC CAN RUN AN AGENT YET (w-9f6975906c), asked while the
+  // welcome is on screen, because each tool's own status check takes a few
+  // seconds and the welcome is where there is time to spare. Null until it
+  // answers; Get started waits for it only if it has not.
+  const asked = useRef<Promise<boolean> | null>(null);
+  const askMac = () => {
+    if (!asked.current) {
+      asked.current = import('../api').then(({ api }) => Promise.all([
+        api.engineSetup('ready', 'claude'), api.engineSetup('ready', 'codex'),
+      ])).then((r) => needsPlan(r.map((x) => ({ found: !!x.found, signedIn: !!x.signedIn }))))
+        .catch(() => false);
+    }
+    return asked.current;
+  };
+  useEffect(() => { if (run.step === 'welcome') void askMac(); }, [run.step]);
+  // The plan they picked, once they have. Null on the question.
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const begin = async () => {
+    if (await askMac()) { setPlan(null); onStep('plan'); }
+    else onEvent({ t: 'start' });
+  };
   const [now, setNow] = useState(() => Date.now());
   // HER AGENTS, read once. Null while it is being read, so the card never
   // flashes an empty list at a Mac that has eight.
@@ -1909,7 +1932,7 @@ export function Onboarding({
   useEffect(() => {
     if (run.step !== 'welcome') return;
     const on = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') { e.preventDefault(); onEvent({ t: 'start' }); }
+      if (e.key === 'Enter') { e.preventDefault(); void begin(); }
     };
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
@@ -2270,10 +2293,21 @@ export function Onboarding({
                 reports", and written out in the README's "What this sends". */}
             <p className="fr-sub">{COPY.headSub}</p>
           </div>
-          <button className="fr-go" onClick={() => onEvent({ t: 'start' })}>
+          <button className="fr-go" onClick={() => void begin()}>
             {COPY.getStarted} <Cap cap="↵" />
           </button>
         </div>
+      )}
+
+      {/* WHICH PLAN, THEN SETTING IT UP (w-9f6975906c). Only on a Mac where
+          nothing can run an agent yet; see `begin`. Both hand on to the folder
+          screen, and so does Skip, because a walk that traps somebody without
+          a plan is worse than one that lets them look around. */}
+      {run.step === 'plan' && !plan && (
+        <PlanQuestion onPick={setPlan} onReady={() => onStep('folder')} />
+      )}
+      {run.step === 'plan' && plan && (
+        <PlanSetupCard plan={plan} onDone={() => onStep('folder')} onSkip={() => onStep('folder')} />
       )}
 
       {/* The app's own picker, over the walk, when there is no Mac one. It

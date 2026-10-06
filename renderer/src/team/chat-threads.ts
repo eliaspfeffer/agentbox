@@ -12,6 +12,7 @@
 // allow resizing."
 import { agoWords } from '../threads/summary-rules';
 import type { AgentEvent, AgentTurn } from '../types';
+import type { Waits } from '../../../shared/team-rules.mjs';
 
 /**
  * Lift the replies out of a chat. A reply whose message is in this chat goes
@@ -76,3 +77,13 @@ export function clampThreadWidth(width: number, pane: number): number {
 
 /** Where the dragged width is kept, so the panel opens at it next time. */
 export const THREAD_WIDTH_KEY = 'zero.chatThreadWidth';
+
+/**
+ * WHICH THREAD OPENS BY ITSELF WHEN YOU OPEN A CHAT: the one thread waiting on
+ * you, when it is the only news (w-920461cbe6). With news in the chat too, the
+ * chat stays in front and the thread is marked; with two threads waiting, which
+ * to read first is yours to choose.
+ */
+export function threadToOpen(waits: Waits | null): string | null {
+  return waits && waits.chat === 0 && waits.threads.length === 1 ? waits.threads[0].uid : null;
+}

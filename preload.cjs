@@ -133,6 +133,9 @@ contextBridge.exposeInMainWorld('zero', {
   // it is also what makes the Coding agent row appear, because the path the
   // search lands on is the one that row is drawn from.
   codexRecheck: () => ipcRenderer.invoke('zero:codex-recheck'),
+  // Install a coding agent and start its own sign-in, for somebody who has a
+  // plan and nothing installed. Actions: ready, start, status, again, cancel.
+  engineSetup: (payload) => ipcRenderer.invoke('zero:engine-setup', payload),
   codexAddAccount: () => ipcRenderer.invoke('zero:codex-add-account'),
   // A second login for either agent is a second home folder. Main makes it and
   // hands back the line the built-in terminal runs to sign in.

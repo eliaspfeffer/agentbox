@@ -38,7 +38,11 @@ import { DONE } from './done-word';
  * Clearing the three now goes straight on
  * to ⌘K. The deleted copy is in decisions.md, 08-23, verbatim. */
 export type Step =
-  | 'welcome' | 'folder' | 'name'
+  // `plan` IS ASKED ONLY ON A MAC WHERE NOTHING CAN RUN AN AGENT YET
+  // (w-9f6975906c): which plan they pay for, then the app installs and signs
+  // in for them. A Mac with Claude Code or Codex found and signed in never sees
+  // it. See ./plan-setup.ts.
+  | 'welcome' | 'plan' | 'folder' | 'name'
   // THERE WAS A `look` BEAT HERE, the theme picker. The app has one look now,
   // Light (w-9e434e8671), so there is nothing to pick. A walk saved at `look`
   // resumes at `hand` (`liveStep`).
@@ -70,7 +74,9 @@ export const N_BEATS = 19;
  *  comes after the inbox is cleared, and the finish card is last. Those are
  *  real claims about the walk whether or not anybody is counting on screen. */
 export const BEAT: Record<Step, number> = {
-  welcome: 1, folder: 2, name: 3,
+  // The plan question shares the welcome's beat: most Macs never see it, and a
+  // walk whose numbering depended on the machine would be two walks.
+  welcome: 1, plan: 1, folder: 2, name: 3,
   // The introduction is four beats of its own and it counts, because a walk
   // that says it is nine long and then keeps going is a walk that lied about how
   // long it was. It went to four slabs on the morning of 2026-08-24 and back to
@@ -295,6 +301,9 @@ export function stepTo(s: FirstRun, step: Step): FirstRun {
  *  to decide whether they are drawn at all. A Back that leads nowhere is the
  *  dead key `tests/the-walk-promises-no-dead-keys.test.mjs` exists to forbid. */
 export function stepBack(step: Step): Step | null {
+  // Nothing has been written down on the plan screen either: a setup that is
+  // running carries on in the background, and the welcome asks again.
+  if (step === 'plan') return 'welcome';
   if (step === 'folder') return 'welcome';
   if (step === 'name') return 'folder';
   return null;
@@ -2661,7 +2670,7 @@ export function restartFirstRun(store: Store): void {
  *  that is already set up, which is what shooting it needs and what the row
  *  drawing alternatives to the tether needs. */
 export const STEPS: Step[] = [
-  'welcome', 'folder', 'name',
+  'welcome', 'plan', 'folder', 'name',
   'inbox', 'away', 'goal', 'hand',
   // WHO IT IS TO SITS BETWEEN OPENING THE CARD AND SENDING IT (2026-10-01),
   // because that is where it is on the card: To is its first line. The walk had

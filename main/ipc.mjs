@@ -1,5 +1,6 @@
 import { openSourceFile } from './open-source-file.mjs';
 import {submitReply} from './live-replies.mjs';
+import { createEngineSetup } from './engine-setup.mjs';
 // IPC: a thin, typed-by-convention surface. The renderer asks; the main
 // process derives from files and answers. Pushes go one way: "state changed,
 // refetch." No state is cached on either side of the bridge.
@@ -1273,6 +1274,32 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   ipcMain.handle('zero:codex-recheck', () => {
     try {
       return { ok: true, workspace: recheckCodex(config) };
+    } catch (err) {
+      return { ok: false, error: String(err.message) };
+    }
+  });
+
+  // SETTING UP THEIR PLAN FOR THEM (w-9f6975906c). The walk asks which plan
+  // they pay for and this installs the tool and starts its own sign-in. The
+  // finder is the recheck, so what gets installed lands on the config and the
+  // rest of the app runs on it without a restart.
+  const engineSetup = createEngineSetup({
+    find: (engine) => {
+      if (engine === 'claude') { const s = recheckClaude(config); return { found: s.claudeFound, path: s.claudeBin }; }
+      const s = recheckCodex(config);
+      return { found: s.found, path: s.bin };
+    },
+  });
+  // A sign-in left waiting on the browser is not left running after the app.
+  app.on('will-quit', () => { engineSetup.cancel('claude'); engineSetup.cancel('codex'); });
+  ipcMain.handle('zero:engine-setup', async (_e, { action, engine } = {}) => {
+    if (engine !== 'claude' && engine !== 'codex') return { ok: false, error: 'Unknown coding agent.' };
+    try {
+      if (action === 'ready') return { ok: true, ...(await engineSetup.readiness(engine)) };
+      if (action === 'start') return { ok: true, ...engineSetup.start(engine) };
+      if (action === 'again') return { ok: true, ...engineSetup.signInAgain(engine) };
+      if (action === 'cancel') return { ok: true, ...engineSetup.cancel(engine) };
+      return { ok: true, ...engineSetup.status(engine) };
     } catch (err) {
       return { ok: false, error: String(err.message) };
     }

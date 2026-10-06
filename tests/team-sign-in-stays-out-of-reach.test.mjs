@@ -29,14 +29,17 @@ describe('an installed build', () => {
   const was = process.env.AGENTBOX_TEAM_CONFIG;
   afterEach(() => { if (was === undefined) delete process.env.AGENTBOX_TEAM_CONFIG; else process.env.AGENTBOX_TEAM_CONFIG = was; });
 
-  it('reads its own team config, whatever AGENTBOX_TEAM_CONFIG says', () => {
+  // An installed build never reads a team config at all since 2026-10-06
+  // (tests/the-installed-app-is-the-single-person-app.test.mjs), so
+  // AGENTBOX_TEAM_CONFIG can point it nowhere; a checkout still honours it.
+  it('ignores AGENTBOX_TEAM_CONFIG, and every other team config', () => {
     const appDir = tmp();
     fs.mkdirSync(path.join(appDir, 'cloud'));
     fs.writeFileSync(path.join(appDir, 'cloud', 'team.config.json'), JSON.stringify({ url: 'https://ours.test', anonKey: 'k' }));
     const other = path.join(tmp(), 'other.json');
     fs.writeFileSync(other, JSON.stringify({ url: 'https://theirs.test', anonKey: 'k' }));
     process.env.AGENTBOX_TEAM_CONFIG = other;
-    expect(loadCloudConfig(appDir, { packaged: true }).url).toBe('https://ours.test');
+    expect(loadCloudConfig(appDir, { packaged: true })).toBeNull();
     expect(loadCloudConfig(appDir, { packaged: false }).url).toBe('https://theirs.test');
   });
 

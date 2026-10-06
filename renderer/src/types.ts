@@ -12,6 +12,14 @@ export interface WorkItem {
   // presses the ledger holds (shared/work-items.mjs); absent on every row
   // nobody has reacted on, which is every row outside a chat.
   reactions?: Record<string, Record<string, string[]>>;
+  // WHO SAID WHAT, AND WHERE, in a conversation between people (w-920461cbe6):
+  // the main chat and each thread, oldest first. What decides whose inbox a
+  // busy chat is in and what its row says (`whatWaits`, shared/team-rules.mjs).
+  // Absent on every row without people on it.
+  talk?: {
+    chat: { by: string; ts: number; text: string }[];
+    threads: Record<string, { by: string; text: string; replies: { by: string; ts: number; text: string }[] }>;
+  };
   status: 'open' | 'claimed' | 'done' | 'blocked';
   title: string;
   // The short written name the LIST draws instead of the title, when a session

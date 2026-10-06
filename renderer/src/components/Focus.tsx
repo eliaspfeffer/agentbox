@@ -64,7 +64,8 @@ import { artifactUrlTransform, isMediaPath, productPath, remarkArtifactPaths } f
 import { api } from '../api';
 import { draftKey, readDraft, saveDraft, clearDraft, readDraftAttachments, saveDraftAttachments, type SentDraft } from '../drafts';
 import { withQuote } from '../team/chat-quote';
-import { THREAD_WIDTH, THREAD_WIDTH_KEY, clampThreadWidth } from '../team/chat-threads';
+import { THREAD_WIDTH, THREAD_WIDTH_KEY, clampThreadWidth, threadToOpen } from '../team/chat-threads';
+import { whatWaits } from '../../../shared/team-rules.mjs';
 import { FormatBar } from '../team/FormatBar';
 import { OptionsOffer } from './OptionsOffer';
 import { foldedReply } from '../folded-reply';
@@ -652,7 +653,12 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   // carried from one conversation to the next, and a document open beside the
   // task closes it, because the pane is then too narrow for two columns.
   const [openThread, setOpenThread] = useState<string | null>(null);
-  useEffect(() => { setOpenThread(null); }, [item.product, item.id]);
+  // WHAT WAITS ON YOU IN THIS CHAT (w-920461cbe6): the threads with replies to
+  // you are marked, and when one of them is the only news it opens by itself as
+  // you arrive. Only on arriving: a thread you close stays closed while you read.
+  const waits = direct ? whatWaits(item, teamCtx?.me ?? null) : null;
+  const freshThreads = waits ? Object.fromEntries(waits.threads.map((t) => [t.uid, t.fresh])) : undefined;
+  useEffect(() => { setOpenThread(openDoc ? null : threadToOpen(waits)); }, [item.product, item.id]);
   const [threadWant, setThreadWant] = useState<number>(() => {
     const kept = Number(typeof localStorage === 'undefined' ? NaN : localStorage.getItem(THREAD_WIDTH_KEY));
     return Number.isFinite(kept) && kept > 0 ? kept : THREAD_WIDTH.start;
@@ -1473,6 +1479,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
                 // it only names the message it answers.
                 onSend: (uid, text) => api.answer({ product: item.product, id: item.id, answer: text, inReplyTo: uid })
                   .catch(() => onNotice('That reply did not send. Try again.')),
+                fresh: freshThreads,
               } : undefined}
             />
           )}

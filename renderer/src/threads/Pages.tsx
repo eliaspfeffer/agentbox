@@ -442,7 +442,9 @@ export function ThreadCells({ item, product, now, person, tab }: {
   // A CONVERSATION WITH A PERSON READS LIKE A MESSAGE, showing who it is
   // with: their face and name lead the row, then the
   // newest message, the way a chat list does. Every other row keeps its title.
-  const said = messageLine(item, product, team?.me ?? null);
+  // AND IT SAYS WHAT IS WAITING ON YOU when the chat has threads (w-920461cbe6),
+  // which is why it is handed your teammates' first names.
+  const said = messageLine(item, product, team?.me ?? null, (id) => firstName(team?.byId.get(id) ?? null));
   if (said) {
     return <RowCells live={liveIds.has(item.id)} title={<MessageTitle people={said.people} fromMe={said.fromMe} text={said.text} />} where="Message" person={person}
       priority={messagePriority(item)} updatedAt={when} now={now} action={action} />;
@@ -500,8 +502,8 @@ export function InboxBoard({ items, products, display, now, onOpenItem, stateOf,
   // Held between renders, because J re-renders the board on every press and
   // the columns do not change when only the keyboard's card does.
   const columns = useMemo(
-    () => boardColumns({ items, products, display, now, stateOf, cards, picked, me, since, live: liveIds, order: shown, projectOrder }),
-    [items, products, display, now, stateOf, cards, picked, me, since, liveIds, shown, projectOrder],
+    () => boardColumns({ items, products, display, now, stateOf, cards, picked, me, since, live: liveIds, order: shown, projectOrder, nameOf: (id) => firstName(team?.byId.get(id) ?? null) }),
+    [items, products, display, now, stateOf, cards, picked, me, since, liveIds, shown, projectOrder, team],
   );
   // THE OTHER COLUMNS SLIDE TO THEIR NEW PLACES (2026-10-02): they used to
   // jump, which read as "weird ... when I'm moving things around". Measured

@@ -92,6 +92,9 @@ import { CrossIcon } from './components/CrossIcon';
 import { ZoomPercent } from './components/ZoomPercent';
 import { FindBar } from './components/FindBar';
 import { Landed, Onboarding, PracticeBand, WayOut } from './components/Onboarding';
+import { PlanBar, PlanSetupCard } from './components/PlanSetup';
+import { AppMark } from './components/AppMark';
+import { needsPlan, type Plan } from './plan-setup';
 import { PRACTICE_ROWS, PRACTICE_SLUG } from '../../shared/first-run-practice.mjs';
 import { ModeScreen, isModeVariant } from './components/ModeScreen';
 import { practiceRemembered, rememberProject, rememberedProject } from './compose-project';
@@ -559,8 +562,10 @@ export default function App() {
      than a dependency list for the same reason `claudeRef` is one: the walk
      ends from three different callbacks and none of them should be rebuilt
      every time one of these opens. `./walk-scope.ts` is the rule. */
+  // The plan the inbox bar is setting up, over the app (w-9f6975906c).
+  const [setupPlan, setSetupPlan] = useState<Plan | null>(null);
   const floatingRef = useRef<OpenOverTheApp>(NOTHING_OVER_THE_APP);
-  floatingRef.current = { modal, settings: settingsOpen, importAgents, newProject, teamShown };
+  floatingRef.current = { modal, settings: settingsOpen, importAgents, newProject, teamShown, setupPlan: !!setupPlan };
   // WHICH PAGE OF SETTINGS A PRESS ASKED FOR, when it asked for one. ⌘K's
   // "Keyboard shortcuts" row opens Settings on the Shortcuts page rather than
   // on its front door; the cog and the plain "Settings…" row leave this null
@@ -965,6 +970,18 @@ export default function App() {
     return missing;
   }, []);
 
+  // THE FALLBACK BAR (w-9f6975906c). Once the walk is over, if neither tool
+  // can run an agent (somebody skipped setup, or signed out since), the inbox
+  // says so with the same two plans the walk asks about. Asked when the walk
+  // ends and again after a setup from the bar finishes; a page that cannot
+  // reach the main process reads as ready, so the bar never appears by guess.
+  const [noPlan, setNoPlan] = useState(false);
+  const checkPlan = useCallback(async () => {
+    const r = await Promise.all([api.engineSetup('ready', 'claude'), api.engineSetup('ready', 'codex')]);
+    setNoPlan(needsPlan(r.map((x) => ({ found: !!x.found, signedIn: !!x.signedIn }))));
+  }, []);
+  useEffect(() => { if (!run) void checkPlan(); }, [run, checkPlan]);
+
   const fire = useCallback((e: Parameters<typeof advanceRun>[1]) => {
     setRun((r) => (r ? advanceRun(r, e) : r));
   }, []);
@@ -1245,6 +1262,7 @@ export default function App() {
     setImportAgents(shut.importAgents);
     setNewProject(shut.newProject);
     setTeamOpen(shut.teamShown);
+    if (!shut.setupPlan) setSetupPlan(null);
   }, []);
 
   const finishRun = useCallback((
@@ -5263,6 +5281,7 @@ export default function App() {
         ) : (
           <>
             <main className={`list-pane${focused || focusedRepeat ? ' pinned' : ''}${bareView ? ' bare' : ''}`}>
+              {noPlan && !run && !focused && !focusedRepeat && <PlanBar onSetup={setSetupPlan} />}
               {focusedRepeat ? (
                 <RepeatFocus
                   rule={focusedRepeat}
@@ -6154,6 +6173,22 @@ export default function App() {
         />
       )}
       {landing && <Landed agents={landing.agents} onGone={() => setLanding(null)} />}
+      {/* THE BAR'S SETUP, on the walk's own screen so it is the card they would
+          have seen in the walk. The arrow closes it; a setup that is running
+          carries on, and the bar checks again when it does. */}
+      {setupPlan && (
+        <div className="fr-screen has-back ps-over">
+          <button type="button" className="back-esc fr-back" aria-label="Back" title="Back" onClick={() => { setSetupPlan(null); void checkPlan(); }}>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10 3.5L5.5 8l4.5 4.5" /></svg>
+          </button>
+          <div className="fr-brand"><AppMark size={22} />{NAME}</div>
+          <PlanSetupCard
+            plan={setupPlan}
+            onDone={() => { setSetupPlan(null); void checkPlan(); void recheckClaude(); }}
+            onSkip={() => { setSetupPlan(null); void checkPlan(); }}
+          />
+        </div>
+      )}
       {/* THE TUTORIAL, OFFERING ITSELF ON A NEW PROJECT (w-9a6ea066d6).
           Out here beside the walk's own cards rather than in the modal stack,
           because it is not one of her modals: nothing opened it, ⌘K does not

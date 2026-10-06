@@ -54,7 +54,7 @@ export function Snooze({ item, count = 1, onPick, onNow, onClose }: {
       title="Schedule"
       subtitle={scheduleSubtitle(item, count)}
       placeholder="Try: 30m, 3h, 8am, tomorrow, next week"
-      hintWhenRefused="Try 30m, 3h, 8am, tomorrow, or next week."
+      hintWhenRefused="try 3h, 8am, tomorrow"
       options={options.map((option) => ({
         label: option.label,
         value: option.ts,

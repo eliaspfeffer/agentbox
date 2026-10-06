@@ -198,16 +198,21 @@ export function ThreadPanel({ parent, replies, md, width, reactions, onReact, on
   );
 }
 
-/** THE LINE UNDER A MESSAGE WITH REPLIES, which opens its thread. */
-export function ThreadLine({ replies, open, onOpen }: { replies: AgentTurn[]; open: boolean; onOpen: () => void }) {
+/**
+ * THE LINE UNDER A MESSAGE WITH REPLIES, which opens its thread. `fresh` is how
+ * many replies came after your own newest word in a thread you are in
+ * (w-920461cbe6): the line then says "2 new replies" and stands out, so a thread
+ * waiting on you is not one more quiet line in a busy chat.
+ */
+export function ThreadLine({ replies, open, onOpen, fresh = 0 }: { replies: AgentTurn[]; open: boolean; onOpen: () => void; fresh?: number }) {
   const team = useContext(TeamContext);
   const line = threadLine(replies);
   return (
-    <button type="button" className={`chat-thread-line${open ? ' open' : ''}`} onClick={onOpen} aria-expanded={open}>
+    <button type="button" className={`chat-thread-line${fresh ? ' fresh' : ''}${open ? ' open' : ''}`} onClick={onOpen} aria-expanded={open}>
       <span className="chat-thread-faces" aria-hidden="true">
         {line.faces.map((id) => <Face key={id} person={team?.byId.get(id) ?? null} me={id === team?.me} />)}
       </span>
-      <span className="chat-thread-n">{line.count}</span>
+      <span className="chat-thread-n">{fresh ? `${fresh} new ${fresh === 1 ? 'reply' : 'replies'}` : line.count}</span>
       <span className="chat-thread-last">{line.last}</span>
     </button>
   );

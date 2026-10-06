@@ -97,6 +97,27 @@ function defaultReaddir(dir) {
   try { return fs.readdirSync(dir); } catch { return []; }
 }
 
+// THE COPY THE CLAUDE APP KEEPS FOR ITSELF, one folder per version, newest
+// first. Somebody who has only ever used Claude Code inside the Claude app has
+// this and nothing else (w-9f6975906c, measured 2026-10-05: 2.1.209 there, and
+// it shared the CLI's sign-in). It is searched LAST, after the shell, because it
+// updates when the app does and a real install is fresher.
+export function appCopyPaths(home = os.homedir(), readdir = defaultReaddir) {
+  const dir = path.join(home, 'Library/Application Support/Claude/claude-code');
+  return readdir(dir)
+    .filter((v) => /^\d+(\.\d+)*$/.test(v))
+    .sort(newestFirst)
+    .map((v) => path.join(dir, v, 'claude.app/Contents/MacOS/claude'));
+}
+
+function newestFirst(a, b) {
+  const x = a.split('.').map(Number), y = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (y[i] ?? 0) - (x[i] ?? 0);
+  }
+  return 0;
+}
+
 // WHAT CLAUDE CODE LEAVES BEHIND. Any one of these means it has run on this
 // Mac. None of them is a binary and none of them is ever spawned; they exist
 // only to stop the app announcing an absence it cannot support.
@@ -263,6 +284,10 @@ export function findClaudeBin({
 
   const fromShell = shellSaid(shellLookup());
   if (fromShell.path) return { path: fromShell.path, found: true, certain: true, from: 'shell', searched, evidence: null };
+
+  for (const candidate of appCopyPaths(home, readdir)) {
+    if (exists(candidate)) return { path: candidate, found: true, certain: true, from: 'app', searched, evidence: null };
+  }
 
   // NOT FOUND, AND WHETHER THAT IS KNOWN. Every cheap path missed and every
   // shell we could reach missed, so the last question is whether this Mac shows

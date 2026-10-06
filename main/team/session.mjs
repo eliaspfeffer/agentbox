@@ -50,7 +50,15 @@ export function teamConfigOnThisMac(home = os.homedir()) {
 // another team is never quietly moved onto this Mac's. AGENTBOX_TEAM_CONFIG
 // points at another file from a checkout only, and is first because that is
 // what the tests run on.
+//
+// AN INSTALLED BUILD IS ALWAYS THE SINGLE-PERSON APP (2026-10-06). The first
+// download from agentbox.ac opened on the team's sign-in page, because the Mac
+// it ran on kept a team key. The founder: "users are no longer using the
+// multiplayer version so this should never be visible." The team version still
+// runs from a checkout (npm run app). See
+// tests/the-installed-app-is-the-single-person-app.test.mjs.
 export function loadCloudConfig(appDir, { packaged = isPackagedElectron(), home = os.homedir() } = {}) {
+  if (packaged) return null;
   const tries = [
     !packaged && process.env.AGENTBOX_TEAM_CONFIG,
     path.join(appDir, 'cloud', 'team.config.json'),

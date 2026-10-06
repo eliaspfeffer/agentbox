@@ -73,6 +73,8 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
     onClose: () => void;
     onResize: (width: number) => void;
     onSend: (uid: string, text: string) => unknown;
+    /** New replies waiting on you, by thread (`whatWaits`). */
+    fresh?: Record<string, number>;
   };
   item: WorkItem;
   // THE THREADS THIS ONE FILED, EACH ON THE TURN THAT FILED IT (w-2e13752a85).
@@ -338,7 +340,7 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
           onReact: chips.react,
           onQuote,
           onHandToAgent,
-          ...(thread ? { replies: built.replies, openThread: thread.open, onOpenThread: thread.onOpen } : {}),
+          ...(thread ? { replies: built.replies, openThread: thread.open, onOpenThread: thread.onOpen, freshThreads: thread.fresh } : {}),
         } : {})}
       />
       {/* THE OPEN THREAD, beside the chat rather than in it (w-920461cbe6). */}
