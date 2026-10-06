@@ -28,9 +28,10 @@
 //    the downloaded update is applied then, so the next launch is current. The
 //    button is the fast path, not the only path.
 //
-// WHERE THE UPDATE COMES FROM. `Astral-Agent/astral-releases`, the same public
-// repo astral.ac/download already redirects to, configured in package.json's
-// `build.publish`. electron-updater reads `releases/latest`, then
+// WHERE THE UPDATE COMES FROM. `agentboxhq/agentbox-releases`, the same public
+// repo agentbox.ac/download redirects to, configured in package.json's
+// `build.publish` (until 2026-10-05 it was Astral-Agent/astral-releases, which
+// is private, so no installed copy could ever read it). electron-updater reads `releases/latest`, then
 // `latest-mac.yml` on that release, and compares its `version` against this
 // build's. It downloads the `.zip`, NOT the `.dmg`: Squirrel. Mac swaps an .app
 // bundle and cannot read a disk image, which is why `build.mac.target` gained a
