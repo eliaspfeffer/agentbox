@@ -30,12 +30,12 @@ import { Name } from '../shared/product-name.mjs';
 
 const TWENTY_MINUTES = 20 * 60_000;
 
-// Her own night. Both accounts hit the weekly limit, and every row in her inbox
-// came back carrying the same sentence.
+// A night where every account hits the weekly limit, and every row in the
+// inbox comes back carrying the same sentence.
 const DIED = new Date(2026, 7, 31, 22, 22).getTime();
 const LATER = DIED + TWENTY_MINUTES + 60_000;
 
-// What the CLI actually printed, off her trace logs that evening.
+// What the CLI actually prints, off real trace logs.
 const LIMIT_LINE = "You've hit your weekly limit · resets Sep 3 at 12pm (America/Los_Angeles)";
 
 const LIMIT_TRACE = `# Observing several issues
@@ -151,8 +151,8 @@ describe('a watermark from before tonight', () => {
 
 describe('the half hour when nothing can spawn', () => {
   it('still counts what is stuck, because that is when it is worst', () => {
-    // The fleet brake goes on when no account is left healthy, which on her
-    // machine was both of them at the weekly limit. The tick used to return at
+    // The fleet brake goes on when no account is left healthy, which here
+    // means every one of them at the weekly limit. The tick used to return at
     // that line and take the count with it, so the app fell silent exactly when
     // every task in her inbox was stopped.
     sup._fruitless['agentbox:w-limit'] = { runs: 1, endedAt: DIED, founderAt: 0 };

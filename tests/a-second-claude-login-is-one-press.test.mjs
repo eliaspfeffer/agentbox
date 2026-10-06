@@ -1,11 +1,10 @@
 // A SECOND CLAUDE ACCOUNT IS ONE PRESS, THE WAY A CODEX ONE ALREADY WAS.
 //
-// She asked on w-3498e0cad2, 2026-09-22: "I see clearly how to add accounts to
-// Codex, but not sure how to do the same for Claude (I sometimes, not now but
-// sometimes, have a work and personal account active)". There was no way,
-// deliberately: on 2026-08-30 she had asked us not to encourage multi
-// accounting while this was a product we sold. She withdrew that on the same
-// row: "we're no longer offering this as a commercially viable product... The
+// Asked on w-3498e0cad2, 2026-09-22: the Codex card showed clearly how to add
+// an account and the Claude card did not, for someone who keeps, say, a work
+// and a personal account active. There was no way, deliberately: on
+// 2026-08-30 the call had been not to encourage multi accounting while this
+// was a product we sold. That was withdrawn on the same row: "we're no longer offering this as a commercially viable product... The
 // rules have changed so I think you should allow multi-accounting."
 //
 // So the Claude card has the Codex card's door, and the three parts of it are

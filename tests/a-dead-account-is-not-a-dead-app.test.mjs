@@ -3,10 +3,10 @@
 // The inbox once read "Agents are failing to start: done: Failed to
 // authenticate: OAuth session expired and could not be refreshed".
 //
-// What was actually happening, measured on the machine that showed it: two
-// Claude subscriptions, and the supervisor round-robins spawns across them.
-// The second one, /Users/you/.claude-second, was signed out. Running the CLI
-// against it by hand printed that exact sentence. So roughly half of every
+// What sits behind it on a machine with two Claude subscriptions, which the
+// supervisor round-robins spawns across: the second one, say
+// /Users/you/.claude-second, is signed out. Running the CLI against it by hand
+// prints that exact sentence. So roughly half of every
 // spawn died in about two seconds, and each death (a) lit a fleet-wide banner
 // claiming all agents were failing, and (b) put a fleet-wide brake on the
 // account that was working, one minute doubling to thirty.
@@ -105,11 +105,10 @@ describe('the words the tool printed never reach her screen', () => {
   });
 
   // THIS LINE USED TO ASSERT 'signed-out', AND THAT ASSERTION WAS THE BUG. It
-  // is her second account's real refusal, and an organization that has switched
-  // Claude Code off is not a login that has run out: she was told to type
-  // /login, did it twice in one afternoon, and the login succeeded both times
-  // while the row stayed dead. It has its own cause and its own remedy now, and
-  // the whole of that afternoon is written up in
+  // is a real refusal a second account can give, and an organization that has
+  // switched Claude Code off is not a login that has run out: a user told to
+  // type /login does it, the login succeeds, and the row stays dead. It has its
+  // own cause and its own remedy now, and the whole of it is written up in
   // tests/an-account-her-admin-turned-off-is-not-signed-out.test.mjs.
   it('knows an organization that blocks Claude Code from a login that has run out', () => {
     expect(troubleCause('organization has disabled Claude subscription access')).toBe('org-blocked');
@@ -126,7 +125,7 @@ describe('one signed-out account does not stop the one that works', () => {
   it('leaves the healthy account running at full speed', () => {
     sup.noteExitForBackoff(deadOnArrival(SECOND), { personal: false });
     // THE BUG SHE PHOTOGRAPHED. This used to be a cooldown tick refuses to run
-    // through, so her good subscription sat idle because her bad one died.
+    // through, so a good subscription sat idle because a bad one died.
     expect(sup._spawnCooldownUntil ?? 0).toBe(0);
     expect(sup._fastExits ?? 0).toBe(0);
     expect(sup._healthyProfiles()).toEqual(['default']);

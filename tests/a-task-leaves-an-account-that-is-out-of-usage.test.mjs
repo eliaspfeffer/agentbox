@@ -1,30 +1,30 @@
 // A TASK WHOSE ACCOUNT IS OUT OF USAGE CARRIES ON UNDER ONE THAT IS NOT.
 //
-// 2026-09-24, w-ca48e69535. Her Codex work login hit its weekly limit at 2:03pm.
-// She switched Agentbox to her other Codex login, which was at 0%, and replied
-// on the row. Four replies in a row went back to the capped login, each worked
-// for about two minutes and then failed with the line below, and the row sat
-// still. Three things were wrong, and each has an assertion here:
+// w-ca48e69535. The shape: one Codex login hits its weekly limit. The user
+// switches Agentbox to a second Codex login with room left, and replies on
+// the row. Every reply goes back to the capped login, works for about two
+// minutes and then fails with the line below, and the row sits still. Three
+// things were wrong, and each has an assertion here:
 //
 //   1. A run that hits the limit after two minutes is not a "fast exit", so the
 //      account was never marked, and the normal branch CLEARED its trouble.
 //   2. Codex names a day, not an hour, so even a marked account would have come
-//      back every thirty minutes for four days.
+//      back every thirty minutes for days.
 //   3. The rule that moves a chat off a broken account only read Claude's
 //      books, and waited out every usage limit however long it was.
 import { describe, it, expect } from 'vitest';
 import { Supervisor } from '../main/supervisor.mjs';
 import { limitResetMoment, troubleCause } from '../shared/spawn-trouble.mjs';
 
-// Copied off her run log, w-3a14ab56d6, 21:10:12Z.
+// The line Codex prints, copied off a real run log.
 const CODEX_LIMIT = "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Sep 28th, 2026 1:05 PM.";
 
-const WORK = 'default';
-const GMAIL = '/Users/her/.codex-2';
+const FIRST = 'default';
+const SECOND = '/Users/her/.codex-2';
 
 function bare(config = {}) {
   const s = Object.create(Supervisor.prototype);
-  s.config = { authProfiles: ['default'], codexProfiles: [WORK, GMAIL], maxConcurrentSessions: 3, ...config };
+  s.config = { authProfiles: ['default'], codexProfiles: [FIRST, SECOND], maxConcurrentSessions: 3, ...config };
   s._profileCooldown = {};
   s._profileStrikes = {};
   s._profileTrouble = {};
@@ -39,7 +39,7 @@ function bare(config = {}) {
 // test keeps the real line and its own fixed `from`.
 const LIVE_LIMIT = CODEX_LIMIT.replace('2026', String(new Date().getFullYear() + 1));
 
-const cappedAfterTwoMinutes = (profile = WORK) => ({
+const cappedAfterTwoMinutes = (profile = FIRST) => ({
   engine: 'codex',
   profile,
   startedAt: Date.now() - 118_800,
@@ -79,7 +79,7 @@ describe('a run that hits the limit late marks its account', () => {
     s.noteExitForBackoff(cappedAfterTwoMinutes());
     const picked = new Set();
     for (let i = 0; i < 10; i += 1) picked.add(s._pickProfile('codex'));
-    expect([...picked]).toEqual([GMAIL]);
+    expect([...picked]).toEqual([SECOND]);
   });
 
   // The branch this reuses must not swallow ordinary work: a long run that
@@ -87,47 +87,47 @@ describe('a run that hits the limit late marks its account', () => {
   it('still clears an account when a long run ends normally', () => {
     const s = bare();
     s._profileTrouble['codex:default'] = { cause: 'unknown', since: 1, at: 1 };
-    s.noteExitForBackoff({ engine: 'codex', profile: WORK, startedAt: Date.now() - 600_000, result: 'done', resultIsError: false, tail: [] });
+    s.noteExitForBackoff({ engine: 'codex', profile: FIRST, startedAt: Date.now() - 600_000, result: 'done', resultIsError: false, tail: [] });
     expect(s._profileTrouble['codex:default']).toBeUndefined();
   });
 });
 
 describe('the chat moves to an account that can run it', () => {
-  it('lets go of a capped codex login when her other one can run', () => {
+  it('lets go of a capped codex login when another one can run', () => {
     const s = bare();
     s.noteExitForBackoff(cappedAfterTwoMinutes());
-    expect(s._profileCannotHoldAChat(WORK, 'codex')).toBe(true);
-    expect(s._profileCannotHoldAChat(GMAIL, 'codex')).toBe(false);
+    expect(s._profileCannotHoldAChat(FIRST, 'codex')).toBe(true);
+    expect(s._profileCannotHoldAChat(SECOND, 'codex')).toBe(false);
   });
 
   it('follows the account she picked', () => {
-    const s = bare({ activeAccount: { codex: GMAIL } });
+    const s = bare({ activeAccount: { codex: SECOND } });
     s.noteExitForBackoff(cappedAfterTwoMinutes());
-    expect(s._profileCannotHoldAChat(WORK, 'codex')).toBe(true);
-    expect(s._pickProfile('codex')).toBe(GMAIL);
+    expect(s._profileCannotHoldAChat(FIRST, 'codex')).toBe(true);
+    expect(s._pickProfile('codex')).toBe(SECOND);
   });
 
   // Nowhere better to go: dropping the chat would lose the thread and buy
   // nothing, so it waits for the reset as it always did.
   it('keeps the chat when the capped login is the only one', () => {
-    const s = bare({ codexProfiles: [WORK] });
+    const s = bare({ codexProfiles: [FIRST] });
     s.noteExitForBackoff(cappedAfterTwoMinutes());
-    expect(s._profileCannotHoldAChat(WORK, 'codex')).toBe(false);
+    expect(s._profileCannotHoldAChat(FIRST, 'codex')).toBe(false);
   });
 
   it('keeps the chat when every login is capped', () => {
     const s = bare();
-    s.noteExitForBackoff(cappedAfterTwoMinutes(WORK));
-    s.noteExitForBackoff(cappedAfterTwoMinutes(GMAIL));
-    expect(s._profileCannotHoldAChat(WORK, 'codex')).toBe(false);
+    s.noteExitForBackoff(cappedAfterTwoMinutes(FIRST));
+    s.noteExitForBackoff(cappedAfterTwoMinutes(SECOND));
+    expect(s._profileCannotHoldAChat(FIRST, 'codex')).toBe(false);
   });
 
   // WHERE HER REPLY GOES. `rowSessionFor` answering null is the fresh brief on
-  // the picked account, carrying the row's own thread. That is the path her
-  // hand-moved history took on 2026-09-24, and it is the one she saw work.
+  // the picked account, carrying the row's own thread. That is the path a
+  // hand-moved history takes, and it is the one known to work.
   it('sends her reply to a fresh session instead of the capped login', () => {
-    const s = bare({ activeAccount: { codex: GMAIL } });
-    s._rowSessions = { 'w-1': { sessionId: 't-1', product: 'p', profile: WORK, engine: 'codex' } };
+    const s = bare({ activeAccount: { codex: SECOND } });
+    s._rowSessions = { 'w-1': { sessionId: 't-1', product: 'p', profile: FIRST, engine: 'codex' } };
     s._engineFor = () => 'codex';
     s.transcriptFile = () => '/somewhere/rollout.jsonl';
     const item = { id: 'w-1', product: 'p' };

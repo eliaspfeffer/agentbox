@@ -192,8 +192,8 @@ describe('picking an account moves the work onto it', () => {
     expect(s._profilesFor('codex')).toEqual(['default']);
   });
 
-  // THE USAGE FIGURE FOLLOWS THE PICK. w-cad7e3e509, 2026-09-24: she switched
-  // Codex to her second login and the card kept showing the first one's 99%,
+  // THE USAGE FIGURE FOLLOWS THE PICK. w-cad7e3e509: switching Codex to a
+  // second login left the card showing the first one's 99%,
   // because the reader was pinned to the primary home while the work moved.
   it('reads usage from the login she picked, not the primary one', () => {
     const s = sup({ codexProfiles: ['default', '/tmp/codex-work'], activeAccount: { codex: '/tmp/codex-work' } });

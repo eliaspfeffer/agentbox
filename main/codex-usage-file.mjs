@@ -4,17 +4,17 @@
 // and it is a good one: never spawn anything and never ask OpenAI anything to
 // draw a picture. Codex's figures ride the app-server the fleet is already
 // running and arrive unprompted during a turn. The unstated cost of that rule is
-// that the app only ever learns a number for work POWERUP ITSELF RAN. She runs
-// Codex in its own app all day, so on her Mac the push had never arrived and the
-// panel was empty while her weekly limit sat at 100% used.
+// that the app only ever learns a number for work POWERUP ITSELF RAN. Someone
+// who runs Codex in its own app all day never gets the push, so the panel sits
+// empty while their weekly limit is at 100% used.
 //
 // SO THERE IS A THIRD SOURCE, AND IT BREAKS NEITHER HALF OF THAT RULE. Codex
 // writes every rate-limit report it receives into its own session log under
 // CODEX_HOME, as a `rate_limits` object on the `token_count` events. Reading it
 // starts no process, sends nothing anywhere, and touches no credential: it is a
-// file on her disk that Codex put there. Measured on her Mac 2026-09-18: 1,140
-// such records across her twenty-five most recent sessions, the newest written
-// the same minute she filed the row.
+// file on the disk that Codex put there. A busy Codex home holds hundreds of
+// such records across its most recent sessions, the newest written within
+// the minute.
 //
 // THE PUSH STILL WINS. A live notification is this second's truth and a log is
 // the last thing anybody wrote down, so main/codex-usage.mjs reads this only when
@@ -111,7 +111,7 @@ function tail(file, bytes = TAIL_BYTES) {
  *
  * Lines are walked backwards because the last report is the one that is true. A
  * report carrying no usable window is skipped rather than accepted: Codex emits
- * an all-null snapshot for limit families that do not apply to the account (her
+ * an all-null snapshot for limit families that do not apply to the account (a
  * `premium` family, every field null), and taking one of those would blank a
  * panel that had a real figure a moment earlier.
  */

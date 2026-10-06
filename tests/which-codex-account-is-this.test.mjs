@@ -3,7 +3,7 @@
 // THE CARD HAD A REASON FOR THE SILENCE AND THE REASON HAD EXPIRED. Both the
 // component and its test said, in as many words, that `~/.codex/auth.json`
 // carries a mode and an opaque account id and no email, so the question had no
-// honest answer. Measured against codex-cli 0.153.4 on her Mac that day, the
+// honest answer. Measured against codex-cli 0.153.4 on a real Mac, the
 // `id_token` in that same file carries `email`, `name`, and a ChatGPT plan.
 // `codex login status` answers "Logged in using ChatGPT" and names nobody, so
 // the file is the only source there is.
@@ -24,8 +24,8 @@ const jwt = (claims) => ['x', Buffer.from(JSON.stringify(claims)).toString('base
 const AUTH_CLAIM = 'https://api.openai.com/auth';
 
 /**
- * Her file's shape, with her values replaced. The claim names are the ones
- *  really present on her Mac, read on 2026-09-18 without printing a value. */
+ * A real file's shape, with its values replaced. The claim names are the ones
+ *  really present in one, read without printing a value. */
 function authFile(overrides = {}) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-auth-'));
   const auth = {
@@ -57,7 +57,7 @@ describe('reading who Codex is signed in as', () => {
     expect(account.mode).toBe('chatgpt');
   });
 
-  // A PLAN ID WE DO NOT KNOW IS PRINTED AS THE ID. Her own token reads "prolite",
+  // A PLAN ID WE DO NOT KNOW IS PRINTED AS THE ID. A token can read "prolite",
   // which title-cases into "Prolite", a product name nobody at OpenAI has ever
   // used. Inventing a label is how a screen tells a confident lie about what
   // somebody is paying for.

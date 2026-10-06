@@ -72,7 +72,7 @@ describe('the mode reaches the thread', () => {
     expect(params('full-access')).toMatchObject({ sandbox: 'danger-full-access', approvalPolicy: 'never' });
   });
 
-  // 2026-09-24, w-ca48e69535: auto on her second Codex login carded her for
+  // w-ca48e69535: auto on a second Codex login carded the user for
   // almost every step, because the reviewer lived only in the first login's
   // config.toml. The thread has to carry it, so any account behaves the same.
   it('auto hands its asks to Codex\'s own reviewer, on any account', () => {

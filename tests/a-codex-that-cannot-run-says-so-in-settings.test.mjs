@@ -3,7 +3,7 @@
 // `_noteProfileTrouble` records what is wrong with an account through
 // `_accountKey`, which exists precisely because BOTH engines call their primary
 // login 'default' -- so a Codex failure lands under `codex:default` and cannot
-// strike her Claude subscription (the 2026-08-24 shape). `status` then exports
+// strike a Claude subscription (one account's fact applied to another). `status` then exports
 // that book verbatim as `accountTrouble`, and the only reader in the app is
 // main/settings.mjs, which indexes it by a bare CLAUDE folder name:
 //
@@ -13,9 +13,9 @@
 // It is never `codex:default`. The entry is in the IPC payload and nothing can
 // ever match it.
 //
-// WHAT THAT COSTS HER. Her Codex subscription lapses. Every Codex task stops.
-// She opens Settings › General and reads "Signed in to Claude", one green row,
-// her plan -- and nothing else. The fleet brake cannot speak either: it is
+// WHAT THAT COSTS. A Codex subscription lapses. Every Codex task stops.
+// The user opens Settings › General and reads "Signed in to Claude", one green
+// row, the plan -- and nothing else. The fleet brake cannot speak either: it is
 // armed only by a fast CLAUDE exit with no healthy CLAUDE account left
 // (`_healthyProfiles` reads Claude keys only, deliberately), so "No agents can
 // start" is structurally unable to be true about Codex. The fact existed on
@@ -108,7 +108,7 @@ describe('what is wrong with the second engine', () => {
   });
 
   // THE CASE THAT MUST NOT MATCH, and it is the whole reason `_accountKey`
-  // exists: her Claude default login being signed out is not a fact about
+  // exists: the Claude default login being signed out is not a fact about
   // Codex, and asking about one engine must never answer with the other's.
   it('is not her claude account, whatever that account is doing', () => {
     const { supervisor } = build();

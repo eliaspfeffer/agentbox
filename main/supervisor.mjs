@@ -604,8 +604,8 @@ export class Supervisor {
    * LIFTED TOO WHEN NOTHING ELSE ON ITS ENGINE COULD RUN (2026-10-04). It used
    * to stay out on the theory that retrying cannot help, but she IS the person:
    * she signs back in, presses Resume, and that is the only signal the app
-   * gets. Her one login was parked from 11:30:29 to 12:00:29 and every Resume
-   * and "continue" in between left her rows queued. If she is still signed out
+   * gets. With only one login, a park of half an hour meant every Resume and
+   * "continue" in between left the rows queued. If she is still signed out
    * the trial dies in two seconds and parks it again on the spot. Where another
    * login is working, the dead one stays out: the work is moving without it. */
   liftBrakeForHer() {
@@ -1791,7 +1791,7 @@ export class Supervisor {
   // But a bigger cap is not what makes it safe either, because CLAUDE CODE
   // DELETES ITS OWN TRANSCRIPTS AT THIRTY DAYS and an entry whose transcript
   // is gone is already refused by `rowSessionFor`. Measured the same day
-  // across both her logins: 3,808 transcript files, oldest 31.0 days, exactly
+  // across a real set of transcripts: 3,808 files, oldest 31.0 days, exactly
   // one over 30. So thirty days is the true life of a chat whatever we set
   // here, and the honest prune is by age, with the count left as a backstop
   // far above where it can bite: replaying her 1,605 real replies through this
@@ -1801,7 +1801,7 @@ export class Supervisor {
   // at 500. Re-run it all with `scripts/replay-the-forgetting-rule.mjs`.
   static get ROW_SESSION_CAP() { return 2000; }
 
-  // Claude Code's own `cleanupPeriodDays`, which neither of her settings files
+  // Claude Code's own `cleanupPeriodDays`, which a settings file rarely
   // overrides. Past this the transcript is gone and the entry is dead weight.
   static get ROW_SESSION_MAX_AGE_MS() { return 30 * 24 * 60 * 60 * 1000; }
 
@@ -2826,11 +2826,11 @@ export class Supervisor {
     // worth less than the first. It is wrong for a worker that never started,
     // because nobody has looked at the row at all.
     //
-    // Measured the day this landed: her Codex tasks could not start, and two
-    // of them earned five strikes each and went to sleep for twenty-four
-    // hours. The engine was fixed at 15:04 and those two rows would still not
-    // have been tried again until 13:48 the following afternoon, serving a
-    // sentence earned entirely by a bug that no longer exists.
+    // Measured the day this landed: Codex tasks could not start, and two of
+    // them earned five strikes each and went to sleep for twenty-four hours.
+    // Once the engine was fixed, those two rows would still not have been
+    // tried again until the following afternoon, serving a sentence earned
+    // entirely by a bug that no longer exists.
     //
     // The first rung still applies, so a broken engine is not hammered: fifteen
     // minutes between attempts, forever, until it works or she is told.
@@ -2877,22 +2877,22 @@ export class Supervisor {
   }
 
   /* ----------------------- auth profiles (subscriptions) ------------------ */
-  // The founder holds two Claude subscriptions; workers round-robin across
-  // them (CLAUDE_CONFIG_DIR per spawn), which roughly doubles throughput. A
-  // profile whose spawns keep dying instantly (expired plan, broken login)
-  // quarantines itself for 30 minutes, and the fleet behaves as if only the
-  // healthy subscription exists; a resubscribe simply starts working again.
-  // HERS FIRST, THEN WHATEVER IS SIGNED IN ON THE DISK. It used to be only the
-  // config key, and an account she logged into herself could therefore sit
-  // unused while the fleet starved on one that was at its limit
-  // (main/account-discovery.mjs has the afternoon that cost). One copy of the
+  // A user may hold more than one Claude subscription; workers round-robin
+  // across them (CLAUDE_CONFIG_DIR per spawn), which roughly doubles throughput
+  // with two. A profile whose spawns keep dying instantly (expired plan, broken
+  // login) quarantines itself for 30 minutes, and the fleet behaves as if only
+  // the healthy subscriptions exist; a resubscribe simply starts working again.
+  // THE CONFIGURED ONES FIRST, THEN WHATEVER IS SIGNED IN ON THE DISK. It used
+  // to be only the config key, and an account someone logged into themselves
+  // could therefore sit unused while the fleet starved on one that was at its
+  // limit (main/account-discovery.mjs has what that costs). One copy of the
   // rule, there, so the fleet and the Agents page can never disagree about
   // which accounts exist.
   _profiles() {
     return effectiveProfiles(this.config.authProfiles, { home: this.config.home });
   }
 
-  // HER CODEX LOGIN, WHICH IS NOT ONE OF HER CLAUDE ONES.
+  // THE CODEX LOGIN, WHICH IS NOT ONE OF THE CLAUDE ONES.
   //
   // Every entry in `authProfiles` is a CLAUDE_CONFIG_DIR: a folder holding a
   // Claude login and no `auth.json` Codex could ever read. Handing one of them
@@ -2976,8 +2976,8 @@ export class Supervisor {
   // IT IS ALLOWED TO COME BACK EMPTY, and that is the change. It used to end
   // `return live.length ? live: ['default']`, which is right for PICKING --
   // somewhere has to be tried -- and wrong for COUNTING, and this one method
-  // was doing both. On her two Claude logins the fallback hid at worst half the
-  // truth. On CODEX, which has a single login, it inverted the entire
+  // was doing both. With two Claude logins the fallback hid at worst half the
+  // truth. On a CODEX setup with a single login, it inverted the entire
   // mechanism: quarantining the one account it has put that same account
   // straight back in the pool on the next line, so a login that had run out was
   // struck, cooled down for thirty minutes, and then handed the very next
@@ -2998,7 +2998,7 @@ export class Supervisor {
 
   // ROUND-ROBIN WITHIN ONE ENGINE. The cursor is per engine because the pools
   // are: one shared counter would have a Codex spawn advance the rotation
-  // across her two Claude subscriptions, so a run of Codex tasks could leave
+  // across the Claude subscriptions, so a run of Codex tasks could leave
   // one of them doing all the Claude work.
   _pickProfile(engine = DEFAULT_ENGINE) {
     const which = engineOf(engine);
@@ -3024,11 +3024,10 @@ export class Supervisor {
    *
    * `profile` is a folder name and BOTH ENGINES HAVE A FOLDER CALLED 'default',
    * so without this a Codex session that died would strike her Claude default
-   * subscription and quarantine it for thirty minutes. That is exactly the bug
-   * of 2026-08-24 -- a fact about one account applied to another, where one
-   * signed-out subscription stopped the one that was working, five times
-   * between 17:39 and 19:08 -- and the second engine would have reintroduced it
-   * for free.
+   * subscription and quarantine it for thirty minutes. That is exactly an
+   * earlier bug -- a fact about one account applied to another, where one
+   * signed-out subscription stopped the one that was working, again and again
+   * -- and the second engine would have reintroduced it for free.
    *
    * An engine nobody recorded is Claude Code, so every key written before the
    * second engine existed still names the account it always named.
@@ -3057,7 +3056,7 @@ export class Supervisor {
   // WHAT IS WRONG WITH ONE ACCOUNT, remembered until a session on it survives.
   //
   // This exists because the fleet-wide banner was reporting an account-shaped
-  // fact as an app-shaped one: her second Claude subscription was signed out,
+  // fact as an app-shaped one: with a second Claude subscription signed out,
   // half of every spawn round-robined onto it and died in two seconds, and the
   // screen said all agents were failing while the other half worked the whole
   // time. A fact about one account now stays on that account.
@@ -3091,7 +3090,7 @@ export class Supervisor {
    * both engines call their primary login 'default'; `status` exports that book
    * verbatim as `accountTrouble`; and its one reader, the Accounts page in
    * main/settings.mjs, indexes it by a bare Claude folder name and therefore
-   * could never match `codex:default`. Her Codex subscription could lapse,
+   * could never match `codex:default`. A Codex subscription could lapse,
    * every Codex task stop, and Settings show a green Claude row and nothing
    * else -- the fleet brake being deliberately Claude-only, so "No agents can
    * start" cannot be true about Codex either.
@@ -3133,11 +3132,11 @@ export class Supervisor {
   }
 
   /*
-   * CAPACITY IS PER SUBSCRIPTION, AND SHE HAS TWO KINDS OF SUBSCRIPTION NOW.
+   * CAPACITY IS PER SUBSCRIPTION, AND THERE ARE TWO KINDS OF SUBSCRIPTION NOW.
    *
    * IT DID NOT. This was one number for the whole Mac and it was built out of
    * `_liveProfiles`, which is the CLAUDE auth-profile pool -- so a Codex task
-   * queued behind three Claude workers while her OpenAI subscription did
+   * queued behind three Claude workers while the OpenAI subscription did
    * nothing, and logging into Codex could never widen anything, because the
    * multiplier counted Claude logins.
    *
@@ -3371,9 +3370,9 @@ export class Supervisor {
     if (session.stoppedByUs) return;
     // A CODEX RUN CANNOT STRIKE A CLAUDE ACCOUNT, and until this slice the only
     // way to be sure of that was to return here: `_noteProfileTrouble` and
-    // `_strikeProfile` took `session.profile`, which was one of her Claude
-    // logins whatever engine had died on it, so a Codex failure quarantined her
-    // working Claude subscription -- the 2026-08-24 shape, where one signed-out
+    // `_strikeProfile` took `session.profile`, which was one of the Claude
+    // logins whatever engine had died on it, so a Codex failure quarantined a
+    // working Claude subscription -- the old shape, where one signed-out
     // account halted the one that was fine.
     //
     // THAT GUARANTEE IS NOW IN `_accountKey` INSTEAD, which is a better place
@@ -3406,12 +3405,11 @@ export class Supervisor {
     // no apparent reason, wearing a new hat.
     const quickButReal = session.result != null && !session.resultIsError;
     // A RUN THAT ENDS ON ITS ACCOUNT'S LIMIT SAYS SO WHATEVER ITS LENGTH.
-    // Measured (w-ca48e69535): a Codex login hit its weekly limit and every
-    // reply after that worked for about two minutes, then failed with "You've
-    // hit your usage limit". Two minutes is not a fast exit, so each one fell to
-    // the branch below that CLEARS the account's trouble, and the row went
-    // straight back to the capped login four times while the other account sat
-    // at 0%.
+    // When a Codex login hits its weekly limit, every reply after that works
+    // for about two minutes, then fails with "You've hit your usage limit".
+    // Two minutes is not a fast exit, so each one fell to the branch below
+    // that CLEARS the account's trouble, and with a second account idle the
+    // row still went straight back to the capped login, again and again.
     //
     // AND SO DOES A RUN THE ACCOUNT REFUSED IN ANY OTHER WAY (2026-10-04). A
     // signed-out Codex retries ten times, five over WebSocket and five over
@@ -3469,10 +3467,9 @@ export class Supervisor {
       // ONLY A FLEET WITH NOWHERE LEFT TO RUN GETS THE FLEET-WIDE BRAKE.
       //
       // This used to fire on every fast exit whatever else was healthy, so one
-      // signed-out subscription stopped her working one for a minute, then two,
-      // then four, doubling to thirty. Measured: five dead spawns on the second
-      // account inside an hour and a half, each one halting the account that
-      // was working. The per-account cooldown above
+      // signed-out subscription stopped a working one for a minute, then two,
+      // then four, doubling to thirty: every dead spawn on the signed-out
+      // account halted the account that was working. The per-account cooldown above
       // already keeps a bad account out of the rotation; the brake is only for
       // when there is no good account left to be kept out of anything.
       const healthy = this._healthyProfiles().length;
@@ -3486,7 +3483,7 @@ export class Supervisor {
         this._lastFastExit = { at: Date.now(), cause, raw };
         onLine(`fast exit #${this._fastExits}; next spawn in ${Math.round(delay / 60000)}m`);
       } else {
-        // Her account is fine and it stays fine. Nothing is said on screen and
+        // The working account is fine and it stays fine. Nothing is said on screen and
         // nothing is slowed down; the trace log has the whole story.
         this._fastExits = 0;
         this._spawnCooldownUntil = 0;
@@ -3800,8 +3797,8 @@ export class Supervisor {
    * The line it fills already existed and it could never have fired for her.
    * `_spawnTrouble` below wants `_fleetTroubleSince`, which is only ever set
    * when NO Claude account is left healthy, and it wants `sessions.size === 0`.
-   * Her Claude agents worked all day while four Codex tasks and four on a
-   * signed-out second login sat there, so both gates were open the whole time
+   * Claude agents can work all day while Codex tasks and tasks on a
+   * signed-out second login sit there, so both gates were open the whole time
    * and the app had no way at all to say what she could plainly see. The
    * subject is the tasks now, not the fleet, and a working engine beside a
    * broken one no longer buys the broken one silence.
@@ -4226,7 +4223,7 @@ export class Supervisor {
      * to break out of the queue entirely. That break was correct while there
      * was one cap -- nothing further down could fit either -- and it is a
      * starvation bug now that there are two: a Codex row sitting behind three
-     * unfittable Claude rows would never be reached at all, so her Codex
+     * unfittable Claude rows would never be reached at all, so the Codex
      * subscription would go on doing nothing with a Codex task in the queue.
      * That is the same shape as the bug the slash-command sort-to-front was
      * written for, and the deleted 2026-08-25 build shipped with it.
@@ -4552,8 +4549,8 @@ export class Supervisor {
     const resumeIdOnDisk = resumeSessionId ?? rowChat?.sessionId ?? forkFrom?.sessionId ?? null;
     // AND WHICH SUBSCRIPTION IT LIVES ON. A resume is only a resume on the
     // account that started it: the transcript sits under that profile's home
-    // and under no other. She holds two Claude logins and spawns round-robin
-    // across them, so half of her replies handed `--resume` an id the other
+    // and under no other. With two Claude logins, spawns round-robin across
+    // them, so half of the replies handed `--resume` an id the other
     // home had never heard of. The CLI printed "No conversation found with
     // session ID" and exited in under a second. spawnWorker uses this instead
     // of picking, and null still means pick.
@@ -5995,8 +5992,8 @@ export class Supervisor {
    * WHOSE LIMIT THE CARD IS ABOUT: the login she picked, else her primary one.
    *
    * This used to be `_codexHome` outright, which is always the primary login.
-   * The pick moved her work onto a second account and left the figure behind,
-   * so she switched off an account at 99% and the card still said 99%
+   * The pick moved the work onto a second account and left the figure behind,
+   * so switching off an account at 99% left the card still saying 99%
    * (w-cad7e3e509). With no pick every login runs, and the primary one stays
    * the one the card speaks for, as before.
    */

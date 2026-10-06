@@ -109,7 +109,7 @@ Not inside a trusted directory and --skip-git-repo-check was not specified.
 # exited (1) 2026-08-27T20:51:40.139Z
 `;
 
-// And the second login, which is the other half of what she was looking at.
+// And a second login, signed out, which is the other half of the picture.
 const SIGNED_OUT_TRACE = `# Screenshot all your Twitter posts.
 # w-login · spawned 2026-08-27T22:56:30.221Z
 

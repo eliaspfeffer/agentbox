@@ -1,9 +1,8 @@
 // A SIGNED-OUT ACCOUNT MUST NOT EAT THE FLEET, AND MUST NOT TALK.
 //
-// Measured on her machine, 2026-08-24. Her second subscription's login expired
-// at 10:39. From then until 18:17 the app said "2 agents picked up where they
-// left off" every fifteen seconds along the bottom of her screen, and her
-// agents did nothing for seven and a half hours.
+// The shape: a second subscription's login expires. From then on the app
+// says "2 agents picked up where they left off" every fifteen seconds along
+// the bottom of the screen, and the agents do nothing for hours.
 //
 // Nothing here was misbehaving on its own. Three correct pieces multiplied:
 //
@@ -118,7 +117,7 @@ describe('an account that cannot start a session cannot resume one either', () =
     sup._strikeProfile(SECOND, { hard: true });
     expect(sup.recoverInterrupted('startup').resumed).toBe(0);
 
-    // She typed /login. A session that survives clears the account.
+    // A /login lands. A session that survives clears the account.
     sup._clearProfileTrouble(SECOND);
 
     const out = sup.recoverInterrupted('capacity');

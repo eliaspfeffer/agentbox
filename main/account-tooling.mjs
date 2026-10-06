@@ -182,16 +182,15 @@ function list(names) {
 //
 // The Accounts page named its two rows `default` and `.claude-second`, which
 // are folders, not people. So there was no way to tell from the screen which
-// subscription either row was running on, and on 2026-08-29 that cost her the
-// second one. The page said the second account was signed out. She did exactly
-// what it told her to do, ran the command and typed /login at 1:47pm, and the
-// browser was already signed in as her personal account, so the login handed
-// that one back. Her work account, work@example.com, had been in that folder
-// since at least 08-23 and was gone by 1:50pm, replaced by the same account the
-// first row was already using. Measured off the config backups the CLI itself
-// writes. Nothing on the page changed when it happened, because nothing on the
-// page had ever said whose account it was, which is also exactly what she
-// reported: "Idk which is logged in nothing changed in settings".
+// subscription either row was running on, and that can cost a person their
+// second account. Say the page reports the second account signed out. They do
+// exactly what it tells them to do, run the command and type /login, and the
+// browser is already signed in as the account the first row uses, so the login
+// hands that one back. The other account that had been in that folder is gone,
+// replaced by the same account the first row was already using; the config
+// backups the CLI itself writes show the swap. Nothing on the page changes
+// when it happens, because nothing on the page had ever said whose account it
+// was: "Idk which is logged in nothing changed in settings".
 //
 // One line of the answer, read from the file Claude Code keeps its own account
 // in. Null when the folder holds no login, which reads on the page as the one

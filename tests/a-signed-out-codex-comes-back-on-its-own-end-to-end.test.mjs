@@ -1,6 +1,6 @@
 // A SIGNED-OUT CODEX COMES BACK ON ITS OWN, END TO END, WITH REAL PROCESSES.
 //
-// 2026-10-04: her Claude Code login expired and every agent sat "Queued" for
+// The bug: a Claude Code login expired and every agent sat "Queued" for
 // half an hour. /login, Resume and "continue" did nothing; the bench timer was
 // the only thing that freed them. The fix (tests/agents-come-back-the-moment-
 // she-signs-in-again.test.mjs) watches the files a login writes, holds replies

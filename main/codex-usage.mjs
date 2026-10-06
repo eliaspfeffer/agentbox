@@ -96,9 +96,9 @@ export class CodexUsage {
     const limits = codexLimits(this._snapshot);
     if (limits.length) return { limits, at: this._at };
     // NOTHING HAS PUSHED, SO ASK WHAT CODEX ALREADY WROTE DOWN. This is the
-    // whole of: the push only ever arrives for work the app itself ran, and she
-    // runs Codex in its own app, so on her Mac the panel stayed empty while her
-    // weekly limit was full. main/codex-usage-file.mjs is a read of a file
+    // whole of: the push only ever arrives for work the app itself ran, and a
+    // person who runs Codex in its own app would see the panel stay empty
+    // while their weekly limit was full. main/codex-usage-file.mjs is a read of a file
     // under this same CODEX_HOME. It starts no process and sends nothing
     // anywhere, so neither rule above is bent.
     return this._logged();

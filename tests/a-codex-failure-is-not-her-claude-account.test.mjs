@@ -1,19 +1,18 @@
 // A DEAD CODEX SESSION MUST NOT QUARANTINE HER CLAUDE SUBSCRIPTION.
 //
-// The bug this is a rerun of is, 2026-08-24: her second Claude subscription was
-// signed out, half of every spawn round-robined onto it and died in two
-// seconds, and the screen reported an account-shaped fact as an app-shaped one.
-// Five dead spawns between 17:39 and 19:08, each one halting the account that
-// was working. The fix was one sentence — A FACT ABOUT ONE ACCOUNT STAYS ON
-// THAT ACCOUNT — and a second engine reintroduces it for free, because BOTH
-// ENGINES CALL THEIR PRIMARY LOGIN 'default' and the cooldown, strike and
-// trouble maps are keyed on that name.
+// The bug this is a rerun of: with a second Claude subscription signed out,
+// half of every spawn round-robined onto it and died in two seconds, and the
+// screen reported an account-shaped fact as an app-shaped one, each dead spawn
+// halting the account that was working. The fix was one sentence — A FACT
+// ABOUT ONE ACCOUNT STAYS ON THAT ACCOUNT — and a second engine reintroduces
+// it for free, because BOTH ENGINES CALL THEIR PRIMARY LOGIN 'default' and the
+// cooldown, strike and trouble maps are keyed on that name.
 //
-// Two hazards, and hers is exactly the shape that hits both: one Claude
-// subscription plus one Codex login, both called 'default'.
+// Two hazards, and the commonest setup is exactly the shape that hits both:
+// one Claude subscription plus one Codex login, both called 'default'.
 //
 //   WRONG QUARANTINE. A Codex session dying on `_profileCooldown['default']`
-//   takes her WORKING Claude subscription out of the rotation for thirty
+//   takes a WORKING Claude subscription out of the rotation for thirty
 //   minutes over a failure in the other engine.
 //
 //   WRONG HOME. Every entry in `authProfiles` is a CLAUDE_CONFIG_DIR: a folder
@@ -72,11 +71,11 @@ describe('a codex session runs on a codex home, never a claude one', () => {
     expect(picked.has('/Users/her/.claude-second')).toBe(false);
   });
 
-  // THE CASE THAT MUST NOT MATCH: Claude Code still round-robins across both of
-  // her subscriptions, which is what roughly doubles her throughput. A fix that
-  // pinned everything to 'default' would pass the test above and cost her half
-  // her fleet.
-  it('still round-robins claude code across both of her subscriptions', () => {
+  // THE CASE THAT MUST NOT MATCH: Claude Code still round-robins across both
+  // subscriptions, which is what roughly doubles throughput. A fix that
+  // pinned everything to 'default' would pass the test above and cost half
+  // the fleet.
+  it('still round-robins claude code across both subscriptions', () => {
     const s = bare({ authProfiles: ['default', '/Users/her/.claude-second'] });
     const picked = new Set();
     for (let i = 0; i < 10; i += 1) picked.add(s._pickProfile('claude'));
@@ -90,11 +89,11 @@ describe('a codex session runs on a codex home, never a claude one', () => {
     expect(s._pickProfile()).toBe('/Users/her/.claude-second');
   });
 
-  // Not needed yet — she has one Codex login — and read here so that a second
-  // one is a config key rather than a change to the method.
+  // Read here so that a second Codex login is a config key rather than a
+  // change to the method.
   // Both signed in: a login still being added is skipped until its sign-in
   // lands (tests/a-thread-that-says-queued-is-one-an-agent-will-start).
-  it('would use a second codex login if she ever had one', () => {
+  it('would use a second codex login if one were configured', () => {
     const first = mkdtempSync(join(tmpdir(), 'codex-first-'));
     const second = mkdtempSync(join(tmpdir(), 'codex-second-'));
     writeFileSync(join(first, 'auth.json'), '{}');
@@ -157,7 +156,7 @@ describe('a real codex spawn bills a codex home', () => {
         // Mac that cannot exist: in the app both come off this same value.
         engineChoice: '2026-09-04T00:00:00Z',
         maxConcurrentSessions: 4,
-        // BOTH of her Claude logins, so a pick that reached the wrong pool has
+        // TWO Claude logins, so a pick that reached the wrong pool has
         // somewhere wrong to land and cannot pass by luck.
         authProfiles: ['default', '/Users/her/.claude-second'],
       },
@@ -298,13 +297,13 @@ describe('a fact about codex stays on codex', () => {
   // THE TWO CASES WHERE THE KEY ALONE IS NOT ENOUGH, and they are the ones that
   // would actually reach her. Keying the strike as `codex:default` keeps her
   // Claude account out of `_healthyProfiles`'s answer, so a Codex death on an
-  // otherwise healthy Mac walks into the "her account is fine" branch. Both of
+  // otherwise healthy Mac walks into the "account is fine" branch. Both of
   // these are about what that branch and the one beside it would then DO to a
   // brake the Claude fleet already owns.
   it('neither lifts nor deepens a brake her claude fleet already owns', () => {
     // ONE: her Claude account is fine, the fleet is braked from earlier, and a
-    // Codex spawn dies on arrival. Without the guard this reads as "her account
-    // is fine and it stays fine" and CLEARS the brake — a Codex failure would
+    // Codex spawn dies on arrival. Without the guard this reads as "the working
+    // account is fine and it stays fine" and CLEARS the brake — a Codex failure would
     // release a cooldown Claude Code earned, once per dead Codex spawn.
     const fine = bare({ authProfiles: ['default'] });
     fine._spawnCooldownUntil = Date.now() + 10 * 60_000;
@@ -317,7 +316,7 @@ describe('a fact about codex stays on codex', () => {
     // nowhere left to run and the brake is armed. Without the guard every dead
     // Codex spawn doubles it, so when her Claude login comes back the fleet
     // stays stopped for up to thirty minutes over a failure in the other
-    // engine. That is the 2026-08-24 incident exactly.
+    // engine. That is the original incident exactly.
     const out = bare({ authProfiles: ['default'] });
     out._profileTrouble = { default: { cause: 'signed-out', since: 1, at: 1 } };
     expect(out._healthyProfiles()).toEqual([]);

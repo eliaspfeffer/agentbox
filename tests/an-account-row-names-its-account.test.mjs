@@ -1,19 +1,19 @@
 // AN ACCOUNT ROW NAMES ITS ACCOUNT, NOT ITS FOLDER.
 //
-// WHAT HAD ACTUALLY HAPPENED, measured off the config backups Claude Code
-// writes for itself, in ~/.claude-second/backups:
+// HOW IT GOES WRONG, as the config backups Claude Code writes for itself in
+// a folder such as ~/.claude-second/backups would show it:
 //
-//   08-23 22:00  work@example.com   (accountUuid bbbb2222…)
-//   08-29 13:47  work@example.com
-//   08-29 13:50  you@example.com     (accountUuid aaaa1111…, the personal one)
+//   day 1        work@example.com   (accountUuid bbbb2222…)
+//   day 7 :00    work@example.com
+//   day 7 :03    you@example.com     (accountUuid aaaa1111…, the other one)
 //
-// and in ~/.claude-second/history.jsonl, one line: `/login` at 13:47:18. The
-// page had said the second account was signed out and to run that command and
-// type /login, and that is exactly what was done. /login opens the browser and
+// with a single `/login` in ~/.claude-second/history.jsonl in between. The
+// page says the second account is signed out and to run that command and
+// type /login, and a person does exactly that. /login opens the browser and
 // takes whoever is already signed in to Claude there without asking, so the
-// login handed back the account already in the first slot. The work account
-// was gone by 13:50 and both folders became one subscription, which is half
-// the capacity the page's own lede promises.
+// login hands back the account already in the first slot. The second account
+// is gone and both folders become one subscription, which is half the
+// capacity the page's own lede promises.
 //
 // Nothing on the screen could have said so, before or after. The rows are
 // named `default` and `.claude-second`, which are folders. That is also why
@@ -88,13 +88,13 @@ describe('which account a folder is signed in as', () => {
     expect(accountIdentity(dir)).toBe(null);
   });
 
-  // THE ONE THAT WOULD HAVE CAUGHT HER MORNING. The whole point of showing the
-  // email is that it changes under her when a /login goes to the wrong account,
+  // THE ONE THAT CATCHES THE SWAP. The whole point of showing the
+  // email is that it changes under a person when a /login goes to the wrong account,
   // so a cached answer that outlived the login is worse than no answer at all.
   it('sees a /login that swaps the account, rather than serving a cached answer', () => {
     const dir = makeAccount('.claude-second', WORK);
     expect(accountIdentity(dir).email).toBe('work@example.com');
-    // What 13:47 to 13:50 did to that folder.
+    // What that /login does to the folder.
     const later = fs.statSync(path.join(dir, '.claude.json')).mtimeMs + 1000;
     write(dir, PERSONAL);
     fs.utimesSync(path.join(dir, '.claude.json'), later / 1000, later / 1000);
@@ -103,7 +103,7 @@ describe('which account a folder is signed in as', () => {
 });
 
 describe('two rows that turned out to be one subscription', () => {
-  it('says so when both folders hold the same account, which is her machine today', () => {
+  it('says so when both folders hold the same account', () => {
     const note = duplicateAccountNote([
       { email: 'you@example.com', accountUuid: 'aaaa1111-personal' },
       { email: 'you@example.com', accountUuid: 'aaaa1111-personal' },
@@ -116,8 +116,8 @@ describe('two rows that turned out to be one subscription', () => {
        folder added none. That claim was wrong about our own scheduler: `_capacity()` in
        main/supervisor.mjs multiplies by live PROFILE FOLDERS, so a duplicated machine
        really is told it can run double and really does start double, all against one
-       subscription. The clause after it told her to sign one of them in as her other
-       account, which she could not do from that screen and which reads to anybody else as a
+       subscription. The clause after it told the reader to sign one of them in as their
+       other account, which they could not do from that screen and which reads to anybody else as a
        nudge to go and get a second subscription.
     */
     expect(note).not.toMatch(/Sign one of them|your other account/i);

@@ -1,12 +1,12 @@
 // AGENTS COME BACK THE MOMENT SHE SIGNS IN AGAIN, NOT HALF AN HOUR LATER.
 //
-// 2026-10-04. Her Claude Code login expired at 11:34 and every agent stopped,
-// which is fair. What was not: she typed /login, pressed "Resume all agents",
-// and replied "continue" on a row, and every row stayed "Queued". Measured off
-// her supervisor state at 12:07: `default` carried trouble `signed-out` from
-// 33 minutes earlier and its bench had run out 3.4 minutes earlier, which is
-// exactly when her agents started moving. Nothing she did had any effect; the
-// timer did it all. Four separate holes, each tested below:
+// A Claude Code login expires and every agent stops, which is fair. What was
+// not: the user types /login, presses "Resume all agents", and replies
+// "continue" on a row, and every row stays "Queued". The supervisor state
+// shows `default` carrying trouble `signed-out` until its half-hour bench
+// runs out, which is exactly when the agents start moving. Nothing the user
+// did had any effect; the timer did it all. Four separate holes, each tested
+// below:
 //
 //   1. Nothing watched for the login coming back. A signed-out account sat out
 //      a fixed 30 minutes and was only ever cleared by a session surviving on
@@ -90,7 +90,7 @@ describe('where a login is written', () => {
 });
 
 describe('1. a login landing puts the account straight back', () => {
-  it('her case: signed out, /login two minutes later, agents can start on the next tick', () => {
+  it('the reported case: signed out, /login two minutes later, agents can start on the next tick', () => {
     sup.noteExitForBackoff(deadOnArrival(SIGNED_OUT));
     expect(sup._hasSlotFor('claude')).toBe(false);
 

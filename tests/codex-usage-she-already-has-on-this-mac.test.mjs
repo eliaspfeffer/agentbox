@@ -1,20 +1,19 @@
-// HER CODEX USAGE, WHICH THE PANEL COULD NOT SHOW HER.
+// CODEX USAGE, WHICH THE PANEL COULD NOT SHOW.
 //
 // It was not a bug in the sense of something broken. The app only ever learned a
-// Codex figure from a push that arrives during a turn POWERUP ITSELF RAN, and she
-// runs Codex in its own app, so the panel had never had anything to draw. Two
+// Codex figure from a push that arrives during a turn POWERUP ITSELF RAN, and a
+// person who runs Codex in its own app gives the panel nothing to draw. Two
 // things came out of that, and this file holds both:
 //
-//   1. THE FIGURE IS ON HER DISK ALREADY. Codex writes every rate-limit report it
+//   1. THE FIGURE IS ON THE DISK ALREADY. Codex writes every rate-limit report it
 //      receives into its own session log under CODEX_HOME. Reading it starts no
 //      process and sends nothing anywhere, which is the rule main/codex-usage.mjs
 //      exists to keep.
-//   2. THE LABELS WERE WRONG FOR HER ACCOUNT. `primary` was taken to mean the five
-//      hour window. Measured across the 1,140 records in her twenty-five most
-//      recent sessions: every window is 10080 minutes and `secondary` is never
-//      populated. So her WEEK was about to be drawn as a session, and the corner
-//      meter, which asked for a session window and nothing else, drew nothing at
-//      all on a day that week was at 100% used.
+//   2. THE LABELS WERE WRONG FOR SOME ACCOUNTS. `primary` was taken to mean the
+//      five hour window. On some Codex plans every window is 10080 minutes and
+//      `secondary` is never populated. So a WEEK was about to be drawn as a
+//      session, and the corner meter, which asked for a session window and
+//      nothing else, drew nothing at all on a day that week was at 100% used.
 
 import { describe, expect, it, beforeEach } from 'vitest';
 import fs from 'node:fs';
@@ -26,9 +25,8 @@ import { loggedCodexLimits, forgetLoggedLimits } from '../main/codex-usage-file.
 import { CodexUsage } from '../main/codex-usage.mjs';
 
 /*
- * HER OWN SHAPE, snake_case because that is how the session log spells it, and
-   with the numbers read off her Mac on 2026-09-18. One window, and it is the
-   week. */
+ * THE WEEK-ONLY SHAPE, snake_case because that is how the session log spells it.
+   One window, and it is the week. */
 const HERS = {
   limit_id: 'codex',
   limit_name: null,
@@ -39,9 +37,9 @@ const HERS = {
 
 /*
  * AND THE ALL-NULL ONE THAT ARRIVES BESIDE IT. Codex reports a `premium` family
-   on her account with every field null; it was the LAST record in her newest log
-   on the day this was written, so a reader that took the last one blindly would
-   have found nothing. */
+   on some accounts with every field null, and it can be the LAST record in the
+   newest log, so a reader that took the last one blindly would find
+   nothing. */
 const EMPTY_FAMILY = {
   limit_id: 'premium',
   primary: null,
@@ -67,9 +65,9 @@ function log(entries) {
 beforeEach(() => forgetLoggedLimits());
 
 describe('a window is named for how long it is, not for the slot it arrived in', () => {
-  // THE DEFECT, STATED AS THE THING SHE WOULD HAVE READ. Her only window is seven
-  // days long and it arrived as `primary`, which the reader called "This session".
-  it('calls her seven day window a week, not a session', () => {
+  // THE DEFECT, STATED AS THE THING A USER WOULD HAVE READ. The only window is
+  // seven days long and it arrived as `primary`, which the reader called "This session".
+  it('calls a seven day window a week, not a session', () => {
     const [limit] = codexLimits(HERS);
     expect(limit.name).toBe('This week');
     expect(limit.span).toBe('week');
@@ -149,7 +147,7 @@ describe('the figure Codex already wrote down on this Mac', () => {
     expect(reading.at).toBe(Date.parse('2026-09-18T20:50:53.678Z'));
   });
 
-  // THE ALL-NULL FAMILY IS SKIPPED, NOT ACCEPTED. It was the last record in her
+  // THE ALL-NULL FAMILY IS SKIPPED, NOT ACCEPTED. It can be the last record in a
   // real log, so a reader that took the newest line blindly would have answered
   // "nothing here" over a figure sitting one line above it.
   it('walks back past a report with no usable window', () => {
@@ -196,7 +194,8 @@ describe('the push still wins', () => {
     expect(reading.limits[0].percent).toBe(12);
   });
 
-  // AND THE LOG IS READ WHEN NOTHING HAS PUSHED, which is her Mac.
+  // AND THE LOG IS READ WHEN NOTHING HAS PUSHED, which is any Mac that runs
+  // Codex in its own app.
   it('reads the log when no push has ever arrived', () => {
     const usage = new CodexUsage({ home: () => '/codex', readLog: () => ({ snapshot: HERS, at: 42 }) });
     const reading = usage.read();

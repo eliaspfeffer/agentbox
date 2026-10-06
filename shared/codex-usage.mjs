@@ -58,17 +58,16 @@
 // ---------------------------------------------------------------------------
 // AND `primary` IS NOT ALWAYS THE FIVE HOUR WINDOW. The block above read one
 // scratch account on 2026-09-05 and took the pairing it happened to see as the
-// shape. Measured again on HER OWN account, 2026-09-18, across the 1,140
-// rate-limit records in her twenty-five most recent Codex sessions: EVERY ONE of
-// them had `secondary: null` and a `primary` whose window was 10080 minutes. Not
-// one five hour window exists on her plan.
+// shape. On some Codex plans the rate-limit records look different: EVERY ONE
+// of them has `secondary: null` and a `primary` whose window is 10080 minutes.
+// Not one five hour window exists on such a plan.
 //
-// So the old table would have drawn her SEVEN DAY limit under the words "This
-// session", which is a confident wrong number about her own subscription, and
-// the corner would have counted a week down as though it were an afternoon.
+// So the old table would have drawn a SEVEN DAY limit under the words "This
+// session", which is a confident wrong number about the user's subscription,
+// and the corner would have counted a week down as though it were an afternoon.
 //
 // THE WINDOW'S OWN LENGTH DECIDES WHAT IT IS CALLED, and the slot it arrived in
-// decides nothing. 300 minutes is her session, 10080 is her week, and an account
+// decides nothing. 300 minutes is a session, 10080 is a week, and an account
 // reporting only one of them gets only that one row. The slot order is still the
 // tie-breaker when a payload names no duration at all, because that is the one
 // case where there is nothing better to go on.

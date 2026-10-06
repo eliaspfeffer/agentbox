@@ -99,12 +99,10 @@ describe('reading what the app-server reported', () => {
     // the reader taking `primary` to MEAN the five hour window rather than
     // reading `windowDurationMins`, which this very fixture carries at 10080.
     //
-    // It cost nothing until 2026-09-18, when the founder's own Codex plan
-    // turned out to report exactly one window and for it to be the weekly one.
-    // Measured across the 1,140 rate-limit records in her twenty-five most
-    // recent Codex sessions: every window was 10080 minutes and `secondary` was
-    // never populated. Her whole week would have been drawn as an afternoon, on
-    // a day it was at 100% used.
+    // It cost nothing until a Codex plan turned up that reports exactly one
+    // window, the weekly one: every window 10080 minutes and `secondary` never
+    // populated. A whole week would have been drawn as an afternoon, on a day
+    // it was at 100% used.
     expect(usageSentence([window], NOW)).toBe('This week: 0% used, 7d left.');
   });
 

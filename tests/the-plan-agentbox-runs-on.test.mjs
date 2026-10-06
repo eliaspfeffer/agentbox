@@ -20,8 +20,8 @@ import { NAME } from '../shared/product-name.mjs';
 
 let home;
 
-// The shape Claude Code actually writes, cut down to the keys this reads. The
-// real file on her Mac carries about forty more and none of them matter here.
+// The shape Claude Code actually writes, cut down to the keys this reads. A
+// real file carries about forty more and none of them matter here.
 const layAccount = (at, account) => {
   fs.mkdirSync(path.dirname(at), { recursive: true });
   fs.writeFileSync(at, JSON.stringify({ numStartups: 12, oauthAccount: { emailAddress: 'someone@example.com', ...account } }));
@@ -40,8 +40,8 @@ afterEach(() => {
 describe('where the file is', () => {
   // Claude Code keeps its config at CLAUDE_CONFIG_DIR when that is set and at
   // the home folder when it is not, and Agentbox's default account is the one
-  // that sets nothing. Verified against her real Mac 2026-08-29: the live file
-  // for the default account is ~/.claude.json, and the one for her second is
+  // that sets nothing. Verified against a real Mac: the live file for the
+  // default account is ~/.claude.json, and the one for a second account is
   // ~/.claude-second/.claude.json.
   it('the default account reads the file beside the home folder, not inside ~/.claude', () => {
     expect(planFile('default', home)).toBe(path.join(home, '.claude.json'));
@@ -56,8 +56,8 @@ describe('where the file is', () => {
     expect(planFile('~/.claude-second', home)).toBe(path.join(home, '.claude-second', '.claude.json'));
   });
 
-  // ~/.claude/.claude.json exists on her Mac and was nine days stale when this
-  // was written: it is what a run with CLAUDE_CONFIG_DIR=~/.claude left behind.
+  // A ~/.claude/.claude.json can exist and be days stale: it is what a run
+  // with CLAUDE_CONFIG_DIR=~/.claude left behind.
   // Reading it for the default account would report a plan from a login that is
   // no longer the one sessions run on.
   it('a stale file inside ~/.claude is not read for the default account', () => {
@@ -67,12 +67,12 @@ describe('where the file is', () => {
 });
 
 describe('what the plan is called', () => {
-  it("names the plan measured on her Mac", () => {
+  it("names a real plan string", () => {
     expect(planLabel('default_claude_max_20x')).toBe('Max 20x');
   });
 
-  // No table of plan names is kept anywhere, because only one plan has ever
-  // been seen on this machine and the rest would be invented. A string this
+  // No table of plan names is kept anywhere, because a table would hold
+  // strings nobody here has seen in a real file, which is inventing them. A string this
   // code has never met still has to come out as words.
   it('a plan nobody here has seen still reads as itself', () => {
     expect(planLabel('default_claude_pro')).toBe('Pro');

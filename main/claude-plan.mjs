@@ -4,7 +4,7 @@
 //
 // THE PROBLEM. Agentbox runs several Claude Code sessions at once and the number
 // is a flat default (`maxConcurrentSessions: 3`, main/config.mjs) that was
-// chosen on a Max subscription and has never been anything else. Nothing
+// chosen with the biggest plan in mind and has never been anything else. Nothing
 // anywhere in the app mentions a plan: not the walk, not the Accounts page, not
 // a row that dies. So a person on a smaller plan gets three sessions started on
 // their behalf, all three burn the same allowance, and what they see is agents
@@ -12,16 +12,16 @@
 // founder was asking out loud while she watched a tester use it.
 //
 // THE ANSWER IS ALREADY ON THE DISK. Claude Code writes its own account profile
-// into its config file and refreshes it as it runs. MEASURED on her Mac
-// 2026-08-29 20:5x, both of her accounts:
+// into its config file and refreshes it as it runs. On a machine with two
+// accounts signed in, for example:
 //
 //   ~/.claude.json                  oauthAccount.organizationType        claude_max
 //                                   oauthAccount.organizationRateLimitTier  default_claude_max_20x
-//                                   profileFetchedAt                    2026-08-29 05:00Z
-//   ~/.claude-second/.claude.json   the same two values
-//                                   profileFetchedAt                    2026-08-29 20:47Z
+//                                   profileFetchedAt                    (within the day)
+//   ~/.claude-second/.claude.json   the same two fields
+//                                   profileFetchedAt                    (within the day)
 //
-// Both fetched within the day, so the field is live rather than a one-time
+// Each is refetched within the day, so the field is live rather than a one-time
 // stamp from a login months ago, and it is the honest source: it is Claude
 // Code's own answer about its own subscription, not a guess of ours.
 //
@@ -30,14 +30,14 @@
 // runs with nothing set, so its file is `~/.claude.json`; a second account runs
 // with CLAUDE_CONFIG_DIR pointing at a folder, so its file is inside that
 // folder (main/supervisor.mjs sets exactly that per spawn). Both are verified
-// above. Note that `~/.claude/.claude.json` also exists on her Mac and is NINE
-// DAYS STALE — it is what a run with CLAUDE_CONFIG_DIR=~/.claude left behind.
+// above. Note that a `~/.claude/.claude.json` can also exist and be days
+// STALE — it is what a run with CLAUDE_CONFIG_DIR=~/.claude left behind.
 // It is not read for the default account, and that is deliberate: the rule here
 // is Claude Code's own rule, not a search for the likeliest looking file.
 //
 // WHAT THIS DELIBERATELY DOES NOT DO. It does not guess the strings for plans
-// nobody here has seen. Only one plan has ever been measured on this machine,
-// and inventing `default_claude_pro` in a table would be a number nobody
+// nobody here has seen in a real file, and inventing `default_claude_pro` in
+// a table would be a number nobody
 // measured. So `max` is decided by looking for the word max, the label is
 // derived from the raw string mechanically, and anything unreadable comes back
 // `known: false` and changes nothing anywhere.

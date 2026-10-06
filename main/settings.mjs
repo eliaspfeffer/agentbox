@@ -378,9 +378,9 @@ export function readSettings({ config, supervisor, store }) {
     const trouble = troubles[profile] ?? null;
     const resting = (supervisor._profileCooldown?.[profile] ?? 0) >= now;
     // WHOSE SUBSCRIPTION THIS ROW IS, not merely which folder it lives in.
-    // The page named its rows after folders, so nothing on it could tell her
-    // that her work account had been replaced by her personal one;
-    // main/account-tooling.mjs has the morning that cost. Null when the
+    // The page named its rows after folders, so nothing on it could tell a
+    // person that one of their accounts had been replaced by the other;
+    // main/account-tooling.mjs has how that happens. Null when the
     // folder holds no login, and then the row reads as it always did.
     const identity = accountIdentity(profile === 'default' ? null : profile);
     return {
@@ -794,8 +794,8 @@ export function addCodexAccount({ config, supervisor }) {
  * accounting while this was a product we sold. She withdrew that on
  * w-3498e0cad2 ("we're no longer offering this as a commercially viable
  * product... the rules have changed so I think you should allow
- * multi-accounting"), and this is the door that decision asked for. Her reason
- * for wanting it is the ordinary one: a work login and a personal login, both
+ * multi-accounting"), and this is the door that decision asked for. The
+ * ordinary reason for wanting it: a work login and a personal login, both
  * live, on one Mac.
  *
  * Everything else is the Codex flow exactly. Main makes the folder and

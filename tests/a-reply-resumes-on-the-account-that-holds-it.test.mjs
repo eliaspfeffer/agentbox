@@ -1,17 +1,15 @@
-// SHE HOLDS TWO CLAUDE LOGINS, AND A SESSION LIVES ON EXACTLY ONE OF THEM.
+// WITH TWO CLAUDE LOGINS, A SESSION LIVES ON EXACTLY ONE OF THEM.
 //
 // The cause was one missing half of a session id: a map recorded the id and
 // not the account, spawnWorker round-robined the account, and a reply that
 // landed on the other login handed `--resume` an id that home had never heard
 // of. Claude Code printed "No conversation found with session ID" and exited in
 // under a second with `result: ''`, and the writeback, which tested only for
-// null, wrote a placeholder over the answer she was reading.
+// null, wrote a placeholder over the answer the user was reading.
 //
-// Measured on her own store the morning she filed it: all 21 of her own threads
-// had their transcript in exactly one home and none in both, 15 under the
-// default login and 6 under the second. 37 of the 124 results ever written on
-// those rows were that placeholder, and all 33 traces behind them printed the
-// same "No conversation found" line.
+// Every thread's transcript sits in exactly one home and never in both, so a
+// reply that lands on the wrong login always fails, and every trace behind
+// the placeholder prints the same "No conversation found" line.
 //
 // THIS FILE USED TO SAY "PERSONAL" EVERYWHERE and it was rewritten when personal
 // projects were deleted (w-d19d6d387c, 2026-09-22). The rule it pins outlived

@@ -1,12 +1,10 @@
 // RESUME STARTS HER AGENTS THE MOMENT SHE SIGNS BACK IN, NOT HALF AN HOUR LATER.
 //
-// What broke, 2026-10-04: Claude Code signed itself out. Every agent died on
-// arrival, and the one login on the Mac was parked for thirty minutes as
-// "signed-out". She signed back in, selected every row, chose Resume, then
-// typed "continue" on a row, and nothing moved: every row sat "queued".
-// Measured off ~/Zero/.zero-supervisor.json: the default login's trouble was
-// written at 11:30:29, its cooldown ran to 12:00:29, and the first worker
-// process started at 12:01:21. Nothing she did in between could lift it,
+// What broke: Claude Code signed itself out. Every agent died on arrival, and
+// a Mac's only login was parked for thirty minutes as "signed-out". The user
+// signed back in, selected every row, chose Resume, then typed "continue" on
+// a row, and nothing moved: every row sat "queued" until the cooldown ran out,
+// and the first worker process started only after it. Nothing done in between could lift it,
 // because `liftBrakeForHer` skipped any login whose cause needs a person, on
 // the theory that retrying cannot help. Once she HAS been the person, it can,
 // and her Resume is how she says so.
@@ -149,7 +147,7 @@ describe('where another login is working, the signed-out one stays out', () => {
 });
 
 describe('the same rule for a Codex login', () => {
-  it('her only Codex login, signed out, is lifted by her hand', () => {
+  it('a lone Codex login, signed out, is lifted by her hand', () => {
     const sup = supervisor();
     sup.noteExitForBackoff(deadOnArrival(SIGNED_OUT, 'default', 'codex'));
     expect(sup._profileResting('codex:default')).toBe(true);

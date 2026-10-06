@@ -676,12 +676,12 @@ describe('a dead run is reported in the words of the engine that died', () => {
 
 /* ============== a codex failure cannot strike a claude account =========== */
 
-describe('what a fast codex exit does to her claude subscriptions', () => {
+describe('what a fast codex exit does to the claude subscriptions', () => {
   // `_strikeProfile` and the fleet-wide cooldown are per Claude account, and a
   // fast exit with no healthy sibling arms a spawn cooldown of up to thirty
   // minutes. A Codex worker never touched that subscription. Charging its death
-  // to one would take her working engine down over a failure in the other,
-  // which is the 2026-08-24 shape: one signed-out subscription halting the one
+  // to one would take a working engine down over a failure in the other,
+  // which is the old shape: one signed-out subscription halting the one
   // that was fine.
   //
   // HOW THIS IS BOUGHT HAS MOVED, AND THE GUARANTEE HAS NOT. When this file was
@@ -690,7 +690,7 @@ describe('what a fast codex exit does to her claude subscriptions', () => {
   // and a Codex login that had run out was hammered by every tick with nothing
   // keeping count. The capacity slice gave it its own books under a `codex:`
   // key instead, so what this test asserts is the thing that actually mattered:
-  // HER CLAUDE ACCOUNT IS UNTOUCHED, and the brake is not armed.
+  // THE CLAUDE ACCOUNT IS UNTOUCHED, and the brake is not armed.
   // tests/a-codex-failure-is-not-her-claude-account.test.mjs is the whole of
   // it.
   it('leaves them alone, because the run never used one', () => {

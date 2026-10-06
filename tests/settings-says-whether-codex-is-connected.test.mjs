@@ -387,7 +387,7 @@ describe('the card is drawn only where somebody asked for Codex', () => {
   // THIS TEST USED TO ASSERT THE OPPOSITE, and its reason was good when it was
   // written: "`~/.codex/auth.json` has no email and no plan, so who is it
   // signed in as has no honest answer." The file changed under it. Measured on
-  // her Mac against codex-cli 0.153.4, the `id_token` in that same file carries
+  // a real Mac against codex-cli 0.153.4, the `id_token` in that same file carries
   // `email`, `name` and a ChatGPT plan, and `codex login status` still names
   // nobody, so the file is the only source there is.
   //

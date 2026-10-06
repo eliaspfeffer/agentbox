@@ -3,7 +3,7 @@
 // IT DID NOT. There was one number for the whole machine —
 // `maxConcurrentSessions * this._liveProfiles.length`, and `_liveProfiles` is
 // the CLAUDE auth-profile pool — so a Codex task queued behind three Claude
-// workers while her OpenAI subscription sat idle, and logging into Codex could
+// workers while the OpenAI subscription sat idle, and logging into Codex could
 // never widen anything, because the multiplier counted Claude logins.
 //
 // Two subscriptions are two rate limits. The number that matters to a Codex
@@ -43,7 +43,7 @@ import { Name } from '../shared/product-name.mjs';
 // here is about. A home with nothing in it is the machine these tests mean.
 const ONE_ACCOUNT_HOME = '/nonexistent-home-with-no-second-account';
 const CODEX_BIN = '/nonexistent/codex/codex';
-// One of her CLAUDE_CONFIG_DIR folders: a Claude login lives here and no Codex
+// A second CLAUDE_CONFIG_DIR folder: a Claude login lives here and no Codex
 // auth ever will. Handing this to a Codex worker is the "wrong home" half of
 // tests/a-codex-failure-is-not-her-claude-account.test.mjs.
 const HER_SECOND_CLAUDE = '/Users/her/.claude-second';

@@ -5264,7 +5264,7 @@ export default function App() {
           read "OAuth session expired and could not be refreshed" about an app
           with no OAuth in it. It lit on the FIRST dead spawn, so a moment's
           trouble after a restart looked like an outage. And it said AGENTS were
-          failing when the truth was that ONE of her two Claude accounts was
+          failing when the truth could be that ONE of two Claude accounts was
           signed out and the other was working the whole time.
 
           All three are fixed underneath rather than here: a dead account is now

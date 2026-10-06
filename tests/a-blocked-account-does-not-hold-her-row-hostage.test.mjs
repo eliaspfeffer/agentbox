@@ -8,13 +8,12 @@
 // row goes back to the same dead login on every reply she writes, forever, and
 // the healthy subscription sitting next to it never gets a turn.
 //
-// MEASURED on her own store that afternoon. `.zero-supervisor.json` held 67
-// remembered row-chats, 28 of them on ~/.claude-work, the account whose
-// organization has Claude Code switched off. The row this test is about was one of the 28, and it died
-// four times — 10:52:07, 10:53:42, 13:38:19, 14:27:19 — each one within about
-// twenty seconds of her writing on the row, each one on that same account,
-// while ~/.claude worked the whole time and finished a fresh task she filed the
-// same hour. Two of those four spawns went out INSIDE a thirty-minute
+// THE SHAPE OF IT. `.zero-supervisor.json` can hold dozens of remembered
+// row-chats on an account such as ~/.claude-work whose organization has
+// Claude Code switched off. A row like that dies every time, within about
+// twenty seconds of someone writing on it, each time on that same account,
+// while ~/.claude works the whole time and finishes fresh tasks filed the
+// same hour. Spawns like that went out INSIDE a thirty-minute
 // quarantine the app had already put that account in: `_resumeInterrupted`
 // checks the quarantine and this path never did.
 //
@@ -163,7 +162,7 @@ describe('the chats that stay exactly where they are', () => {
   it('keeps the chat when there is no healthy account to move it to', () => {
     const sup = makeSupervisor();
     const item = rowWithChatOn(sup, blocked);
-    // Both of her accounts down at once: unpinning would lose the thread and
+    // Both accounts down at once: unpinning would lose the thread and
     // buy nothing, so it does not happen.
     sup._profileTrouble = {
       [blocked]: { cause: 'org-blocked', since: Date.now(), at: Date.now() },

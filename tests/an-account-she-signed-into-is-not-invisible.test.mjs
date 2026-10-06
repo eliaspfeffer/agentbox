@@ -1,22 +1,22 @@
 // AN ACCOUNT SHE SIGNED INTO IS NOT INVISIBLE.
 //
-// The report: the Agents page showed two rows that were both the same personal
-// subscription.
+// The shape: the Agents page shows two rows that are both the same
+// subscription, while a different one sits signed in on the same disk.
 //
-// WHAT WAS ACTUALLY ON THE MACHINE, read off the `oauthAccount` in each
-// folder's own .claude.json:
+// A MACHINE LIKE THIS, read off the `oauthAccount` in each folder's own
+// .claude.json:
 //
 //   ~/.claude          you@example.com    aaaa1111-…   listed in authProfiles
 //   ~/.claude-second   you@example.com    aaaa1111-…   listed in authProfiles
 //   ~/.claude-work     work@example.com  bbbb2222-…   LISTED NOWHERE
 //
-// So the whole fleet was down for three days with a second, rested, paid
-// subscription sitting on the same disk, logged in nineteen minutes earlier.
+// The whole fleet can sit at a limit for days with a second, rested
+// subscription logged in on the same disk.
 //
 // THE CAUSE IS THAT AGENTBOX HAD NO WAY TO LEARN ABOUT IT. The only register of
 // accounts was the hand-written `authProfiles` key in zero.config.json. Nothing
 // in the app writes that key and nothing in the app reads the disk, so an
-// account she set up the way anybody would — a new CLAUDE_CONFIG_DIR, a
+// account set up the way anybody would — a new CLAUDE_CONFIG_DIR, a
 // /login — was invisible by construction. There was no symptom to see, which
 // is the whole difficulty: the page showed two healthy-looking rows and every
 // word on it was true.
@@ -25,15 +25,15 @@
 // and these tests pin the four rules that make that safe:
 //
 //   - a folder holding a subscription we are not already running on JOINS;
-//   - a folder holding a subscription we ALREADY have does not (her
-//     .claude-second: two folders, one account, and counting it twice is what
-//     double-books an account that is already at its limit);
-//   - a folder with no login in it does not (her .claude-swap-backup and
+//   - a folder holding a subscription we ALREADY have does not (the
+//     .claude-second above: two folders, one account, and counting it twice is
+//     what double-books an account that is already at its limit);
+//   - a folder with no login in it does not (a .claude-swap-backup or
 //     .claude-worktrees, which are not accounts and never were);
-//   - and nothing she configured herself is ever dropped or reordered, because
-//     her file is a decision and this is only a discovery.
+//   - and nothing the user configured is ever dropped or reordered, because
+//     their file is a decision and this is only a discovery.
 //
-// Cost, measured on her own home folder on 2026-08-31 (200 entries, 9 of them
+// Cost, measured on a home folder of 200 entries (9 of them
 // .claude-shaped, 5 of those directories, 3 of those holding a login) with the
 // caches warm: 0.029 ms per call, the readdir skipped on an mtime check. It is
 // asked on the supervisor's 15-second tick, so there is nothing here worth a
@@ -105,8 +105,8 @@ describe('the account she signed into', () => {
 });
 
 describe('what must NOT join', () => {
-  // The one that matters most, and the one a naive scan gets wrong. Her
-  // .claude-second held the SAME subscription as ~/.claude, so adding it would
+  // The one that matters most, and the one a naive scan gets wrong. A
+  // .claude-second holding the SAME subscription as ~/.claude, so adding it would
   // send two thirds of every spawn round to an account already at its limit.
   it('a second folder holding a subscription we already run on', () => {
     signedIn('.claude', 'you@example.com', PERSONAL);
@@ -249,7 +249,7 @@ describe('a login that lands while the app is running', () => {
 // THE WIRING ITSELF, because a rule nothing calls is a rule that does not run.
 // The supervisor is what decides where a spawn goes, and until 2026-08-31 it
 // read the config key straight. If this goes red, the module above is still
-// perfect and her work account is still idle.
+// perfect and a second account is still idle.
 describe('the fleet asks the disk, not the config file', () => {
   it('will spawn on an account she signed into but never configured', async () => {
     signedIn('.claude', 'you@example.com', PERSONAL);

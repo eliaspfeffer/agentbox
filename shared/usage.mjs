@@ -171,12 +171,11 @@ export function sessionLimit(limits) {
  * THE ONE LIMIT THE CORNER IS ABOUT, on an account that may not have a five hour
  * window at all.
  *
- * The bar used to be the session limit or nothing, and on 2026-09-18 that turned
- * out to mean NOTHING on the founder's own Codex plan: measured across the 1,140
- * rate-limit records in her twenty-five most recent Codex sessions, every window
- * she has is a seven day one and `secondary` is never populated. Her weekly limit
- * was at 100% used that day, which is exactly the moment a person needs the
- * corner, and the corner would have been blank.
+ * The bar used to be the session limit or nothing, and that turned out to mean
+ * NOTHING on some Codex plans: every window such an account has is a seven day
+ * one and `secondary` is never populated. A weekly limit at 100% used is
+ * exactly the moment a person needs the corner, and the corner would have been
+ * blank.
  *
  * The session window still wins whenever there is one, because it is the one that
  * stops her today. When there is not, the fullest window she does have is drawn

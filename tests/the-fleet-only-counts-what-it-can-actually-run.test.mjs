@@ -151,9 +151,9 @@ describe('an account that is resting', () => {
     expect(sup._pickProfile('codex')).toBe('default');
   });
 
-  // AND THE BOUNDARY EITHER SIDE on her two Claude logins: one resting leaves
+  // AND THE BOUNDARY EITHER SIDE with two Claude logins: one resting leaves
   // the other, and only both resting empties the pool.
-  it('leaves her other claude login counted when only one is resting', () => {
+  it('leaves the other claude login counted when only one is resting', () => {
     build([], { authProfiles: ['default', HER_SECOND_CLAUDE] });
     quarantine('claude', HER_SECOND_CLAUDE);
     expect(sup._liveProfilesFor('claude')).toEqual(['default']);

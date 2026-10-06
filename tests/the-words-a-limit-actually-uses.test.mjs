@@ -1,12 +1,12 @@
 // THE WORDS A LIMIT ACTUALLY USES.
 //
 // The session before this one fixed the plumbing: a run that dies reporting an
-// error now gets a sentence written onto its row. It also told her, flatly,
-// that there was no usage limit anywhere in her logs. That was wrong, and it
+// error now gets a sentence written onto its row. It also claimed, flatly,
+// that there was no usage limit anywhere in the logs. That was wrong, and it
 // was wrong for a reason worth pinning down forever: `troubleCause` was
 // looking for the words "usage limit", and Claude Code does not use them.
 //
-// What it prints, verbatim from her store, 2026-08-28T00:56:35Z:
+// What it prints, verbatim from a real trace log:
 //
 //   You've hit your session limit · resets 6pm (America/Los_Angeles)
 //
@@ -15,19 +15,18 @@
 // will keep failing the same way until this is fixed", when the limit lets go
 // on its own at the hour printed on that very line.
 //
-// MEASURED over all 3,769 trace logs in ~/Zero/projects/*/sessions on
-// 2026-08-28,: 751 runs ended
-// with an error result, and 239 of them came back 'unknown'. 50 of those, on
-// 27 rows, were limits. 189 were a run cut off by the machine or the network,
-// 133 of them her own Mac going to sleep mid-response. After this change the
-// unknown pile is 0 and the 512 already read as signed-out are untouched.
+// MEASURED over a few thousand real trace logs: of the runs that ended with
+// an error result, a few hundred came back 'unknown'. Some of those were
+// limits; most were a run cut off by the machine or the network, many of them
+// the Mac going to sleep mid-response. After this change the
+// unknown pile is 0 and the ones already read as signed-out are untouched.
 
 import { describe, it, expect } from 'vitest';
 import {
   troubleCause, limitResetsAt, deadRunSentence, troubleSentence, troubleRemedy, accountSentence, needsHerHands,
 } from '../shared/spawn-trouble.mjs';
 
-// Every one of these is copied out of a real trace log in her store.
+// Every one of these is copied out of a real trace log.
 const HER_SESSION_LIMIT = "You've hit your session limit · resets 6pm (America/Los_Angeles)";
 const HER_WEEKLY_LIMIT = "You've hit your weekly limit · resets 4pm (America/Los_Angeles)";
 const HER_LATE_LIMIT = "You've hit your session limit · resets 10:10pm (America/Los_Angeles)";

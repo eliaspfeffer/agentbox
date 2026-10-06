@@ -6,7 +6,7 @@
 // across the top of her inbox. Her three complaints were all correct. There is
 // no OAuth in Agentbox, so the sentence names a thing that does not exist here.
 // It is ugly. And it was on screen while agents were working perfectly well,
-// because it was about one of her two Claude accounts and not about the app.
+// because it was about one Claude account among several and not about the app.
 //
 // So the raw text never reaches the renderer again. It goes in the session's
 // own trace log, which is where a person debugging wants it, and what she is
@@ -24,7 +24,7 @@
 // CODEX. It is right about Codex anyway, and that is measured rather than
 // assumed. On 2026-09-05 `codex app-server` (codex-cli 0.148.0) was driven the
 // way main/codex-app-server.mjs drives it, with CODEX_HOME pointed at an empty
-// directory so there was no auth.json and her real ~/.codex login was neither
+// directory so there was no auth.json and the real ~/.codex login was neither
 // read nor written. The turn retried ten times and failed with
 //
 // unexpected status 401 Unauthorized: Missing bearer or basic authentication in
@@ -41,18 +41,18 @@
 
 // AN ACCOUNT THAT IS SIGNED IN AND NOT ALLOWED TO RUN.
 //
-// She was. Her second login was intact and her browser sign-in succeeded every
-// time she did it; the WORKSPACE that account belongs to has Claude Code turned
-// off. Run by hand on her Mac, this is the whole of what the CLI says:
+// It happens. A login can be intact, with the browser sign-in succeeding every
+// time, while the WORKSPACE that account belongs to has Claude Code turned
+// off. Run by hand, this is the whole of what the CLI says:
 //
 //   Your organization has disabled Claude subscription access for Claude Code ·
 //   Use an Anthropic API key instead, or ask your admin to enable access
 //
 // "subscription access" is in the list below, so every one of those was filed
-// as a login that had run out and she was told to type /login. She did, twice
-// in one afternoon; both logins worked; nothing changed, because no login can
-// change an admin's policy. FOUR dead runs on one row that day, all four
-// carrying "Sign that account back in and it picks straight up."
+// as a login that had run out and the person was told to type /login. Doing
+// it again and again changes nothing, because no login can change an admin's
+// policy, and every dead run on the row carried "Sign that account back in
+// and it picks straight up."
 //
 // TESTED BEFORE SIGNED_OUT, which is the whole of the fix: these lines say
 // "subscription" and "access" and mean something else entirely.
@@ -188,9 +188,8 @@ export function troubleCause(raw) {
 //
 // carries the one thing she actually wants to know, and we were throwing it
 // away and then telling her the vaguer "when the limit resets". The timezone
-// is dropped rather than shown: this Mac is set to America/Los_Angeles and
-// every limit line in her store prints that same zone, so naming it would only
-// add a word she has to read. Null when there is no time to quote, and then
+// is dropped rather than shown: the limit line prints the zone the Mac is
+// already set to, so naming it would only add a word she has to read. Null when there is no time to quote, and then
 // the sentence falls back to the wording that has always been there.
 export function limitResetsAt(raw) {
   // Both wordings are real: the CLI's own line is "resets 6pm" and the API's
@@ -202,14 +201,14 @@ export function limitResetsAt(raw) {
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
 // THE SAME HOUR AS A MOMENT, so the fleet can wait exactly until it
-// (2026-09-22: a limit that reset at 6:50pm held every agent until 7:03pm,
+// (a limit that reset at, say, 6:50pm could hold every agent until 7:03pm,
 // because the app waited a fixed thirty minutes instead of reading this line).
 // The next local occurrence of that clock time at or after `from`; null when
 // the line names no hour.
 export function limitResetMoment(raw, from = Date.now()) {
   // CODEX NAMES A DAY, NOT AN HOUR: "try again at Sep 28th, 2026 1:05 PM"
   // (codex-cli 0.153.4, 2026-09-24). A weekly limit read as "thirty minutes"
-  // put the capped login back in the pool every half hour for four days.
+  // put the capped login back in the pool every half hour for days.
   const dated = /try again at ([a-z]{3,9})\.? (\d{1,2})(?:st|nd|rd|th)?,? (\d{4}),? (\d{1,2}):(\d{2})\s*(am|pm)/i.exec(String(raw ?? ''));
   if (dated) {
     const month = MONTHS.indexOf(dated[1].slice(0, 3).toLowerCase());
@@ -343,8 +342,8 @@ export function engineTroubleNote(cause, engineWord = 'Codex') {
 // The count is the point, and it is why this is a different sentence from
 // `troubleSentence` above rather than a rewording of it. That one is about the
 // FLEET, and it can only ever be true when every account on the Mac is down at
-// once. That is why her screen stayed quiet: four Codex tasks and four on a
-// signed-out login sat there all day while her other agents worked, so the
+// once. That is why the screen could stay quiet: Codex tasks and tasks on a
+// signed-out login could sit there all day while the other agents worked, so the
 // fleet was never down and the one line the app owns was structurally unable to
 // speak. The subject here is her TASKS, which is the thing she went looking for
 // and the thing that was actually stuck.

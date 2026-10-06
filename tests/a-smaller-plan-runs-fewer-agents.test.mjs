@@ -1,7 +1,7 @@
 // HOW MANY AGENTS AGENTBOX STARTS FOR SOMEBODY WHO IS NOT ON A MAX PLAN.
 //
-// 2026-08-29. `maxConcurrentSessions: 3` was chosen on a Max subscription and
-// never revisited, and nothing in the app had ever mentioned a plan. So a
+// 2026-08-29. `maxConcurrentSessions: 3` was chosen with a Max subscription in
+// mind and never revisited, and nothing in the app had ever mentioned a plan. So a
 // stranger got three sessions started for them against whatever they were
 // paying for, and the founder's own bullet from a tester's onboarding was the
 // question "not on max plan?" asked while she watched it happen.

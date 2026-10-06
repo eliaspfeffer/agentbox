@@ -271,12 +271,11 @@ describe('the strings that were already measured on claude code', () => {
     ["You've hit your session limit · resets 6pm (America/Los_Angeles)", 'at-limit'],
     ['You have reached your weekly limit', 'at-limit'],
     ['Failed to authenticate: OAuth session expired and could not be refreshed', 'signed-out'],
-    // NOT SIGNED-OUT ANY MORE, AND THAT IS HER FIX RATHER THAN THIS SLICE'S.
+    // NOT SIGNED-OUT ANY MORE, AND THAT IS ANOTHER FIX RATHER THAN THIS SLICE'S.
     // (2026-09-06) added ORG_BLOCKED above SIGNED_OUT, because an account
     // whose workspace has Claude Code switched off is signed in and being told
-    // to type /login. She did, twice in one afternoon; both logins worked and
-    // nothing changed. The row moved when that landed, not when the second
-    // engine did.
+    // to type /login, which works and changes nothing. The row moved when
+    // that landed, not when the second engine did.
     ['organization has disabled Claude subscription access', 'org-blocked'],
     ['Not inside a trusted directory and --skip-git-repo-check was not specified.', 'workspace'],
     ['the response stopped arriving', 'interrupted'],

@@ -280,8 +280,8 @@ export function liveLine(item: WorkItem, facts: LiveFacts = {}): LiveLine | null
   if (!inProgress) return null;
 
   // SIGNED OUT IS NOT QUEUED (2026-10-04). "An agent starts on it as soon as
-  // one is free" was on her screen for half an hour while no agent could start
-  // at all, because her Claude Code login had run out. The row says what is
+  // one is free" could sit on screen for half an hour while no agent could
+  // start at all, because the Claude Code login had run out. The row says what is
   // wrong and the one thing that fixes it, and the sentence is drawn, not only
   // announced: it is the next step, and there is nothing else to do.
   const tool = signInNeeded[item.id];

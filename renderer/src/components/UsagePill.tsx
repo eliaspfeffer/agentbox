@@ -107,9 +107,9 @@ export function UsagePill({ usage, now, engineWord = null, onOpen, sidebar = fal
   // NOTHING AT ALL UNTIL A READING LANDS. This sits below the hooks rather than
   // above them, because a render where the reading has not arrived yet must not
   // skip any of them.
-  // AND THE BAR IS THE SESSION WINDOW ONLY WHERE ONE EXISTS. On her Codex plan
-  // there is no five hour window at all, so asking for one drew an empty corner
-  // on a day her weekly limit was full. `headlineLimit` says why.
+  // AND THE BAR IS THE SESSION WINDOW ONLY WHERE ONE EXISTS. On some Codex
+  // plans there is no five hour window at all, so asking for one drew an empty
+  // corner on a day the weekly limit was full. `headlineLimit` says why.
   const session = headlineLimit(limits);
   if (!session) return null;
 

@@ -1,10 +1,10 @@
 // AN ACCOUNT THAT IS SIGNED IN AND BLOCKED IS NOT AN ACCOUNT THAT IS SIGNED OUT.
 //
-// She was right and the app was wrong. Her second login, work@example.com in
-// ~/.claude-work, is signed in — its `oauthAccount` is intact and the browser
-// login succeeds every time she does it. What actually happens is that the
-// WORKSPACE that account belongs to has Claude Code turned off. Run by hand on
-// her Mac that afternoon, and this is the whole of the CLI's output:
+// The user is right and the app was wrong. Say a second login, work@example.com
+// in ~/.claude-work, is signed in — its `oauthAccount` is intact and the
+// browser login succeeds every time. What actually happens is that the
+// WORKSPACE that account belongs to has Claude Code turned off. Run by hand,
+// this is the whole of the CLI's output:
 //
 //   $ CLAUDE_CONFIG_DIR=~/.claude-work claude -p "say ok"
 //   Your organization has disabled Claude subscription access for Claude Code ·
@@ -12,22 +12,20 @@
 //
 // `/subscription access/i` is in the SIGNED_OUT list, so every one of those was
 // filed as a login that had run out, and the row and the Accounts page both
-// told her to go and type /login. She did, twice — 10:53am and 2:26pm, both
-// visible on the row — and the login SUCCEEDED both times, because there was
-// never anything wrong with it. Nothing changed, because nothing about a
-// /login can change an admin's policy.
+// told the user to go and type /login. Doing so SUCCEEDS every time, because
+// there was never anything wrong with the login. Nothing changes, because
+// nothing about a /login can change an admin's policy.
 //
-// Measured on her store: 4 dead runs on that one row (10:52:07, 10:53:42,
-// 13:38:19, 14:27:19), every one of them carrying "could not sign in, so
-// nothing has been done on this task. Sign that account back in and it picks
-// straight up." — an instruction she cannot carry out, on a row that was never
-// going to move.
+// So the row piles up dead runs, every one of them carrying "could not sign
+// in, so nothing has been done on this task. Sign that account back in and it
+// picks straight up." — an instruction nobody can carry out, on a row that was
+// never going to move.
 //
 // So this cause gets its own name and its own sentences, and the remedy names
 // the only person who has one: an admin of that workspace. The API-key half of
-// the CLI's line is deliberately never repeated to her — Agentbox bills workers
-// to her subscription and never to a key (CLAUDE.md), so offering it would be
-// telling her to do the one thing this app refuses to do.
+// the CLI's line is deliberately never repeated to the user — Agentbox bills
+// workers to their subscription and never to a key (CLAUDE.md), so offering it
+// would be telling them to do the one thing this app refuses to do.
 
 import { describe, it, expect } from 'vitest';
 import {
@@ -35,10 +33,10 @@ import {
   deadRunSentence, deadRunCause, causeWord, causeWhat, causeNext, causeAct, causeBreakdown,
 } from '../shared/spawn-trouble.mjs';
 
-// The line her CLI actually printed, byte for byte.
+// The line the CLI actually prints, byte for byte.
 const HERS = 'Your organization has disabled Claude subscription access for Claude Code · Use an Anthropic API key instead, or ask your admin to enable access';
 
-describe('the words her own machine printed', () => {
+describe('the words the CLI prints', () => {
   it('names the organization, not a login', () => {
     expect(troubleCause(HERS)).toBe('org-blocked');
   });
@@ -105,7 +103,7 @@ describe('what she is told about it', () => {
     expect(accountSentence('org-blocked', '/Users/you/.claude-work')).toMatch(/admin/i);
   });
 
-  it('says on the Accounts page that the account IS signed in, which is her whole complaint', () => {
+  it('says on the Accounts page that the account IS signed in, which is the whole complaint', () => {
     expect(accountSentence('org-blocked', '/Users/you/.claude-work')).toMatch(/signed in/i);
   });
 

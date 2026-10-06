@@ -10,9 +10,9 @@
 // `#!/bin/bash` into `# !/bin/bash`. A shell running it by hand shrugs that off;
 // the CLI spawning it directly gets ENOEXEC (errno -8), the server never comes
 // up, and Claude refuses to start a session without its permission tool. Three
-// deaths struck her default account, which took Claude's capacity to zero, so
-// the only thing still running was the one Codex task. Measured in her store at
-// 19:21: four workers dead inside four seconds, all on this line.
+// deaths struck the default account, which took Claude's capacity to zero, so
+// the only thing still running was the one Codex task: four workers dead
+// inside four seconds, all on this line.
 //
 // So: every shell script in the tree starts with a real shebang, and the
 // launcher answers an MCP handshake when spawned exactly the way the CLI does,

@@ -2,9 +2,9 @@
 //
 // Settings' Agents pane draws "Room for N at once" straight off
 // `status.capacity` (`_capacity`), and directly under it "Up to 3 run together"
-// off `sessionsAtOnce` times her Claude accounts. On any Mac with `codex` on
+// off `sessionsAtOnce` times the Claude accounts. On any Mac with `codex` on
 // PATH and no `engineChoice` moment in zero.config.json -- which is EVERY Mac
-// before she opts in, including hers today -- those two lines disagreed:
+// before its user opts in -- those two lines disagreed:
 // six against three.
 //
 // WHY. `_capacityFor` refused Codex on one fact only:

@@ -1,10 +1,10 @@
 // THE ACCOUNTS AGENTBOX RUNS ON ARE THE ONES ON THE DISK, not the ones somebody
 // remembered to type into a config file.
 //
-// It was logged in. ~/.claude-work held work@example.com, signed in at 15:19
-// that afternoon, and the fleet had been stopped since 15:14 on a personal
-// subscription that had hit its WEEKLY limit — three days of nothing, with a
-// rested paid account on the same disk. The register of accounts was the
+// Picture someone with two subscriptions: a second account signed in through
+// its own CLAUDE_CONFIG_DIR, and a first one that has hit its WEEKLY limit.
+// The fleet stops for days, with a rested account on the same disk the whole
+// time. The register of accounts was the
 // hand-written `authProfiles` key in zero.config.json, which nothing in the app
 // writes and nothing in the app checks against reality, so an account set up
 // the ordinary way (a new CLAUDE_CONFIG_DIR, a /login) was invisible BY
@@ -34,9 +34,9 @@
 // The directory listing is cached on the home folder's own mtime, so the
 // readdir happens once and then only when a folder appears or disappears; the
 // login inside each candidate is read through `accountIdentity`, which is
-// already cached on that file's mtime. Measured on her own home folder on
-// 2026-08-31 — 200 entries, 9 .claude-shaped, 5 of them directories, 3 holding
-// a login — a warm call costs 0.029 ms, and it is asked on the supervisor's
+// already cached on that file's mtime. Measured on a home folder of 200
+// entries, 9 .claude-shaped, 5 of them directories, 3 holding a login, a
+// warm call costs 0.029 ms, and it is asked on the supervisor's
 // 15-second tick. A button would only be a thing to remember to press.
 //
 // THE DELIBERATE LIMIT: one level, under the home directory only. A profile

@@ -35,7 +35,7 @@ const AUTH_CLAIM = 'https://api.openai.com/auth';
 
 /**
  * The plan ids whose proper names are known. Everything else is printed exactly
- *  as Codex spells it, and that is deliberate: her own token reads "prolite",
+ *  as Codex spells it, and that is deliberate: a real token can read "prolite",
  *  which title-cases into "Prolite", a product name nobody at OpenAI has ever
  *  used. Inventing a label is how a screen tells a confident lie about what
  *  somebody is paying for, so an id we do not know is shown as the id. */

@@ -1,11 +1,11 @@
 // AGENTS START WHEN HER LIMIT RESETS, NOT HALF AN HOUR LATER, AND HER OWN
 // "CONTINUE" OR RESUME IS NEVER HELD BEHIND A TIMER.
 //
-// MEASURED off ~/Zero/.zero-supervisor.json at 18:53: the default account's
-// cooldown ran to 19:03:50, thirty minutes after the limit was hit at 18:33:52,
-// though the CLI had printed the reset time, 18:50, on the very line the app
-// read the cause from. And the fleet-wide brake (one minute doubling to thirty)
-// returns at the top of every tick, so her reply and both resume commands
+// The shape, as the supervisor state shows it: the default account's cooldown
+// runs a fixed thirty minutes past the moment the limit was hit, though the
+// CLI had printed an earlier reset time on the very line the app read the
+// cause from. And the fleet-wide brake (one minute doubling to thirty)
+// returns at the top of every tick, so a reply and both resume commands
 // queued behind it with nothing able to lift it early. Two fixes, pinned here:
 //
 //   1. A limit that names its reset hour holds the fleet until THAT hour (plus
@@ -25,7 +25,7 @@ const ONE_ACCOUNT_HOME = '/nonexistent-home-with-no-second-account';
 const HER_LIMIT = "You've hit your session limit · resets 6:50pm (America/Los_Angeles)";
 const SIGNED_OUT = 'Failed to authenticate: OAuth session expired and could not be refreshed';
 
-// Local wall-clock moments on her day, so the tests mean the same thing in any
+// Local wall-clock moments on one day, so the tests mean the same thing in any
 // timezone the suite runs in.
 const at = (h, m = 0, s = 0, day = 22) => new Date(2026, 8, day, h, m, s).getTime();
 
@@ -91,7 +91,7 @@ afterEach(() => {
 });
 
 describe('a limit with a reset hour holds the fleet until that hour and no longer', () => {
-  it('her 6:33pm limit: the fleet is running again by 6:51pm, not 7:03pm', () => {
+  it('a 6:33pm limit: the fleet is running again by 6:51pm, not 7:03pm', () => {
     sup.noteExitForBackoff(deadOnArrival(HER_LIMIT));
     expect(sup._spawnBraked()).toBe(true);
 

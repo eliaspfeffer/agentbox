@@ -1,13 +1,13 @@
 // A SIGNED-OUT CLAUDE COMES BACK ON ITS OWN, PROVED WITH REAL PROCESSES.
 //
-// 2026-10-04: her Claude Code login expired at about 11:30 and every agent
-// stopped. She typed /login, pressed Resume all agents, and replied "continue",
-// and her rows stayed "Queued" until a fixed half-hour bench ran out at 12:04.
+// The bug: a Claude Code login expires and every agent stops. The user types
+// /login, presses Resume all agents, and replies "continue", and the rows stay
+// "Queued" until a fixed half-hour bench runs out.
 // cda2a8a fixed it, and tests/agents-come-back-the-moment-she-signs-in-again
 // pins each piece by calling the supervisor's methods directly. This file is
 // the end-to-end proof that the pieces meet: a real Store on disk, a real
 // Supervisor driving real ticks, and a real child process standing in for the
-// `claude` binary. The stand-in fails exactly the way her CLI did ("Failed to
+// `claude` binary. The stand-in fails exactly the way a signed-out CLI does ("Failed to
 // authenticate: OAuth session expired and could not be refreshed", an error
 // result, exit 1) until a login is written into its home, then works.
 //

@@ -59,8 +59,8 @@ const DEFAULTS = {
   // How many sessions run at once. The queue absorbs the rest; when the plan
   // window caps out, a longer queue is the visible, benign failure mode.
   //
-  // THIS IS THE NUMBER FOR A MAX SUBSCRIPTION, which is the only kind this was
-  // ever chosen on. When nobody has set one, loadConfig below reads the plan
+  // THIS IS THE NUMBER FOR A MAX SUBSCRIPTION, the biggest plan. When nobody
+  // has set one, loadConfig below reads the plan
   // Claude Code is signed in on and lowers this for a smaller one.
   maxConcurrentSessions: DEFAULT_SESSIONS_AT_ONCE,
   // LET AGENTBOX DECIDE HOW MANY RUN (w-e5225b62ba). On unless somebody has set

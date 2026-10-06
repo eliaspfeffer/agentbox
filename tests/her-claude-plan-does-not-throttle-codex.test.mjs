@@ -79,7 +79,7 @@ describe('the default this file rests on', () => {
 /* ================== the case, and the two either side =================== */
 
 describe('a claude plan caps claude code and nothing else', () => {
-  // HER CASE. A Pro Claude login, nobody set a number, so loadConfig wrote
+  // THE CASE. A Pro Claude login, nobody set a number, so loadConfig wrote
   // `maxConcurrentSessions: 1` and `planSlotsFrom: 'Pro'`. Claude Code runs one
   // at a time, which is correct and stays. Codex does not.
   it('leaves codex on the app default when a plan lowered the claude number', () => {

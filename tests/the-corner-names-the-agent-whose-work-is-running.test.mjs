@@ -19,7 +19,7 @@
 // WHY NOT THE WORKSPACE AGENT, ALWAYS. It is stabler and it is wrong in exactly
 // the case that was reported: four Codex workers running under a workspace that
 // defaults to Claude Code would draw Claude Code's meter, at 12%, while the
-// thing about to stop her fleet sits at 96% on the other subscription. A meter
+// thing about to stop the fleet sits at 96% on the other subscription. A meter
 // that is stable and describes the wrong account is the defect, not the fix.
 //
 // WHY NOT BOTH, AS TWO METERS. One corner, one dropdown: a second meter is
