@@ -96,6 +96,53 @@ export function machineSlots({ memBytes = os.totalmem(), cores = os.cpus().lengt
 }
 
 /**
+ * HOW MANY AGENTS THIS MACHINE CARRIES, which is the number Automatic answers
+ * with (w-e5225b62ba). `machineSlots` above suggests a number PER ACCOUNT; this
+ * one is for the MACHINE, because the machine is what runs out and because the
+ * page was showing both at once — a stepper reading 3 beside a sentence saying
+ * 6 run together.
+ *
+ * THE MEMORY CHECK IS WORTH HALF AS MANY AGAIN. The one-per-4 GB rule above
+ * comes from her own anchors, 2 at 8 GB and 4 at 16 GB, and those were set when
+ * every agent's build and test run competed for memory at the same moment. With
+ * the check on (w-3958c3753d) heavy commands take turns instead, so most of the
+ * time an extra agent costs its idle footprint rather than a build's.
+ *
+ * MEASURED ON A 16 GB, 10-CORE MAC with the check on and six agents running,
+ * over about an hour: 942 commands asked, 124 waited, NONE refused, three
+ * waiting at the busiest moment. Nothing was turned away and nothing was
+ * stopped, so six is what that Mac carries — and six is what this answers for
+ * it. More agents would have lengthened the queue rather than done more work.
+ * With the check off the answer is exactly what it was before, so nobody who
+ * has not turned it on is handed a bigger number than they had.
+ *
+ * `nudge` is how many times "Something felt slow" has been pressed. It only ever
+ * subtracts, and never below one: a person saying the Mac is struggling is a
+ * better reading than any arithmetic here.
+ */
+export function autoAgents({ memBytes, cores, gated = false, nudge = 0 } = {}) {
+  const base = machineSlots({ memBytes, cores }).slots;
+  const forGate = gated ? Math.floor((base * 3) / 2) : base;
+  const n = Number(nudge);
+  const down = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  return Math.max(1, Math.min(MAX_SLOTS, forGate) - down);
+}
+
+/**
+ * The machine's number shared out, because the cap underneath is still per
+ * account and nothing in the supervisor had to change shape for this.
+ *
+ * ROUNDED DOWN, so the machine's number is a ceiling rather than a floor: three
+ * accounts on a Mac that carries six get two each and not three. At least one
+ * each, because an account that may start nothing is an account whose rows
+ * never move.
+ */
+export function perAccountAgents(total, accounts) {
+  const n = Math.max(1, Math.floor(Number(accounts) || 1));
+  return Math.max(1, Math.floor((Number(total) || 1) / n));
+}
+
+/**
  * The sentence the Agents row puts under the stepper, in her vocabulary: what
  * this Mac is, and what we would run on it. It SUGGESTS and never refuses, so
  * it says "we suggest" and not "as high as it goes", which is what this line

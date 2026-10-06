@@ -63,6 +63,14 @@ const DEFAULTS = {
   // ever chosen on. When nobody has set one, loadConfig below reads the plan
   // Claude Code is signed in on and lowers this for a smaller one.
   maxConcurrentSessions: DEFAULT_SESSIONS_AT_ONCE,
+  // LET AGENTBOX DECIDE HOW MANY RUN (w-e5225b62ba). On unless somebody has set
+  // a number themselves, which `loadConfig` works out below from whether one was
+  // ever written down. With it on, `maxConcurrentSessions` is not read at all:
+  // `Supervisor#_slotsPerAccount` asks main/machine.mjs for what this Mac
+  // carries and shares that out across the live accounts. `agentsNudge` is how
+  // many times "Something felt slow" has been pressed, and only ever subtracts.
+  agentsAuto: true,
+  agentsNudge: 0,
   // HOLD HEAVY WORK WHEN MEMORY IS SHORT (w-3958c3753d). Off until somebody
   // turns it on from the Agents page. With it on, every shell command a worker
   // runs asks main/memory-gate-server.mjs first, and heavy ones wait their turn
@@ -256,6 +264,16 @@ export function loadConfig(appDir, { home = os.homedir() } = {}) {
   // already in zero.config.json is untouched, for the same reason the plan cap
   // leaves it alone.
   config.machineSlots = machineSlots().slots;
+  // WHO IS DECIDING THE NUMBER, read off whether one was ever written down
+  // (w-e5225b62ba). A number in zero.config.json is somebody's own instruction
+  // about this Mac and keeps being obeyed; an install that never touched the
+  // stepper was already having its number filled in here, and Automatic is that
+  // same thing said out loud and kept up to date. An explicit `agentsAuto`
+  // outranks the guess, because turning Automatic back on after setting a number
+  // has to be possible.
+  if (typeof overrides.agentsAuto !== 'boolean') {
+    config.agentsAuto = typeof overrides.maxConcurrentSessions !== 'number';
+  }
   if (typeof overrides.maxConcurrentSessions !== 'number') {
     const plans = readPlans(effectiveProfiles(config.authProfiles, { home }), { home });
     const slots = slotsForPlans(plans, config.machineSlots);

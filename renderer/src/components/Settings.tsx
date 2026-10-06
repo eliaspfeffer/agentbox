@@ -457,6 +457,95 @@ const Group = ({ id, label, warn, children }: { id?: string; label?: string; war
   </div>
 );
 
+/** A choice between two or three words, built the way the stepper is: chips side
+ *  by side, so it is the new-task card's control and not a new one. */
+function Seg<T extends string>({ label, value, options, onChange }: {
+  label: string; value: T; options: Array<{ value: T; label: string }>; onChange: (v: T) => void;
+}) {
+  return (
+    <div className="set-seg" role="radiogroup" aria-label={label}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={o.value === value}
+          className={o.value === value ? 'on' : ''}
+          onClick={() => onChange(o.value)}
+        >{o.label}</button>
+      ))}
+    </div>
+  );
+}
+
+/** The rest of what a row promises, kept off the page until it is asked for.
+ *  The words are unchanged; only where they sit has moved. */
+function Tell({ label, title, body }: { label: string; title: string; body: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="set-ghost" aria-expanded={open} onClick={() => setOpen(!open)}>{label}</button>
+      {open && (
+        <div className="set-tell" role="dialog" aria-label={title} onClick={() => setOpen(false)}>
+          <p>{body}</p>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * WHAT THE APP MEASURED, AS THE FIRST THING ON THE PAGE (w-e5225b62ba).
+ *
+ * Every figure here is read, never worked out for display: the agents are the
+ * sessions this app is running, and the rest comes from the memory check's own
+ * coordinator (main/memory-gate-server.mjs) through `memoryReading`. ANYTHING IT
+ * DOES NOT KNOW IS LEFT OUT. A card whose whole job is to be the measured corner
+ * of the screen cannot afford one invented number, so a kernel reading that did
+ * not arrive takes its cell with it rather than showing a nought.
+ *
+ * It is not drawn at all with the memory check off, because then the only thing
+ * it could say is how many agents are running, which the sentence under the
+ * title already says.
+ */
+function Reading({ running, capacity, gate }: {
+  running?: number; capacity?: number;
+  gate?: { on: boolean; reading?: { heavy: number | null; waiting: number | null; pressure: string | null; usedPct: number | null; asked: number | null; waited: number | null; refused: number | null } };
+}) {
+  const r = gate?.on ? gate.reading : null;
+  if (!r) return null;
+  const word = r.pressure === 'critical' ? 'Very short' : r.pressure === 'tight' ? 'Tight' : r.pressure ? 'Fine' : null;
+  const cells: Array<{ n: string; of: string }> = [];
+  if (Number.isFinite(running)) cells.push({ n: String(running), of: capacity ? `of ${capacity} running` : 'running' });
+  if (r.heavy !== null) cells.push({ n: String(r.heavy), of: 'heavy at once' });
+  if (r.waiting !== null) cells.push({ n: String(r.waiting), of: 'waiting on memory' });
+  if (word) cells.push({ n: word, of: 'memory now' });
+  // The day's tally is one sentence and only where there is one to tell. "None
+  // turned away" is the part that answers "is this Mac coping", so it is said
+  // in full rather than left to a nought the eye skips.
+  const tally = r.asked
+    ? `Today: ${r.asked} commands asked, ${r.waited ?? 0} waited, ${r.refused ? `${r.refused} turned away` : 'none turned away'}.`
+    : null;
+  if (!cells.length && !tally) return null;
+  return (
+    <div className="set-group">
+      <div className="set-plate">
+        {!!cells.length && (
+          <div className="set-row set-read">
+            {cells.map((c) => <div key={c.of}><b>{c.n}</b><span>{c.of}</span></div>)}
+          </div>
+        )}
+        {r.usedPct !== null && (
+          <div className="set-row set-bar-row">
+            <i className="set-bar"><i className={r.pressure === 'normal' ? '' : 'hot'} style={{ width: `${r.usedPct}%` }} /></i>
+          </div>
+        )}
+        {tally && <div className="set-row set-row-warn">{tally}</div>}
+      </div>
+    </div>
+  );
+}
+
 /** A page: its title, the sentence under it when there is one worth saying,
  *  and its groups. */
 const Page = ({ title, lede, children }: { title: string; lede?: string; children: ReactNode }) => (
@@ -1356,86 +1445,125 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
             Mac is short of memory, and which of your own reach the inbox. */}
         {model && w && pane === 'running' && (
           <Page title="Running">
+            {/* WHAT IT MEASURED, FIRST (w-e5225b62ba, her drawing). These facts
+                used to be the last clause of three grey paragraphs — "6 running
+                now", "Holding 3 commands now; memory is tight", "Nothing running
+                now" — so the one measured part of the screen was the part read
+                last. It leads now, and anything the app does not actually know
+                is left out rather than filled in. */}
+            <Reading running={w.running} capacity={w.agentsTotal ?? w.capacity} gate={w.memoryGate} />
             <Group id="at-once" label="Agents">
               {/* PAUSING IS A COMMAND, NOT A SETTING (w-12081d32cc): Pause
                   agents and Unpause agents are on ⌘K. */}
+              {/* HOW MANY RUN AT ONCE, which Agentbox answers now (w-e5225b62ba).
+                  "Realistically, the user shouldn't have to figure out how many
+                  agents they want at once. That's more of an override that
+                  technical people should handle."
+
+                  THE NUMBER SHOWN IS THE MACHINE'S, NOT THE ACCOUNT'S. The
+                  stepper was per account while the sentence beside it talked
+                  about the total, so this Mac showed 3 and said 6. Automatic
+                  answers for the Mac and main/machine.mjs shares it out; the
+                  per-account number is arithmetic nobody is asked to do.
+
+                  A PLAN THAT ALLOWS ONE AT A TIME STILL SAYS SO, because that is
+                  a fact about the subscription rather than about this Mac. */}
               <Row
-                label="Agents at once"
-                /* * WHY THE NUMBER IS WHAT IT IS, when Agentbox chose it rather
-                   than the person (w-7d5cb36913). A smaller plan gets one at a
-                   time instead of three. AND IT NAMES THE ENGINE ONLY WHERE THERE
-                   ARE TWO: the plan is a fact about her ANTHROPIC subscription,
-                   and the number it sets caps Claude Code alone
-                   (main/supervisor.mjs, `_slotsPerAccount`).
-                */
-                desc={`${w.sessionsAtOnceFromPlan ? `Your plan is ${w.sessionsAtOnceFromPlan}, so ${NAME} starts one ${twoEngines ? 'Claude Code agent ' : ''}at a time. Put it up whenever you like. ` : ''}${w.accounts.length > 1
-                  ? `Per account. With ${w.accounts.length} connected, up to ${w.sessionsAtOnce * w.accounts.length} run together. The rest wait in line.`
-                  : w.sessionsAtOnce > 1
-                    ? `Up to ${w.sessionsAtOnce} run together. The rest wait in line.`
-                    /*
-                     * The plan sentence above has already said one at a time,
-                       so saying it again is the stutter this read as when it
-                       was photographed on a Pro payload. */
-                    : w.sessionsAtOnceFromPlan
-                      ? 'The rest wait in line.'
-                      : 'One runs at a time. The rest wait in line.'}${w.machineNote ? ` ${w.machineNote}` : ''}${w.running ? ` ${w.running} running now.` : ''}`}
+                label="How many run at once"
+                desc={w.sessionsAtOnceFromPlan
+                  ? `Your plan is ${w.sessionsAtOnceFromPlan}, so ${NAME} starts one ${twoEngines ? 'Claude Code agent ' : ''}at a time.`
+                  : w.agentsAuto
+                    ? 'From this Mac’s memory, kept there as you add accounts or turn the memory check on.'
+                    : `You set this. Automatic would run ${w.agentsAutoTotal ?? w.sessionsAtOnce} on this Mac.`}
               >
-                {/* THE STEPPER'S RANGE IS THE SAME ON EVERY MAC (w-3d634cbc44).
-                    The hardware reading is in the sentence above, where it
-                    suggests, and the control goes where it always went. */}
-                <Stepper label="Agents at once" value={w.sessionsAtOnce} min={1} max={w.slotsMax ?? 12} onChange={(v) => setWorkspace('sessionsAtOnce', v)} />
+                {w.agentsAuto && <span className="set-chose">{(w.agentsTotal ?? w.capacity)} {(w.agentsTotal ?? w.capacity) === 1 ? 'agent' : 'agents'}</span>}
+                {!w.agentsAuto && (
+                  <Stepper label="Agents at once" value={w.sessionsAtOnce} min={1} max={w.slotsMax ?? 12} onChange={(v) => setWorkspace('sessionsAtOnce', v)} />
+                )}
+                <Seg
+                  label="How many run at once"
+                  value={w.agentsAuto ? 'auto' : 'manual'}
+                  options={[{ value: 'auto', label: 'Automatic' }, { value: 'manual', label: 'Set it myself' }]}
+                  onChange={(v) => setWorkspace('agentsAuto', v === 'auto')}
+                />
               </Row>
-            </Group>
             {/* HOLD HEAVY WORK WHEN MEMORY IS SHORT (w-3958c3753d). An agent
                 waiting on the model costs a few hundred MB; one running tests
                 or a build costs a gigabyte or more, so the number that runs
                 out is heavy commands, not agents. Off out of the box. */}
-            {(w.memoryGate || w.leftovers) && (
-              <Group id="memory" label="Memory">
-                {w.memoryGate && (
+              {w.memoryGate && (
                 <Row
                   label="Hold heavy work when memory is short"
-                  desc={`Tests, builds and other heavy commands run a few at a time, urgent first. Everything else runs as normal.${w.memoryGate.on && w.memoryGate.now ? ` ${w.memoryGate.now}` : ''}`}
+                  desc={`Tests and builds take turns, urgent first. Everything else runs as normal.${twoEngines ? ' Claude Code and Codex both.' : ''}`}
                 >
                   <Switch label="Hold heavy work when memory is short" on={w.memoryGate.on} onChange={(v) => setWorkspace('memoryGate', v)} />
                 </Row>
-                )}
-                {w.memoryGate?.on && (
-                  <Row
+              )}
+              {/* HOW MANY HEAVY COMMANDS, kept but moved out of the way: it is
+                  the one number on this page a person has no way to pick well,
+                  so it only appears once they have taken the decision back.
+                  Stepping back onto Auto's own number IS Auto, so there is
+                  always a way back without a second control. */}
+              {w.memoryGate?.on && !w.agentsAuto && (
+                <Row
+                  label="Heavy commands at once"
+                  desc={w.memoryGate.slots === null
+                    ? `Auto: ${w.memoryGate.slotsAuto} on this Mac, one for every 8 GB of memory.`
+                    : `You picked ${w.memoryGate.slots}. Auto is ${w.memoryGate.slotsAuto} on this Mac.`}
+                >
+                  <Stepper
                     label="Heavy commands at once"
-                    desc={w.memoryGate.slots === null
-                      ? `Auto: ${w.memoryGate.slotsAuto} on this Mac, one for every 8 GB of memory.`
-                      : `You picked ${w.memoryGate.slots}. Auto is ${w.memoryGate.slotsAuto} on this Mac.`}
-                  >
-                    {/* Stepping back onto Auto's own number IS Auto, so there is
-                        always a way back without a second control. */}
-                    <Stepper
-                      label="Heavy commands at once"
-                      value={w.memoryGate.slots ?? w.memoryGate.slotsAuto}
-                      min={1}
-                      max={w.memoryGate.slotsMax}
-                      onChange={(v) => setWorkspace('memoryGateSlots', v === w.memoryGate?.slotsAuto ? null : v)}
-                    />
-                  </Row>
-                )}
-                {/* STOP WHAT FINISHED AGENTS LEAVE RUNNING (2026-10-05). A night
-                    of agents left 7.7 GB running after every agent had finished
-                    and the Mac ran out of memory; main/leftovers.mjs has the
-                    numbers and the rules agreed with Codex. Its own switch,
-                    because the memory switch only ever delays commands and this
-                    one stops programs, and the person should agree to that by
-                    name. The description is the whole policy, so nothing about
-                    it is a surprise later; it is kept word for word. */}
-                {w.leftovers && (
-                  <Row
-                    label="Stop what finished agents leave running"
-                    desc={`Dev servers, previews, test runs and other background jobs an agent started and left behind are stopped two hours after its run ends, or ten minutes while memory is short, including what is already running when you turn this on. Never stopped: what an agent was asked to keep, apps installed on this Mac such as Docker Desktop, and anything you started yourself.${twoEngines ? ' Codex agents’ programs are not found yet.' : ''}${w.leftovers.now ? ` ${w.leftovers.now}` : ''}`}
-                  >
-                    <Switch label="Stop what finished agents leave running" on={w.leftovers.on} onChange={(v) => setWorkspace('cleanupLeftovers', v)} />
-                  </Row>
-                )}
-              </Group>
-            )}
+                    value={w.memoryGate.slots ?? w.memoryGate.slotsAuto}
+                    min={1}
+                    max={w.memoryGate.slotsMax}
+                    onChange={(v) => setWorkspace('memoryGateSlots', v === w.memoryGate?.slotsAuto ? null : v)}
+                  />
+                </Row>
+              )}
+              {/* STOP WHAT FINISHED AGENTS LEAVE RUNNING (2026-10-05). A night
+                  of agents left 7.7 GB running after every agent had finished
+                  and the Mac ran out of memory; main/leftovers.mjs has the
+                  numbers and the rules agreed with Codex. Its own switch,
+                  because the memory switch only ever delays commands and this
+                  one stops programs, and the person should agree to that by
+                  name.
+
+                  THE POLICY IS STILL THERE, WORD FOR WORD, behind "What it
+                  stops" (w-e5225b62ba). As a description it was six lines of
+                  grey and the longest thing on the page, which is how a row
+                  nobody reads gets agreed to. A sentence that says what it does
+                  and a button that says the rest is the same promise, kept
+                  where it can actually be read. */}
+              {w.leftovers && (
+                <Row
+                  label="Stop what finished agents leave running"
+                  desc={`Dev servers, previews and test runs an agent left behind, two hours after its run ends.${w.leftovers.now ? ` ${w.leftovers.now}` : ''}`}
+                >
+                  <Tell
+                    label="What it stops"
+                    title="Stop what finished agents leave running"
+                    body={`Dev servers, previews, test runs and other background jobs an agent started and left behind are stopped two hours after its run ends, or ten minutes while memory is short, including what is already running when you turn this on. Never stopped: what an agent was asked to keep, apps installed on this Mac such as Docker Desktop, and anything you started yourself.${twoEngines ? ' Codex agents’ programs are not found yet.' : ''}`}
+                  />
+                  <Switch label="Stop what finished agents leave running" on={w.leftovers.on} onChange={(v) => setWorkspace('cleanupLeftovers', v)} />
+                </Row>
+              )}
+              {/* THE ONE LEVER NO READING REPLACES. She is sitting in front of
+                  the Mac and the app is not: "If there are issues with that, the
+                  user determines whether they can take some sort of more manual
+                  control or indicate that there were issues." It only ever
+                  subtracts, and never below one agent. */}
+              {w.agentsAuto && (
+                <Row
+                  label="Something felt slow"
+                  desc={w.agentsNudge
+                    ? `${NAME} is running ${w.agentsNudge} fewer than this Mac suggests.`
+                    : `${NAME} runs one fewer from now on, and remembers that it did.`}
+                >
+                  {!!w.agentsNudge && <button type="button" className="set-ghost" onClick={() => setWorkspace('agentsFeltSlow', 'reset')}>Undo</button>}
+                  <button type="button" className="set-ghost" onClick={() => setWorkspace('agentsFeltSlow', true)}>Tell it</button>
+                </Row>
+              )}
+            </Group>
             {/* THE USER'S OWN CLAUDE CODE, the sessions Agentbox did not start.
                 They are rows in the Inbox and in no other list since
                 2026-08-17; this is the only place that decides how many of
