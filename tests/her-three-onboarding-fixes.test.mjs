@@ -183,7 +183,9 @@ describe('3. there is a quiet way out, and it asks them to stay', () => {
     // band, where her clicks on it never landed.
     expect(rule).toMatch(/left: \d+px/);
     expect(rule).toMatch(/bottom: \d+px/);
-    expect(rule).toMatch(/height: 38px/);
+    // 22 tall in the strip under the sidebar since 2026-10-06: at 38 it sat on
+    // Settings once the sidebar's foot ended at Settings.
+    expect(rule).toMatch(/height: 22px/);
     // DIM, AND NOT SO DIM THAT SHE HAD TO BE TOLD IT WAS THERE. It was 0.45,
     // which over the dark photograph the walk wears measured 3.01:1 against the
     // strip behind it (the harness, off the painted

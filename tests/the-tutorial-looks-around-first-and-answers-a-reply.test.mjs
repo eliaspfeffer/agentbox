@@ -239,6 +239,39 @@ describe('4c. R replies, and the reply is written in when the box opens', () => 
   });
 });
 
+describe('4e. with the reply box open, the card asks to send it, not for R', () => {
+  // Hers, 2026-10-06, with a picture of "Make it shorter, please.r": "If I type
+  // R here, it just adds R to the input field rather than actually moving to
+  // the next step." The card kept saying "Press R" over an open, focused box.
+  // Driven in the built app after the fix: opened by R, by a click, and still
+  // open after Escape, the card says ⌘↵, and ⌘↵ sends it back to work.
+  it('switches to ⌘↵ and Send once the box is open, and back is not needed', () => {
+    const open = coach('answer', 0, { replying: true });
+    expect(open.key).toBe('⌘↵');
+    expect(loud(open)).toBe('Press ⌘↵ or click Send to ask for it.');
+    expect(open.alt).toBeUndefined();
+    // THE CASE THAT MUST NOT MATCH: closed, it still names R; after a reply,
+    // marking it done wins whatever the box is doing.
+    expect(coach('answer', 0).key).toBe('R');
+    expect(coach('answer', 0, { replying: true, replies: 1 }).key).toBe('E');
+  });
+
+  it('reads the open box off the app and off where the typing cursor is', () => {
+    const card = read('renderer/src/components/Onboarding.tsx');
+    expect(app).toMatch(/replying=\{modal === 'reply'\}/);
+    expect(card).toMatch(/replying: !!replying \|\| inReply/);
+    expect(card).toMatch(/el\.closest\('\.focus-dock'\)/);
+  });
+
+  it('keeps the corner Skip in the strip under the sidebar, clear of Settings', () => {
+    // Measured in the built app at 1440x900: Skip 878 to 900, Settings 838 to
+    // 874. It was 38 tall from 14 up and sat on Settings.
+    const css = read('renderer/src/styles.css');
+    const rule = css.slice(css.indexOf('.fr-out {'), css.indexOf('}', css.indexOf('.fr-out {')));
+    expect(rule).toMatch(/bottom: 0px; height: 22px;/);
+  });
+});
+
 describe('4d. on the ⌘K list any key or click finishes, and runs nothing', () => {
   // Hers, 2026-10-06: "i keep accidentally hitting these commands like making a
   // new project in tutorial. it should just respond with any key to moving to

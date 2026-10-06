@@ -1726,7 +1726,7 @@ function Statement({ head, line, go, onNext, skip, onSkip }: {
 }
 
 export function Onboarding({
-  run, claude, home, opened, waiting, later, picking, palette, board, view, tabs, products = [],
+  run, claude, home, opened, waiting, later, picking, palette, board, replying, view, tabs, products = [],
   beat, pointed,
   onEvent, onStep, onSkipToApp, onPractice, onDone, onFiled, onProjectMade, onRecheck, onLeave, onShut,
 }: {
@@ -1767,6 +1767,8 @@ export function Onboarding({
   palette?: boolean;
   /** Whether the page is drawn as the board, for the board beat's second half. */
   board?: boolean;
+  /** Whether the reply box is open, for the answer beat's second half. */
+  replying?: boolean;
   /**
    * THE ROWS THE CURRENT BEAT'S KEY IS RIGHT FOR, in the order they are drawn,
    *  and the row the row-keys would actually land on. Both come from the app,
@@ -1884,6 +1886,21 @@ export function Onboarding({
     else onEvent({ t: 'start' });
   };
   const [now, setNow] = useState(() => Date.now());
+  // WHETHER THE TYPING CURSOR IS IN THE REPLY BOX (2026-10-06). The app's own
+  // `replying` is the box opened by R or a click; the box can also stay open
+  // and focused after that state has moved on, and a card saying "Press R"
+  // over a focused box is the one that typed an r onto the end of her reply.
+  const [inReply, setInReply] = useState(false);
+  useEffect(() => {
+    const read = () => {
+      const el = document.activeElement as Element | null;
+      setInReply(!!el && typeof el.closest === 'function' && !!el.closest('.focus-dock'));
+    };
+    read();
+    window.addEventListener('focusin', read);
+    window.addEventListener('focusout', read);
+    return () => { window.removeEventListener('focusin', read); window.removeEventListener('focusout', read); };
+  }, []);
   // HER AGENTS, read once. Null while it is being read, so the card never
   // flashes an empty list at a Mac that has eight.
   const [found, setFound] = useState<{ user: AgentFile[]; project: AgentFile[] } | null>(null);
@@ -2175,7 +2192,7 @@ export function Onboarding({
     const teamStrip = run.step === 'where' && typeof document !== 'undefined'
       && !!document.querySelector('.th-bar .tm-tabs');
     const say = coach(run.step, run.sentAt ? now - run.sentAt : 0, {
-      opened, view, picking, palette, board, left: beat?.length, tabs, replies: run.replies,
+      opened, view, picking, palette, board, replying: !!replying || inReply, left: beat?.length, tabs, replies: run.replies,
       tabNames: teamStrip ? TEAM_TAB_NAMES : undefined, team: !!team,
     });
     if (!say) return null;
