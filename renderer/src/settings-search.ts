@@ -16,7 +16,7 @@ export type SettingsPageId =
   | 'projects' | 'team';
 
 /** The menu, in the order it is drawn, under the three headings it is drawn
- *  under. Codex and Team are left out by the screen on a Mac that has neither. */
+ *  under. Team is left out by the screen on a build with no team cloud. */
 export const SETTINGS_PAGES: Array<{ id: SettingsPageId; label: string; group: 'Personal' | 'Agents' | 'Workspace' }> = [
   { id: 'general', label: 'General', group: 'Personal' },
   { id: 'appearance', label: 'Appearance', group: 'Personal' },

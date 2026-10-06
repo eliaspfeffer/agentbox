@@ -1290,7 +1290,20 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
       const s = recheckCodex(config);
       return { found: s.found, path: s.bin };
     },
+    // WHICH ONE IS SIGNED IN, kept on the config for the run that reads it
+    // (`Supervisor#_enginesFound`) and never saved: it changes outside the app.
+    onSignIn: (engine, signedIn) => {
+      config[`${engine}SignedIn`] = signedIn;
+    },
   });
+  // ASKED ONCE AT LAUNCH, and only on a Mac with both, which is the only Mac
+  // where the answer moves a task (w-d5d632e503): a tester who pays for
+  // ChatGPT had the Claude app's copy of Claude Code, never signed in, so
+  // every task went to Claude Code and Codex was never offered.
+  if (config.claudeFound && config.codexBin) {
+    void engineSetup.signedInNow('claude', config.claudeBin);
+    void engineSetup.signedInNow('codex', config.codexBin);
+  }
   // A sign-in left waiting on the browser is not left running after the app.
   app.on('will-quit', () => { engineSetup.cancel('claude'); engineSetup.cancel('codex'); });
   ipcMain.handle('zero:engine-setup', async (_e, { action, engine } = {}) => {

@@ -80,9 +80,9 @@ describe('the engine-choice header', () => {
     expect(read('renderer/src/components/EnginePicker.tsx')).toMatch(/EnginePicker/);
     expect(read('renderer/src/components/Compose.tsx')).toMatch(/<EnginePicker/);
     // Settings' half is a page of its own since the redraw (w-ccadd13c46),
-    // in the menu only where the gate is open.
+    // in the menu on every Mac since w-d5d632e503.
     expect(read('renderer/src/settings-search.ts')).toContain("{ id: 'codex', label: 'Codex', group: 'Agents' }");
-    expect(read('renderer/src/components/Settings.tsx')).toContain("(p.id !== 'codex' || !!w?.codex)");
+    expect(read('renderer/src/components/Settings.tsx')).not.toContain("(p.id !== 'codex' || !!w?.codex)");
   });
 
   // THE HALF THAT IS STILL TRUE STAYS, and it is the one that matters: the

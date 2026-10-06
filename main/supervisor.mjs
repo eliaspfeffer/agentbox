@@ -5217,7 +5217,15 @@ export class Supervisor {
    *  (main/config.mjs `claudeFound`); a config that never said leaves it true,
    *  which is what it always meant. */
   _enginesFound() {
-    return { claude: this.config.claudeFound !== false, codex: !!this.config.codexBin };
+    const codex = !!this.config.codexBin;
+    // A CLAUDE CODE NOBODY IS SIGNED INTO, BESIDE A CODEX SOMEBODY IS, COUNTS
+    // AS NOT HERE (w-d5d632e503). The Claude app keeps a copy of Claude Code
+    // whether or not its owner pays for it, so a person who only uses Codex
+    // had every task sent to a Claude Code that could not run. Both answers
+    // come from the sign-in check (main/engine-setup.mjs); until it has
+    // answered, nothing moves.
+    const claudeSignedOut = this.config.claudeSignedIn === false && codex && this.config.codexSignedIn === true;
+    return { claude: this.config.claudeFound !== false && !claudeSignedOut, codex };
   }
 
   /** What runs when nobody chose: Claude Code, or Codex on a Mac without it. */

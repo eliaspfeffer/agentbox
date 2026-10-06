@@ -144,9 +144,13 @@ function defaultReaddir(dir) {
 // used Codex in the ChatGPT app has this and nothing else (w-9f6975906c,
 // measured 2026-10-05: codex-cli 0.158.0-alpha.2, sharing the CLI's sign-in).
 // Searched LAST, after the shell, because it moves with the app's releases.
+//
+// AND THE ONE THE CODEX DESKTOP APP CARRIES (w-d5d632e503). Its reported place,
+// not measured on a Mac here: none of the Macs this was written on had the app.
+// A path that is not there costs one missed `exists`.
 export function appCopyPaths(home = os.homedir()) {
-  const inside = 'ChatGPT.app/Contents/Resources/codex-cli/bin/codex';
-  return [path.join('/Applications', inside), path.join(home, 'Applications', inside)];
+  const inside = ['ChatGPT.app/Contents/Resources/codex-cli/bin/codex', 'Codex.app/Contents/Resources/codex'];
+  return inside.flatMap((p) => [path.join('/Applications', p), path.join(home, 'Applications', p)]);
 }
 
 // WHAT CODEX LEAVES BEHIND. None of these is a binary and none is ever spawned.

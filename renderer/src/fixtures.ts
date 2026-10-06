@@ -866,8 +866,9 @@ export const fixtureSettings = {
     // AND THE SAME ONE CODING AGENT THE SNAPSHOT ABOVE REPORTS. Six keys, all
     // of them the answer a Mac with the gate shut really gives (main/
     // settings.mjs): one choice, so the Coding agent row is not drawn and the
-    // Model row still speaks for every agent; `codex: null`, so Settings says
-    // the word Codex nowhere at all. They are written out rather than left
+    // Model row still speaks for every agent; and `codex` says Codex is not on
+    // this Mac, because the Codex page is drawn on every Mac (w-d5d632e503)
+    // and a Mac with Codex on it opens the choice. They are written out rather than left
     // absent because this object is the schema preview the file's own header
     // promises, and because a key that is missing exercises the reader's
     // fallback instead of the payload the app really sends.
@@ -882,7 +883,7 @@ export const fixtureSettings = {
     // Agentbox was built with: exactly what a Mac with no Claude Code on it
     // gets, and what every Mac gets until the settings trip returns.
     claudeModels: BUILT_MODELS.map((m) => ({ id: m.id, label: m.label, model: m.model })),
-    codex: null,
+    codex: { found: false, certain: true, bin: '', url: 'https://learn.chatgpt.com/docs/codex/cli', trouble: null },
     standingLines: 20,
     messageRulesLines: 254,
     projectsWithInstructions: 1,

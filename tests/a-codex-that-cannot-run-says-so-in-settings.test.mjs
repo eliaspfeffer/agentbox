@@ -162,13 +162,15 @@ describe('the codex card', () => {
     expect(read().codex.trouble).not.toContain('codex login');
   });
 
-  // THE GATE STILL DECIDES WHETHER THERE IS A CARD AT ALL. On a Mac that has
-  // not opened it, Agentbox has never said the word Codex on any screen, and a
-  // trouble sentence would be the app volunteering a topic.
-  it('is absent entirely while the gate is shut, trouble or no trouble', () => {
+  // THE CARD IS ON EVERY MAC NOW (w-d5d632e503), the gate shut or not: a
+  // tester who only uses Codex looked for it and found nothing. Its trouble
+  // comes with it, because a card saying nothing is wrong over a Codex that
+  // cannot run is the lie this file exists to stop.
+  it('is there while the gate is shut, with its trouble', () => {
     const { supervisor, read } = build({ codexBinConfigured: realFile() });
     codexDied(supervisor, 'unexpected status 401 Unauthorized');
-    expect(read().codex).toBe(null);
+    expect(read().codex.found).toBe(true);
+    expect(read().codex.trouble).toBe(engineTroubleNote('signed-out'));
   });
 });
 

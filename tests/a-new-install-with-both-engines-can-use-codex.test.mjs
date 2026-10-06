@@ -42,9 +42,11 @@ describe('the Codex opt-in on a new install', () => {
     expect(engineChoiceSince(loadConfig(d, { home: d }))).toBe(first);
   });
 
-  it('is not written into an install that already has a config', () => {
+  // With Codex not found: an existing install that does find Codex opens it
+  // from that launch (tests/a-person-who-only-uses-codex-gets-codex-without-asking).
+  it('is not written into an install that already has a config and no Codex', () => {
     const d = dir();
-    fs.writeFileSync(path.join(d, 'zero.config.json'), JSON.stringify({ accountId: 'existing' }));
+    fs.writeFileSync(path.join(d, 'zero.config.json'), JSON.stringify({ accountId: 'existing', codexBin: '/nonexistent/codex/codex' }));
     expect(engineChoiceSince(loadConfig(d, { home: d }))).toBeNull();
     expect(saved(d).engineChoice).toBeUndefined();
   });
