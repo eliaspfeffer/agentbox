@@ -73,9 +73,13 @@ describe('a folder with no key of its own', () => {
     expect(loadCloudConfig(appDir, { packaged: false, home })?.url).toBe('https://hers.test');
   });
 
-  it('runs the team version in the app from the Dock too, which is the whole point', () => {
+  // REVERSED 2026-10-06: an installed app is always the single-person app, key
+  // or no key ("users are no longer using the multiplayer version so this should
+  // never be visible"). tests/the-installed-app-is-the-single-person-app.test.mjs
+  // holds the full rule; the team version runs from a checkout.
+  it('does not run the team version in an installed app, even with the Mac\'s key', () => {
     const { home, appDir } = aMac({ inHome: KEY });
-    expect(loadCloudConfig(appDir, { packaged: true, home })?.url).toBe('https://hers.test');
+    expect(loadCloudConfig(appDir, { packaged: true, home })).toBeNull();
   });
 
   // THE CASE EITHER SIDE: no key anywhere is still the single-person app, which
@@ -99,7 +103,8 @@ describe('a folder that has its own key', () => {
   // moved onto hers.
   it('runs on its own, not the Mac\'s', () => {
     const { home, appDir } = aMac({ inHome: KEY, inFolder: { url: 'https://this-folder.test', anonKey: 'k' } });
-    expect(loadCloudConfig(appDir, { packaged: true, home }).url).toBe('https://this-folder.test');
+    // An installed app reads no key at all since 2026-10-06.
+    expect(loadCloudConfig(appDir, { packaged: true, home })).toBeNull();
     expect(loadCloudConfig(appDir, { packaged: false, home }).url).toBe('https://this-folder.test');
   });
 });
@@ -113,7 +118,8 @@ describe('an installed build', () => {
     const other = path.join(tmp('other'), 'other.json');
     fs.writeFileSync(other, JSON.stringify({ url: 'https://theirs.test', anonKey: 'k' }));
     process.env.AGENTBOX_TEAM_CONFIG = other;
-    expect(loadCloudConfig(appDir, { packaged: true, home }).url).toBe('https://hers.test');
+    // It ignores every team config since 2026-10-06, this one included.
+    expect(loadCloudConfig(appDir, { packaged: true, home })).toBeNull();
     // From a checkout it is still honoured, which is what tests run on.
     expect(loadCloudConfig(appDir, { packaged: false, home }).url).toBe('https://theirs.test');
   });
