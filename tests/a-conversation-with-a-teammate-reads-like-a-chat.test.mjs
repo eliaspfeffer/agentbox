@@ -14,7 +14,7 @@
 // the full name and the time once per run of messages, a run being one
 // person's messages within ten minutes of each other, a quiet day line, a soft
 // rule, and none of the agent thread's chapters.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -65,8 +65,15 @@ const team = {
   byId: new Map([[ME, { id: ME, name: 'Sam Rivera', email: '', avatarUrl: null }], [MAYA, { id: MAYA, name: 'Maya Chen', email: '', avatarUrl: null }]]),
   products: new Map(),
 };
-const draw = (events, chat) => renderToStaticMarkup(React.createElement(TeamContext.Provider, { value: team },
-  React.createElement(Thread, { events, chat, name: 'Claude Code', landOn: 'w-1', onWhole: () => {}, md: (t) => React.createElement('p', null, t) })));
+const draw = (events, chat) => {
+  // Launch QA found one failure after the fixture's day passed: the renderer
+  // used the real clock while the layout assertions used NOW. Share its clock.
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW);
+  try {
+    return renderToStaticMarkup(React.createElement(TeamContext.Provider, { value: team },
+      React.createElement(Thread, { events, chat, name: 'Claude Code', landOn: 'w-1', onWhole: () => {}, md: (t) => React.createElement('p', null, t) })));
+  } finally { clock.mockRestore(); }
+};
 const conversation = [
   said(MAYA, at(4, 21), 'Sending my findings here.'),
   said(MAYA, at(4, 24), 'One more.'),

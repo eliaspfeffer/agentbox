@@ -1433,6 +1433,13 @@ export class Store {
           if (file && !/work-items\.jsonl|dashboard\.jsonl|project\.json/.test(file)) return;
           this._notify();
         });
+        // fs.watch may return successfully, then emit an error (for example
+        // EMFILE). An unhandled error takes down the app, outside this catch.
+        // Reads still work without a watcher; release only the failed one.
+        watcher.on('error', () => {
+          try { watcher.close(); } catch {}
+          this.watchers = this.watchers.filter((w) => w !== watcher);
+        });
         this.watchers.push(watcher);
       } catch {}
     }

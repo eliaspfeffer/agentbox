@@ -1309,11 +1309,12 @@ export interface FinishCard {
 export function finishCard(
   claude: { missing: boolean },
   agents: { read: boolean; some: boolean },
+  threads: Array<{ imported?: boolean }> | null = [],
 ): FinishCard {
   if (claude.missing) {
     return { show: true, blocked: true, go: false, head: COPY.gateHead, line: COPY.missing };
   }
-  if (!agents.read) {
+  if (!agents.read || threads === null) {
     return { show: false, blocked: false, go: false, head: '', line: '' };
   }
   // NOTHING TO BRING IN IS NO CARD AGAIN (w-9f6975906c, 2026-10-06), which
@@ -1323,7 +1324,7 @@ export function finishCard(
   // setup. Codex, consulted on the round: "makes successful completion feel
   // like failed setup." The walk goes straight to the landing, and ⌘K still
   // has its import row for the day there is something to bring.
-  if (!agents.some) {
+  if (!agents.some && !threads.some((t) => !t.imported)) {
     return { show: false, skip: true, blocked: false, go: true, head: '', line: '' };
   }
   return { show: true, blocked: false, go: true, head: COPY.bringHead, line: COPY.agentsOffer };
@@ -1511,6 +1512,8 @@ export function coach(
     team?: boolean;
     /** How many times she has replied to her own thread (`FirstRun.replies`). */
     replies?: number;
+    /** Whether the reply box is open, for the answer beat's second half. */
+    replying?: boolean;
   } = {},
 ): Coach | null {
   switch (step) {
@@ -1626,6 +1629,13 @@ export function coach(
         // the tab says Done and the card said close, three words for one key
         // to every persona tester. Done is the app's word (./done-word.ts).
         ? say('It is shorter now, so this one is finished.', 'Press ', 'E', ' to mark it done.')
+        // AND ONCE THE BOX IS OPEN THE NEXT MOVE IS SENDING (2026-10-06). The
+        // card kept saying "Press R" over an open box with the reply in it, so
+        // R typed an r on the end of the reply: hers, "If I type R here, it
+        // just adds R to the input field rather than actually moving to the
+        // next step." Now the card says what the open box is waiting for.
+        : ctx.replying
+        ? say('Your reply is written for you.', 'Press ', '⌘↵', ' or click Send to ask for it.')
         // R IS THE APP'S REPLY KEY, AND IT IS THE CAP (2026-10-06), hers: "it's
         // actually R to reply". E rides as the beat's second key, so pressing
         // it is still taken, and the box writes the reply in for her when it

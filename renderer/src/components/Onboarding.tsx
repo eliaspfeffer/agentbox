@@ -25,7 +25,7 @@ import {
   coach, nextStep, nextTab, recentFolders, ring, runOf, shortPath, stepBack,
   type AgentFile, type Coach, type FirstRun, type Rect, type RecentFolder, type Step,
 } from '../onboarding';
-import { type AgentFolder, type Project } from '../agent-import-card';
+import { type AgentFolder, type Project, type SessionThread } from '../agent-import-card';
 import { ImportAgents } from './ImportAgents';
 import FolderPicker from './FolderPicker';
 import { PRACTICE_NAME, PRACTICE_ROWS, PRACTICE_TASK } from '../../../shared/first-run-practice.mjs';
@@ -1201,8 +1201,19 @@ function Finished({
   // draw. The new card reaches every folder on the Mac with agents in it, so a
   // Mac whose agents are all in ~/Desktop/dev/whatever now gets the offer
   // instead of being walked straight past it.
+  // Conversations are importable without any Claude agent files. In particular,
+  // a Codex-only Mac has no files in ~/.claude/agents. Wait for this read before
+  // deciding an empty finish card can be skipped.
+  const [threads, setThreads] = useState<SessionThread[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    import('../api').then(({ api }) => api.agentThreads())
+      .then((t) => { if (live) setThreads(t); })
+      .catch(() => { if (live) setThreads([]); });
+    return () => { live = false; };
+  }, []);
   const some = (!!found && anyAgents(found)) || !!folders?.some((f) => f.count > 0);
-  const card = finishCard(claude, { read: found !== null && folders !== null, some });
+  const card = finishCard(claude, { read: found !== null && folders !== null, some }, threads);
   // The two things the gate needs to remember: whether a search is running
   // right now, and whether one has already come back empty.
   const [checking, setChecking] = useState(false);
@@ -1726,7 +1737,7 @@ function Statement({ head, line, go, onNext, skip, onSkip }: {
 }
 
 export function Onboarding({
-  run, claude, home, opened, waiting, later, picking, palette, board, view, tabs, products = [],
+  run, claude, home, opened, waiting, later, picking, palette, board, replying, view, tabs, products = [],
   beat, pointed,
   onEvent, onStep, onSkipToApp, onPractice, onDone, onFiled, onProjectMade, onRecheck, onLeave, onShut,
 }: {
@@ -1767,6 +1778,8 @@ export function Onboarding({
   palette?: boolean;
   /** Whether the page is drawn as the board, for the board beat's second half. */
   board?: boolean;
+  /** Whether the reply box is open, for the answer beat's second half. */
+  replying?: boolean;
   /**
    * THE ROWS THE CURRENT BEAT'S KEY IS RIGHT FOR, in the order they are drawn,
    *  and the row the row-keys would actually land on. Both come from the app,
@@ -1884,6 +1897,21 @@ export function Onboarding({
     else onEvent({ t: 'start' });
   };
   const [now, setNow] = useState(() => Date.now());
+  // WHETHER THE TYPING CURSOR IS IN THE REPLY BOX (2026-10-06). The app's own
+  // `replying` is the box opened by R or a click; the box can also stay open
+  // and focused after that state has moved on, and a card saying "Press R"
+  // over a focused box is the one that typed an r onto the end of her reply.
+  const [inReply, setInReply] = useState(false);
+  useEffect(() => {
+    const read = () => {
+      const el = document.activeElement as Element | null;
+      setInReply(!!el && typeof el.closest === 'function' && !!el.closest('.focus-dock'));
+    };
+    read();
+    window.addEventListener('focusin', read);
+    window.addEventListener('focusout', read);
+    return () => { window.removeEventListener('focusin', read); window.removeEventListener('focusout', read); };
+  }, []);
   // HER AGENTS, read once. Null while it is being read, so the card never
   // flashes an empty list at a Mac that has eight.
   const [found, setFound] = useState<{ user: AgentFile[]; project: AgentFile[] } | null>(null);
@@ -2175,7 +2203,7 @@ export function Onboarding({
     const teamStrip = run.step === 'where' && typeof document !== 'undefined'
       && !!document.querySelector('.th-bar .tm-tabs');
     const say = coach(run.step, run.sentAt ? now - run.sentAt : 0, {
-      opened, view, picking, palette, board, left: beat?.length, tabs, replies: run.replies,
+      opened, view, picking, palette, board, replying: !!replying || inReply, left: beat?.length, tabs, replies: run.replies,
       tabNames: teamStrip ? TEAM_TAB_NAMES : undefined, team: !!team,
     });
     if (!say) return null;

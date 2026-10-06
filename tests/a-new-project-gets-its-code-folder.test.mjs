@@ -8,7 +8,7 @@
 // The other half is that the folder stays OPTIONAL. With no folder chosen yet,
 // the project is made without one, exactly as before.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -60,14 +60,20 @@ describe('the folder the card proposed actually gets made', () => {
 
   it('expands the ~ the card writes, because only this side knows whose home it is', async () => {
     const s = await store();
+    // Launch QA found this test writing outside its fixture and failing EPERM
+    // in a worker sandbox. Give tilde expansion its own disposable home too.
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'zero-tilde-home-'));
+    const homeRead = vi.spyOn(os, 'homedir').mockReturnValue(home);
     const under = `zero-tilde-${process.pid}`;
-    const full = path.join(os.homedir(), under);
+    const full = path.join(home, under);
     try {
       s.createProduct({ name: 'Tilde', repoPath: `~/${under}` });
       expect(fs.statSync(full).isDirectory()).toBe(true);
       expect(readProject(s, 'tilde').repoPath).toBe(full);
     } finally {
-      fs.rmSync(full, { recursive: true, force: true });
+      homeRead.mockRestore();
+      s.unwatch();
+      fs.rmSync(home, { recursive: true, force: true });
     }
   });
 });

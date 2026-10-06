@@ -6177,6 +6177,9 @@ export default function App() {
           // Whether the board is what the page is drawn as, for the board
           // beat's second half (2026-10-06).
           board={inboxDisplay.view === 'board'}
+          // And whether the reply box is open, so the answer beat stops saying
+          // R over a box that R would type into (2026-10-06).
+          replying={modal === 'reply'}
           view={view}
           /* THE TABS THE WALK NAMES ARE THE TABS TAB MOVES ALONG. Its tour
              tells somebody to press Tab and then says where that press lands,

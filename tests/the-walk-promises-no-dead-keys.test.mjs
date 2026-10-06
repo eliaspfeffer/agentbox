@@ -160,7 +160,7 @@ describe('a Mac with no agent files is offered nothing at all', () => {
     // ~/Desktop/dev/whatever is offered them instead of walked past them. The
     // scan is a second read and the card waits on it too.
     expect(walk).toMatch(/const some = \(!!found && anyAgents\(found\)\) \|\| !!folders\?\.some\(\(f\) => f\.count > 0\);/);
-    expect(walk).toMatch(/finishCard\(claude, \{ read: found !== null && folders !== null, some \}\)/);
+    expect(walk).toMatch(/finishCard\(claude, \{ read: found !== null && folders !== null, some \}, threads\)/);
     // AND NOT ON A CARD THAT IS HOLDING THE INBOX SHUT. A
     // Mac with no Claude Code on it has nothing to import agents INTO yet, and
     // that card is about one thing.
