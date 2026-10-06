@@ -84,11 +84,11 @@ describe('the menu behind how many run at once', () => {
   const opts = (w) => agentCountOptions({ slotsMax: 12, ...w });
 
   it('offers Automatic first, carrying the number it settled on', () => {
-    expect(opts({ agentsTotal: 6 })[0]).toEqual({ value: 'auto', label: 'Automatic — 6 agents' });
+    expect(opts({ agentsTotal: 6 })[0]).toEqual({ value: 'auto', label: 'Automatic (6 agents)' });
   });
 
   it('says one agent rather than 1 agents', () => {
-    expect(opts({ agentsTotal: 1 })[0].label).toBe('Automatic — 1 agent');
+    expect(opts({ agentsTotal: 1 })[0].label).toBe('Automatic (1 agent)');
     expect(opts({ agentsTotal: 6, accounts: [{}] })[1].label).toBe('1 agent');
   });
 
@@ -113,7 +113,32 @@ describe('the menu behind how many run at once', () => {
 
   it('survives a payload with no accounts and no capacity yet', () => {
     expect(() => opts({})).not.toThrow();
-    expect(opts({})[0].label).toBe('Automatic — 1 agent');
+    expect(opts({})[0].label).toBe('Automatic (1 agent)');
+  });
+
+  /* NO DASH IN ANYTHING SHE READS (2026-10-05). The Automatic option joined its
+     two halves with an em dash and she caught it on the screen: "looks quite
+     bad". The app has refused them in `machineNote` since that sentence was
+     written, and a menu label is read exactly as a sentence is, so the rule
+     covers both. The en dash is here too because it is the one that gets typed
+     by accident. */
+  it('has no em dash or en dash in any option', () => {
+    for (const o of opts({ agentsTotal: 6, accounts: [{}, {}] })) {
+      expect(o.label).not.toMatch(/[—–]/);
+    }
+  });
+});
+
+describe('the words on the Running page', () => {
+  const pane = fs.readFileSync(new URL('../renderer/src/components/Settings.tsx', import.meta.url), 'utf8');
+  const running = pane.slice(pane.indexOf("pane === 'running'"), pane.indexOf("pane === 'appearance'"));
+
+  // The same rule over the page's own labels and sentences, which is where one
+  // would land next. Comments are left alone: this file's own prose uses them.
+  it('carries no em dash or en dash in a label or a sentence', () => {
+    const read = running.split('\n').filter((l) => /label=|desc=/.test(l));
+    expect(read.length).toBeGreaterThan(4);
+    for (const line of read) expect(line).not.toMatch(/[—–]/);
   });
 });
 

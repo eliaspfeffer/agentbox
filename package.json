@@ -186,8 +186,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "Astral-Agent",
-        "repo": "astral-releases"
+        "owner": "agentboxhq",
+        "repo": "agentbox-releases"
       }
     ]
   },

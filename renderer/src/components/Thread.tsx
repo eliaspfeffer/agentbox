@@ -72,7 +72,7 @@ export interface CodeInThread {
   open: (path: string) => void;
 }
 
-export function Thread({ events, omitted = 0, onWhole, onOpenOrigin, onSendNow, name, landOn, md, code, tail, chat = false, reactions, onReact, onQuote, onHandToAgent, replies, openThread = null, onOpenThread }: {
+export function Thread({ events, omitted = 0, onWhole, onOpenOrigin, onSendNow, name, landOn, md, code, tail, chat = false, reactions, onReact, onQuote, onHandToAgent, replies, openThread = null, onOpenThread, freshThreads }: {
   // CUT THE AGENT'S CURRENT STEP so a message of hers that is waiting on it is
   // answered now (w-f37a34def6). Absent where nothing can be cut.
   onSendNow?: () => unknown;
@@ -137,6 +137,9 @@ export function Thread({ events, omitted = 0, onWhole, onOpenOrigin, onSendNow, 
   replies?: Record<string, AgentTurn[]>;
   openThread?: string | null;
   onOpenThread?: (uid: string) => void;
+  // How many replies in each thread are waiting on you, by its message's uid
+  // (`whatWaits`, shared/team-rules.mjs). Absent or 0 reads as before.
+  freshThreads?: Record<string, number>;
 }) {
   // Which work lines are open, and how far. Kept per conversation, not globally.
   const [open, setOpen] = useState<Map<number, number>>(new Map());
@@ -363,7 +366,7 @@ export function Thread({ events, omitted = 0, onWhole, onOpenOrigin, onSendNow, 
                     many, and when the last came in. Pressing it opens the
                     thread in the panel beside the chat. */}
                 {e.uid && onOpenThread && (replies?.[e.uid]?.length ?? 0) > 0 && (
-                  <ThreadLine replies={replies![e.uid]} open={e.uid === openThread} onOpen={() => onOpenThread(e.uid!)} />
+                  <ThreadLine replies={replies![e.uid]} open={e.uid === openThread} onOpen={() => onOpenThread(e.uid!)} fresh={freshThreads?.[e.uid] ?? 0} />
                 )}
                 {e.uid && onReact && (
                   <MessageActions
