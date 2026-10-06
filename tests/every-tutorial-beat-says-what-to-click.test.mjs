@@ -166,7 +166,9 @@ describe('every practice beat names something to click', () => {
   it('has exactly four beats with no click, and names them', () => {
     expect(Object.keys(NO_CLICK).sort()).toEqual(['clear', 'command', 'snooze', 'working']);
     expect(coach('working', 0).key).toBeNull();
-    expect(coach('command', 0, { palette: true }).key).toBe('esc');
+    // Any key since 2026-10-06, so no cap at all on the list's half.
+    expect(coach('command', 0, { palette: true }).key).toBeNull();
+    expect(coach('command', 0, { palette: true }).anyKey).toBe(true);
     // The first half named "the ⌘ button" until 2026-10-06, when driving the
     // default layout found no such button on the screen to click.
     expect(loud(coach('command', 0))).toBe('Press ⌘K to see them all.');
@@ -218,7 +220,7 @@ describe('the click each card names is a real one', () => {
   });
 
   it('points at the reply box and the options strip, which are what those beats ring', () => {
-    expect(loud(coach('answer', 0))).toContain('Click the reply box');
+    expect(loud(coach('answer', 0))).toContain('click the reply box');
     expect(ANCHOR.answer[0]).toBe('.focus-dock .dock-card');
     expect(loud(coach('unblock', 0, { opened: true }))).toContain('click the first answer');
     expect(ANCHOR.unblock[0]).toBe('.opt-strip');

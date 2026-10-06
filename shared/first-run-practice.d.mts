@@ -7,6 +7,8 @@ export const PRACTICE_SLUG: string;
 export const PRACTICE_FLAG: string;
 export const PRACTICE_TASK: { title: string; body: string };
 export const PRACTICE_ANSWER: string;
+export const PRACTICE_REPLY: string;
+export const PRACTICE_REPLY_ANSWER: string;
 export const PRACTICE_TASK_TRACE: string[];
 /** The practice project's sidebar note, written to its `pinned.md` and drawn
  *  beside the third introduction slab. */

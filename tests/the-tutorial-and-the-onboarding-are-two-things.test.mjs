@@ -382,7 +382,8 @@ describe('3. the walk itself teaches where the tutorial lives', () => {
     // The budget is a type, and this walks the whole beat rather than trusting
     // the other file to have.
     expect(last.why).toBeUndefined();
-    expect(Object.keys(last).sort()).toEqual(['key', 'lead', 'quiet', 'tail']);
+    // `anyKey` since 2026-10-06 is a yes or no, not a line.
+    expect(Object.keys(last).sort()).toEqual(['anyKey', 'key', 'lead', 'quiet', 'tail']);
   });
 
   it('still ends on the thing she does next, which is her own first real task', () => {
