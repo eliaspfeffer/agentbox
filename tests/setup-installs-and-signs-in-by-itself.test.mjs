@@ -8,9 +8,9 @@
 // the browser page is Claude Code's and Codex's own. Measured 2026-10-05 into
 // throwaway home folders, stdin closed and no terminal:
 //
-//   curl -fsSL https://claude.ai/install.sh | bash     24.6 s, exit 0, no prompts
+//   curl -fsSL https://claude.ai/install.sh | bash     24.6 s, exit 0, no prompts  (public-check: allow, Anthropic's documented installer)
 //     -> ~/.local/bin/claude 2.1.290
-//   curl -fsSL https://chatgpt.com/codex/install.sh | sh   9.7 s, exit 0, no prompts
+//   curl -fsSL https://chatgpt.com/codex/install.sh | sh   9.7 s, exit 0, no prompts  (public-check: allow, OpenAI's documented installer)
 //     -> ~/.local/bin/codex 0.160.1
 //   claude auth login --claudeai   runs `open <url>` with a localhost callback,
 //     so approving in the browser finishes it with nothing to paste
