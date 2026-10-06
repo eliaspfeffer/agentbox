@@ -72,6 +72,15 @@ export const RECENT_DAYS = 10;
 const HEAD_BYTES = 96 * 1024;
 
 /**
+ * How far past the head one cut-off first message may be followed
+ *  (w-24edc04548, 2026-10-05). A screenshot pasted into the first message is
+ *  written into that row as base64, so the row outgrows the head: three of her
+ *  ten days' terminal threads opened with rows of 240KB, 294KB and 486KB, were
+ *  cut, lost their name and fell off the card. Eight megabytes is the Codex
+ *  reader's own ceiling (main/codex-threads.mjs) and several screenshots. */
+const FIRST_TURN_BYTES = 8 * 1024 * 1024;
+
+/**
  * A stop on how many transcripts are OPENED, for the same reason the folder
  *  scan in agent-files.mjs has one: opening a card may not turn into a disk
  *  crawl.
@@ -112,6 +121,21 @@ export function isScratchFolder(folder, home = os.homedir()) {
     || /^\/tmp(\/|$)/.test(p)
     || /^\/private\/var\/folders(\/|$)/.test(p)
     || /^\/var\/folders(\/|$)/.test(p);
+}
+
+/**
+ * THE SAME RULE, READ OFF THE FOLDER CLAUDE CODE FILED THE TRANSCRIPT IN, so
+ *  it can be applied before the file is opened (w-24edc04548, 2026-10-05).
+ *  Claude Code names that folder after the working folder with every other
+ *  character turned into `-`, so `/private/tmp/w-1` is `-private-tmp-w-1`.
+ *  Of her 12,272 transcripts touched in ten days about 12,000 were in temp
+ *  folders, and opening each one only to refuse it spent the card's three
+ *  seconds before it reached her oldest threads. */
+export function isScratchProjectDir(name, home = os.homedir()) {
+  const n = String(name ?? '');
+  const here = path.resolve(String(home ?? '')).replace(/[^a-zA-Z0-9]/g, '-');
+  if (here.length > 1 && (n === here || n.startsWith(`${here}-`))) return false;
+  return /^-(private-)?(tmp|var-folders)(-|$)/.test(n);
 }
 
 /**
@@ -179,7 +203,9 @@ export function threadTitle(texts, max = 72) {
 function titleFromOne(text, max) {
   const raw = String(text ?? '').replace(/\r/g, '');
   for (const line of raw.split('\n')) {
-    const t = line.trim();
+    // `[Image #1]` and `[Pasted text #1 +40 lines]` are Claude Code's stand-ins
+    // for what was pasted, not words she typed.
+    const t = line.replace(/\[(?:Image|Pasted text) #\d+[^\]]*\]/g, '').trim();
     if (!t) continue;
     if (NOT_TYPED.some((re) => re.test(t))) return '';
     const clean = t
@@ -217,7 +243,7 @@ export function shortFolder(folder, home = os.homedir()) {
  *  every message row and the first human turn is the first message, so all
  *  three are at the top, and the alternative is reading gigabytes to fill in a
  *  list. Her largest transcript is 13MB and there are hundreds. */
-export function readTranscriptHead(file, bytes = HEAD_BYTES) {
+export function readTranscriptHead(file, bytes = HEAD_BYTES, most = FIRST_TURN_BYTES) {
   let fd = null;
   try {
     fd = fs.openSync(file, 'r');
@@ -226,21 +252,36 @@ export function readTranscriptHead(file, bytes = HEAD_BYTES) {
     const text = buf.slice(0, n).toString('utf8');
     // The last line of a fixed read is usually cut in half. Dropping it costs
     // nothing, because what is wanted is at the top.
-    const lines = text.split('\n').slice(0, -1);
+    const lines = text.split('\n');
+    const cut = lines.pop();
     let cwd = null;
     let entrypoint = null;
     const said = [];
-    for (const line of lines) {
-      if (!line.trim()) continue;
+    const take = (line) => {
       let row;
-      try { row = JSON.parse(line); } catch { continue; }
+      try { row = JSON.parse(line); } catch { return; }
       if (!cwd && typeof row.cwd === 'string' && row.cwd) cwd = row.cwd;
       if (!entrypoint && typeof row.entrypoint === 'string' && row.entrypoint) entrypoint = row.entrypoint;
       if (row.type === 'user' && said.length < 5) {
         const t = messageText(row);
         if (t.trim()) said.push(t);
       }
+    };
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      take(line);
       if (cwd && entrypoint && said.length >= 5) break;
+    }
+    // UNLESS THE HALF LINE IS HER FIRST MESSAGE, cut because a screenshot was
+    // pasted into it. Then it is read to its end, once, up to `most`. Only a
+    // cut row that names itself a user message near its start qualifies, and
+    // only when nothing she said was found and the session is not already
+    // known to be the app's own, so the thousands of worker transcripts are
+    // never read past their head.
+    if (!said.length && n === bytes && cut && /"type":"user"/.test(cut.slice(0, 2048))
+      && (!entrypoint || startedByHand(entrypoint))) {
+      const rest = restOfLine(fd, n, most - n);
+      if (rest) take(Buffer.concat([buf.subarray(buf.lastIndexOf(0x0a, n - 1) + 1, n), rest]).toString('utf8'));
     }
     return { cwd, entrypoint, said };
   } catch {
@@ -248,6 +289,25 @@ export function readTranscriptHead(file, bytes = HEAD_BYTES) {
   } finally {
     if (fd !== null) { try { fs.closeSync(fd); } catch { /* nothing to do */ } }
   }
+}
+
+/**
+ * The bytes from `from` up to the next newline, or null if there is none
+ *  within `budget` bytes: a line that long is given up on, not read whole. A
+ *  file that ends without a newline ends the line too. */
+function restOfLine(fd, from, budget) {
+  const parts = [];
+  let at = from;
+  const chunk = Buffer.alloc(256 * 1024);
+  while (at - from < budget) {
+    const n = fs.readSync(fd, chunk, 0, Math.min(chunk.length, budget - (at - from)), at);
+    if (n <= 0) return Buffer.concat(parts);
+    const nl = chunk.subarray(0, n).indexOf(0x0a);
+    if (nl >= 0) { parts.push(Buffer.from(chunk.subarray(0, nl))); return Buffer.concat(parts); }
+    parts.push(Buffer.from(chunk.subarray(0, n)));
+    at += n;
+  }
+  return null;
 }
 
 /**
@@ -286,6 +346,7 @@ function readTerminalThreads({ home, cutoff, max, skipIds = new Set() }) {
     try { when = fs.statSync(file).mtimeMs; } catch { continue; }
     if (when < cutoff) { skipped.old += 1; continue; }
     if (isSubagentPath(file.slice(root.length))) { skipped.subagent += 1; continue; }
+    if (isScratchProjectDir(path.relative(root, file).split(path.sep)[0], home)) { skipped.scratch += 1; continue; }
     recent.push({ file, when });
   }
   recent.sort((a, b) => b.when - a.when);

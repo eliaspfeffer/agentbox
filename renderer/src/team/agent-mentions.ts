@@ -20,6 +20,7 @@
 // new is stored anywhere: a message is still one answer in the conversation's
 // ledger, and it syncs to the other person exactly as before.
 import { ENGINES } from '../../../shared/engines.mjs';
+import { projectSeenBy } from '../../../shared/thread-cards.mjs';
 
 export interface ChatAgent { engine: string; label: string }
 export interface Project { slug: string; name: string }
@@ -197,6 +198,21 @@ export function taskBrief({ sent, asker, others, transcript }: {
     `Asked by ${asker}${withWhom}. Your answer is shown in that conversation, so write it for everyone in it.`,
     ...(lines.length ? ['The conversation so far, newest last:', ...lines] : []),
   ].join('\n\n');
+}
+
+/**
+ * WHO SEES THE TASK: the people in the conversation, and nobody else, in any
+ * project (w-e053ed3581). Its brief carries the conversation, so a project
+ * that reads as the whole team must not put it on the whole team's board. A
+ * Just you project stays Just you. People unknown fails closed to private.
+ */
+export function chatTaskSharing(
+  project: { personal?: boolean; seenBy?: string; seenByPeople?: string[] },
+  people: readonly string[],
+): { visibility?: 'people' | 'private'; visibleTo?: string[] } {
+  if (projectSeenBy(project).who === 'private') return {};
+  const chat = [...new Set(people.filter(Boolean))];
+  return chat.length ? { visibility: 'people', visibleTo: chat } : { visibility: 'private' };
 }
 
 /**

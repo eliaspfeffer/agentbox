@@ -31,8 +31,10 @@ const app = read('renderer/src/App.tsx');
 describe('⌘K offers one new user, and it is the blank one', () => {
   it('has the blank row and no second row beside it', () => {
     expect(palette).toContain("id: 'fresh-user',");
+    // No agents of hers, but her Claude Code, so it is detected (w-9f6975906c).
     expect(palette).toContain('run: () => onFreshUser(false),');
     expect(palette).not.toContain("id: 'fresh-user-agents',");
+    expect(palette).not.toContain("id: 'fresh-user-no-tools',");
     expect(palette).not.toContain('run: () => onFreshUser(true),');
   });
 

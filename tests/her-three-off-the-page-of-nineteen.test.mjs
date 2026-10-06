@@ -49,7 +49,8 @@ describe('2. nothing counts the walk on screen any more', () => {
     // What went is the drawing, not the beats. Renaming it is the whole of how
     // a later session is stopped from reading `DOT` and drawing one again.
     // Nineteen since 2026-10-01: who a thread is for, and the board, each became a beat of their own.
-    expect(N_BEATS).toBe(19);
+    // Sixteen since 2026-10-05 (w-9f6975906c): the three introduction slabs went.
+    expect(N_BEATS).toBe(16);
     expect(new Set(Object.values(BEAT)).size).toBe(N_BEATS);
     expect(onboarding).not.toMatch(/export const DOT\b/);
     expect(onboarding).toMatch(/export const BEAT: Record<Step, number>/);

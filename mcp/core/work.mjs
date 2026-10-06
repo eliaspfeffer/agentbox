@@ -92,10 +92,33 @@ function saidPlainly(fields, source) {
   return out;
 }
 
-export function createItem(product, fields = {}, { source = 'agent' } = {}) {
+export function createItem(product, fields = {}, { source = 'agent', from = [] } = {}) {
   const p = resolveProduct(product);
-  const item = createWorkItem(p.dir, saidPlainly(fields, source), { source });
+  const sources = [...from, fields.parent].filter(Boolean).map((id) => { try { return locate(id).item; } catch { return null; } });
+  const kept = fields.visibility ? {} : privacyFrom(sources);
+  const item = createWorkItem(p.dir, saidPlainly({ ...fields, ...kept }, source), { source });
   return { ...item, product: p.id, productName: p.name };
+}
+
+/*
+ * A TASK AN AGENT FILES IS SEEN BY NO MORE PEOPLE THAN THE TASKS IT CAME FROM
+ * (w-e053ed3581). The agent asked into a private chat holds a task seen only
+ * by the chat, and what it files from there is written out of that chat; with
+ * no word of its own, a filed task in a project that reads as the whole team
+ * went on every teammate's board. So it takes the narrowest of its sources:
+ * Private if any is, else only the people every one of them names. A source
+ * with no word of its own leaves the project to decide, as before.
+ */
+export function privacyFrom(items) {
+  let people = null;
+  for (const item of items) {
+    if (item?.visibility === 'private') return { visibility: 'private' };
+    if (item?.visibility !== 'people') continue;
+    const named = Array.isArray(item.visibleTo) ? item.visibleTo.filter(Boolean) : [];
+    people = people ? people.filter((id) => named.includes(id)) : [...new Set(named)];
+  }
+  if (!people) return {};
+  return people.length ? { visibility: 'people', visibleTo: people } : { visibility: 'private' };
 }
 
 export function updateItem(id, patch, { product = null, epoch = null, source = 'agent' } = {}) {
@@ -400,6 +423,12 @@ export function createClaimRegistry({ heartbeatMs = HEARTBEAT_MS, holder } = {})
       held.delete(id);
       stopTimer();
       return item;
+    },
+
+    // Filing from this session: what it files is kept as private as every row
+    // it has held, finished ones too, since it may still be answering on them.
+    file(product, fields) {
+      return createItem(product, fields, { from: [...held.keys()] });
     },
 
     holding: () => [...held.entries()].filter(([, h]) => h.live).map(([id]) => id),

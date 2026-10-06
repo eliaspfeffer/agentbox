@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { nameSlug } from '../../shared/product-name.mjs';
+import { runningAsAFreshUser } from '../../shared/fresh-user-home.mjs';
 import { supabaseBackend } from './supabase-backend.mjs';
 import { signInWithGoogle, cancelGoogleSignIn } from './sign-in.mjs';
 
@@ -57,8 +58,12 @@ export function teamConfigOnThisMac(home = os.homedir()) {
 // multiplayer version so this should never be visible." The team version still
 // runs from a checkout (npm run app). See
 // tests/the-installed-app-is-the-single-person-app.test.mjs.
-export function loadCloudConfig(appDir, { packaged = isPackagedElectron(), home = os.homedir() } = {}) {
-  if (packaged) return null;
+// AND SO IS ⌘K's NEW-USER WINDOW (w-9f6975906c, 2026-10-05). It runs from her
+// checkout, which holds a team key, so it opened on the same sign-in page:
+// "when i run this command i got the login screen again ... this was the
+// critical thing to fix". A new user is a new user of the single-person app.
+export function loadCloudConfig(appDir, { packaged = isPackagedElectron(), home = os.homedir(), env = process.env } = {}) {
+  if (packaged || runningAsAFreshUser(env)) return null;
   const tries = [
     !packaged && process.env.AGENTBOX_TEAM_CONFIG,
     path.join(appDir, 'cloud', 'team.config.json'),

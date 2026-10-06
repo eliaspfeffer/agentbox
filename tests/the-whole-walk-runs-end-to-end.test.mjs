@@ -52,13 +52,10 @@ function walkIt({ bare = false } = {}) {
   s = advance(s, { t: 'folder', path: FOLDER });        at('chose a folder');
   s = stepTo(s, 'name');                                at('named it');
   s = advance(s, { t: 'name', name: 'Side Quest' });
-  // AND NAMING THE PROJECT HANDS STRAIGHT TO THE INTRODUCTION.
-  s = advance(s, { t: 'made', product: 'side-quest' }); at('what an inbox is');
-  s = stepTo(s, 'away');                                at('what a task is');
-  // THE SIDEBAR NOTE IS NOT A SLAB.
-  s = stepTo(s, 'goal');                                at('what the job is');
+  // AND NAMING THE PROJECT HANDS STRAIGHT TO THE HAND-OFF. The three slabs
+  // that stood between them went on 2026-10-05 (w-9f6975906c).
   // NO MOUSE RULE HERE ANY MORE, AND NO THEME STEP SINCE w-9e434e8671.
-  s = stepTo(s, 'hand');                                at('into practice');
+  s = advance(s, { t: 'made', product: 'side-quest' }); at('into practice');
   // THE PRACTICE PROJECT IS REAL AND IT IS NOT THEIRS. Made here, with the
   // three rows already waiting in it, and archived when the walk ends.
   s = advance(s, { t: 'practice', product: 'practice', examples: EXAMPLE_IDS });
@@ -142,6 +139,9 @@ describe('the walk, start to finish', () => {
     //
     // ELEVEN AND NINETEEN since 2026-10-01: who a thread is for, and the
     // board, each became a beat of their own, so both pairs came up two.
+    //
+    // EIGHT AND SIXTEEN since 2026-10-05 (w-9f6975906c): the three
+    // introduction slabs went, so both pairs came down three.
     //
     // `where` IS ONE BEAT AND ONE STEP even though it takes three presses of
     // Tab. The presses move the VIEW, not the step, which is exactly why the

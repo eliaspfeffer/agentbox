@@ -16,7 +16,7 @@ import { resolveAccount } from './core/account.mjs';
 import { listProducts, getProduct, createProduct, updateProduct } from './core/products.mjs';
 import { listDocuments, readDocument, writeDocument } from './core/documents.mjs';
 import { listSkills, fetchSkill, fetchReference } from './core/skills.mjs';
-import { listWorkItems, createItem, updateItem, createClaimRegistry } from './core/work.mjs';
+import { listWorkItems, updateItem, createClaimRegistry } from './core/work.mjs';
 import { listProductChats, readProductChat } from './core/chat.mjs';
 import { lookAtPage } from './core/page.mjs';
 import { WORK_ITEM_STATUSES } from '../shared/work-items.mjs';
@@ -173,7 +173,7 @@ export function buildTools({ holder } = {}) {
         parent: z.string().optional().describe('another work item id, for a subtask'),
         runAt: z.number().int().optional().describe('epoch ms before which nothing happens with this item: it cannot be claimed and will not start. Use it when the work genuinely belongs to a later moment. A missed moment is not lost; the item simply becomes available once it passes.'),
       },
-      run: ({ product, ...fields }) => json(createItem(product, fields)),
+      run: ({ product, ...fields }) => json(claims.file(product, fields)),
     },
     {
       name: 'claim_work_item',

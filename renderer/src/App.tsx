@@ -103,7 +103,7 @@ import { TutorialOffer } from './components/TutorialOffer';
 import { comeBackTo, neverOffered, offerOnNewProject, rememberOffered } from './tutorial';
 import {
   ANSWER_AFTER_MS, COACHED, COPY as WALK_COPY, FIRST_RUN_LABEL, advance as advanceRun, afterCommand, beatRows, coach, closingRefused, firstRunDone,
-  finishedCleared, firstRunNeeded, inboxCleared, laterCleared, laterId, laterIndex,
+  finishedCleared, firstRunNeeded, projectsOfTheirOwn, inboxCleared, laterCleared, laterId, laterIndex,
   mayOpenInbox, noCodingAgent, practising, restartFirstRun, snoozeRefused, tutorialRun,
   waitingId, waitingIndex,
   finishFirstRun, forcedStep, readFirstRun, walkRows,
@@ -116,7 +116,7 @@ import { BoxFilter } from './components/BoxFilter';
 import { itemPriority, moveProduct, placeScore } from '../../shared/rank.mjs';
 import { threadsMade, approvableFiled } from './threads-made';
 import { ChatAgentsContext, type ChatAgentsValue } from './team/ChatAgents';
-import { agentLinks, chatProjects, chatTranscript, taskBrief, taskTitle, withTask } from './team/agent-mentions';
+import { agentLinks, chatProjects, chatTaskSharing, chatTranscript, taskBrief, taskTitle, withTask } from './team/agent-mentions';
 import { isCleanRun, ruleIdOf, ruleLabel } from '../../shared/repeats.mjs';
 import { NAME, Name } from '../../shared/product-name.mjs';
 import { inMyInbox, isShared, heldByAPerson, runnerOf, iSpokeLast } from '../../shared/team-rules.mjs';
@@ -858,7 +858,7 @@ export default function App() {
   useEffect(() => {
     if (run || !snap) return;
     if (walkWaitsForSignIn) return;
-    if (!firstRunNeeded({ products: snap.products.length, done: firstRunDone(localStorage), forced: !!forcedRun.current })) return;
+    if (!firstRunNeeded({ products: projectsOfTheirOwn(snap.products), done: firstRunDone(localStorage), forced: !!forcedRun.current })) return;
     // A half-finished walk resumes where it stopped: the folder and name are
     // saved as answered, so reopening resumes.
     setRun(forcedRun.current ? { ...RUN_START, step: forcedRun.current } : readFirstRun(localStorage));
@@ -2728,9 +2728,9 @@ export default function App() {
       const made = await api.compose({
         product: project.slug, title: taskTitle(text), body: brief, engine: link.engine, start: 'now',
         ...(link.model ? { model: link.model } : {}), ...(link.effort ? { effort: link.effort } : {}),
-        // Seen by the people in the conversation, on a shared project; a
-        // project of your own keeps its own privacy.
-        ...(isShared(project) && people.length ? { visibility: 'people' as const, visibleTo: people } : {}),
+        // Seen by the people in the conversation and nobody else, whoever
+        // the project is shared with; a Just you project stays Just you.
+        ...chatTaskSharing(project, people),
       });
       if (made?.id) out = withTask(out, link, made.id);
     }
@@ -4469,7 +4469,7 @@ export default function App() {
     // test the walk itself uses is repeated because the two effects settle on
     // the same commit, and on that one render `run` is still null.
     if (run || firstRunNeeded({
-      products: snap.products.length, done: firstRunDone(localStorage), forced: !!forcedRun.current,
+      products: projectsOfTheirOwn(snap.products), done: firstRunDone(localStorage), forced: !!forcedRun.current,
     })) { setRestored(true); return; }
     const place = wasAt.current;
     if (!placeIsSomewhere(place)) { setRestored(true); return; }
