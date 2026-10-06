@@ -62,6 +62,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { envName, readEnv } from '../shared/product-name.mjs';
+import { liveDownload, RELEASE_REPO, DOWNLOAD_ASSET } from './lib/live-download.mjs';
 
 const repo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const noSign = process.argv.includes('--no-sign');
@@ -311,12 +312,11 @@ if (!noSign && fresh.length) {
   // needs it: the tag is the only place the PUBLISHED version number is written.
   try {
     const out = spawnSync('gh', [
-      'release', 'view', '--repo', 'Astral-Agent/astral-releases', '--json', 'tagName,assets',
+      'release', 'view', '--repo', RELEASE_REPO, '--json', 'tagName,assets',
     ], { encoding: 'utf8', timeout: 15000 });
     if (out.status === 0) {
-      const json = JSON.parse(out.stdout);
-      const asset = (json.assets ?? []).find((a) => a.name === 'Astral-arm64.dmg');
-      if (asset) serving = { tag: json.tagName, ...asset };
+      const live = liveDownload(out.stdout, DOWNLOAD_ASSET);
+      if (live && !live.missing) serving = live;
     }
   } catch { /* the sentence below is still worth saying without it */ }
 
@@ -332,7 +332,7 @@ if (!noSign && fresh.length) {
     const days = Math.floor((Date.now() - Date.parse(serving.updatedAt)) / 86400000);
     console.log(`agentbox.ac/download is still handing out ${(serving.size / 1e6).toFixed(1)} MB, uploaded ${serving.updatedAt}${days > 0 ? `, ${days} day${days === 1 ? '' : 's'} ago` : ''}.`);
   } else {
-    console.log('agentbox.ac/download is handing out whatever was last uploaded to Astral-Agent/astral-releases.');
+    console.log(`agentbox.ac/download is handing out whatever was last uploaded to ${RELEASE_REPO}.`);
   }
 
   // THE TWO FILES WITHOUT WHICH NOBODY WHO ALREADY HAS AGENTBOX EVER HEARS ABOUT

@@ -69,15 +69,14 @@ describe('the npm listing', () => {
     expect(pkg.repository.url).toBe(`git+${REPO}.git`);
     expect(pkg.homepage).toBe(`${REPO}#readme`);
     expect(pkg.bugs.url).toBe(`${REPO}/issues`);
-    // The old private repo must never be where a stranger is SENT. It does
-    // still appear in `build.publish`, and that is correct and must stay:
-    // that block is how the installed desktop app finds its own updates, and
-    // Astral-Agent/astral-releases is a real repo that shipped .dmg files
-    // already point at. It is a release channel, not a link on a page.
+    // The old private repo must never be where a stranger is SENT. Since
+    // 2026-10-05 it is not the update channel either: `build.publish` names the
+    // public agentboxhq/agentbox-releases, because a private repo's releases
+    // 404 for every installed copy (tests/the-download-lives-in-a-public-release-repo).
     for (const sent of [pkg.repository.url, pkg.homepage, pkg.bugs.url]) {
       expect(sent).not.toMatch(/Astral-Agent/);
     }
-    expect(pkg.build.publish[0].owner).toBe('Astral-Agent');
+    expect(pkg.build.publish[0].owner).toBe('agentboxhq');
   });
 
   it('credits her by name and does not publish her email', () => {

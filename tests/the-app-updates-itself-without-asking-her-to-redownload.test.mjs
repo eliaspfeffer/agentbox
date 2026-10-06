@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { describe as describeState, shortError } from '../main/updater.mjs';
 import { announcesUpdate } from '../renderer/src/update-row.ts';
 import { NAME, Name } from '../shared/product-name.mjs';
+import { RELEASE_REPO } from '../scripts/lib/live-download.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
@@ -52,11 +53,14 @@ describe('the build produces the files an update needs', () => {
     expect(pkg.build.publish).toBeTruthy();
     const [feed] = pkg.build.publish;
     expect(feed.provider).toBe('github');
-    expect(feed.owner).toBe('Astral-Agent');
-    expect(feed.repo).toBe('astral-releases');
+    // Public since 2026-10-05: the old Astral-Agent/astral-releases is private,
+    // so no installed copy could ever read an update from it.
+    expect(feed.owner).toBe('agentboxhq');
+    expect(feed.repo).toBe('agentbox-releases');
     // The same place scripts/publish-download.mjs uploads to. If these two ever
     // drift the app looks for its updates somewhere nothing is published.
-    expect(publish).toContain(`const REPO = '${feed.owner}/${feed.repo}'`);
+    expect(publish).toContain('const REPO = RELEASE_REPO');
+    expect(`${feed.owner}/${feed.repo}`).toBe(RELEASE_REPO);
   });
 
   it('ships the updater as a real dependency, not a dev one', () => {
