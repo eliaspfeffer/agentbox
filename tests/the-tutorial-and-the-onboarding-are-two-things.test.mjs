@@ -249,7 +249,7 @@ describe('2. the two of them are two things, and a stranger can tell them apart'
     // opens a SECOND Agentbox that has never been set up (main/fresh-user.mjs).
     // Untouched by the split.
     expect(palette).toContain('label: `Open ${NAME} as a new user`');
-    expect(palette).toContain('onFreshUser(false)');
+    expect(palette).toContain('onFreshUser(false, false)');
   });
 
   it('starts the tutorial on the hand-off card, with no setup screen in front', () => {

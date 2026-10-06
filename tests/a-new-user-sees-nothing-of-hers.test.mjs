@@ -31,8 +31,11 @@ const app = read('renderer/src/App.tsx');
 describe('⌘K offers one new user, and it is the blank one', () => {
   it('has the blank row and no second row beside it', () => {
     expect(palette).toContain("id: 'fresh-user',");
-    expect(palette).toContain('run: () => onFreshUser(false),');
+    // No agents of hers, and since 2026-10-05 (w-9f6975906c) no Claude Code or
+    // Codex of hers either, so the walk's plan setup is what a new user sees.
+    expect(palette).toContain('run: () => onFreshUser(false, false),');
     expect(palette).not.toContain("id: 'fresh-user-agents',");
+    expect(palette).not.toContain("id: 'fresh-user-no-tools',");
     expect(palette).not.toContain('run: () => onFreshUser(true),');
   });
 
