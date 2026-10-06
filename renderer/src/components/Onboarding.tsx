@@ -1656,8 +1656,10 @@ function Slab({ head, line, piece, onNext }: {
  * ONE STATEMENT AND ONE BUTTON. The rule and the hand-off are both this: no
  *  choice on them, nothing to read twice, and the same card shape the finish
  *  uses so the walk has one kind of card in it rather than three. */
-function Statement({ head, line, go, onNext }: {
+function Statement({ head, line, go, onNext, skip, onSkip }: {
   head: string; line: string; go: string; onNext: () => void;
+  /** A quiet second button under the main one (2026-10-06). */
+  skip?: string; onSkip?: () => void;
 }) {
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
@@ -1684,6 +1686,7 @@ function Statement({ head, line, go, onNext }: {
           <h1 className="fr-finish-head">{head}</h1>
           <p className="fr-finish-line">{line}</p>
           <button className="fr-finish-go" onClick={onNext} autoFocus>{go}</button>
+          {skip && onSkip ? <button type="button" className="fr-finish-skip" onClick={onSkip}>{skip}</button> : null}
         </div>
       </div>
     </div>
@@ -1693,8 +1696,10 @@ function Statement({ head, line, go, onNext }: {
 export function Onboarding({
   run, claude, home, opened, waiting, later, picking, palette, board, view, tabs, products = [],
   beat, pointed,
-  onEvent, onStep, onSkipToApp, onPractice, onDone, onFiled, onProjectMade, onRecheck,
+  onEvent, onStep, onSkipToApp, onPractice, onDone, onFiled, onProjectMade, onRecheck, onLeave,
 }: {
+  /** Skip the tutorial from its hand-off page, into her own project. */
+  onLeave?: () => void;
   run: FirstRun;
   /**
    * EVERY PROJECT THE APP HAS. The last card files into one, so it needs the
@@ -2111,6 +2116,11 @@ export function Onboarding({
         line={COPY.handLine}
         go={COPY.handGo}
         onNext={onPractice}
+        // A WAY PAST IT ON THE PAGE ITSELF (2026-10-06), her words: "this is a
+        // tutorial page. Add a skip button, obviously a secondary button."
+        // The same exit as the corner Skip inside the tutorial.
+        skip={COPY.handSkip}
+        onSkip={onLeave}
       />
     );
   }

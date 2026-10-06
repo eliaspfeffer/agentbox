@@ -199,6 +199,22 @@ describe('4. a reply on her first thread is answered', () => {
   });
 });
 
+describe('4b. the tutorial page can be skipped from the page itself', () => {
+  // Her words, 2026-10-06: "this is a tutorial page. Add a skip button,
+  // obviously a secondary button, so it is not as focused."
+  it('draws a quiet Skip under Start, wired to the same exit as the corner Skip', () => {
+    const card = read('renderer/src/components/Onboarding.tsx');
+    const css = read('renderer/src/styles.css');
+    expect(card).toMatch(/skip=\{COPY\.handSkip\}\s*\n\s*onSkip=\{onLeave\}/);
+    expect(card).toMatch(/className="fr-finish-skip" onClick=\{onSkip\}/);
+    expect(app).toMatch(/onLeave=\{\(\) => finishRun\(\[\], \{ celebrate: false \}\)\}\s*\n\s*onPractice=/);
+    // Secondary: no border and no fill, unlike Start.
+    const rule = css.slice(css.indexOf('.fr-finish-skip {'), css.indexOf('}', css.indexOf('.fr-finish-skip {')));
+    expect(rule).toMatch(/border: 0/);
+    expect(rule).toMatch(/background: none/);
+  });
+});
+
 describe('5. a new user is not told they have no agents', () => {
   it('goes straight to the landing when there is nothing to bring in', () => {
     expect(finishCard({ missing: false }, { read: true, some: false })).toMatchObject({ show: false, skip: true });

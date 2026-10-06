@@ -6183,6 +6183,8 @@ export default function App() {
               return whyNotMade((err as Error).message, name);
             }
           }}
+          // The tutorial page's own Skip, the same exit as the corner one.
+          onLeave={() => finishRun([], { celebrate: false })}
           onPractice={async () => {
             // THE PRACTICE PROJECT, MADE FOR REAL.One call makes the project
             // and writes the three rows already waiting in it.

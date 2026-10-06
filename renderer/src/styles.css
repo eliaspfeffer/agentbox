@@ -7402,6 +7402,14 @@ a.set-ghost { text-decoration: none; display: inline-block; }
   border: 1px solid var(--line);
 }
 .fr-finish-go:hover { background: var(--bg-hover); }
+/* THE TUTORIAL PAGE'S SKIP (2026-10-06): a plain text button under the main
+   one, no border and no fill, so the eye still lands on Start. */
+.fr-finish-skip {
+  display: block; margin: 12px auto 0; padding: 4px 8px;
+  font: inherit; font-size: 13px; color: var(--text-dim);
+  background: none; border: 0; cursor: pointer;
+}
+.fr-finish-skip:hover { color: var(--text); }
 
 /* THE USER'S AGENTS, ON THE FINISH CARD. This was a full screen of its own standing
    just before the card; it is a block on the card now, and on a Mac with no

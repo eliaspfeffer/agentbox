@@ -1050,6 +1050,9 @@ export const COPY = {
   handHead: 'This is the tutorial.',
   handLine: 'A practice project with a few example threads, and nothing you do in here is saved. Your own project is made already and it is waiting behind this.',
   handGo: 'Start the tutorial',
+  // The quiet second button under it (2026-10-06, hers: "Add a skip button,
+  // obviously a secondary button").
+  handSkip: 'Skip the tutorial',
 
   /* * THE QUIET WAY OUT, AND THE LINE THAT ASKS THEM TO STAY.
 
