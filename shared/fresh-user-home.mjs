@@ -133,8 +133,16 @@ function link(from, to) {
 // Code sessions already on this Mac into the fresh inbox. It is not starting
 // from absolute zero, so it is a flag rather than a default here and the
 // caller says which test it wants.
-export function prepareHome(home, { withAgents = false, realHome = os.homedir() } = {}) {
-  const claudeBin = link(path.join(realHome, '.local/bin/claude'), path.join(home, '.local/bin/claude'));
+//
+// `withTools: false` IS A NEW USER WITH NOTHING INSTALLED (w-9f6975906c): her
+// Claude Code is not linked, so the walk's "Which AI plan do you pay for?"
+// can be tried on this Mac. The keychain still is, because Claude Code keeps
+// its sign-in there; `freshEnv(..., { ownSignIns: true })` gives that copy a
+// sign-in folder of its own so it reads and writes a different entry.
+export function prepareHome(home, { withAgents = false, withTools = true, realHome = os.homedir() } = {}) {
+  const claudeBin = withTools
+    ? link(path.join(realHome, '.local/bin/claude'), path.join(home, '.local/bin/claude'))
+    : false;
   const keychain = link(path.join(realHome, 'Library/Keychains'), path.join(home, 'Library/Keychains'));
   const agents = withAgents
     ? link(path.join(realHome, '.claude'), path.join(home, '.claude'))
@@ -169,6 +177,9 @@ export const NOT_INHERITED = Object.freeze([
   ...envNames('HOME'),
   'ZERO_FIXTURES',
   'ZERO_NO_SUPERVISOR',
+  // Where her own Claude Code and Codex sign-ins live, when she has moved them.
+  'CLAUDE_CONFIG_DIR',
+  'CODEX_HOME',
 ]);
 
 /**
@@ -177,9 +188,17 @@ export const NOT_INHERITED = Object.freeze([
  *  is the mark, so the copy knows it is a test and does not count as a person;
  *  see `runningAsAFreshUser` above. And everything in `NOT_INHERITED` is taken
  *  out, because a stranger's copy may not be handed her store. */
-export function freshEnv(home, env = process.env) {
+export function freshEnv(home, env = process.env, { ownSignIns = false } = {}) {
   const fresh = { ...env, HOME: home, CFFIXED_USER_HOME: home, [FRESH_USER_ENV]: '1' };
   for (const key of NOT_INHERITED) delete fresh[key];
+  // A COPY THAT SIGNS IN FOR ITSELF signs in to folders of its own. Claude Code
+  // names its keychain entry after CLAUDE_CONFIG_DIR (measured 2026-10-05: a
+  // fresh one read signed out on a signed-in Mac), so a test account signed in
+  // here cannot replace hers; Codex keeps its sign-in in CODEX_HOME.
+  if (ownSignIns) {
+    fresh.CLAUDE_CONFIG_DIR = path.join(home, '.claude');
+    fresh.CODEX_HOME = path.join(home, '.codex');
+  }
   return fresh;
 }
 

@@ -99,7 +99,7 @@ export function Palette({ products, supervisorPaused, itemCommands = [], batch =
   onTutorial: () => void;
   /** The agent import, off the walk and on a card of its own. */
   onImportAgents: () => void;
-  onFreshUser: (withAgents: boolean) => void;
+  onFreshUser: (withAgents: boolean, withTools?: boolean) => void;
   /**
    * The demo inbox: a second Agentbox on an invented studio's work, so a demo
    * does not have to be her own screen. */
@@ -459,8 +459,14 @@ export function Palette({ products, supervisorPaused, itemCommands = [], batch =
       id: 'fresh-user',
       label: `Open ${NAME} as a new user`,
       hint: 'nothing set up · yours keeps running',
-      keywords: 'new user fresh install stranger onboarding first run clean empty blank test website download nothing of mine agents claude code sessions',
-      run: () => onFreshUser(false),
+      keywords: 'new user fresh install stranger onboarding first run clean empty blank test website download nothing of mine agents claude code sessions setup plan codex chatgpt not installed',
+      // NOTHING INSTALLED EITHER (w-9f6975906c, her call 2026-10-05: "It was
+      // just to update the existing row"). It used to borrow her signed-in
+      // Claude Code, so the walk skipped "Which AI plan do you pay for?" and a
+      // new user's setup could not be seen on this Mac. Now it has no Claude
+      // Code of hers and signs in to folders of its own, so a test sign-in
+      // there never replaces hers (main/fresh-user.mjs, `withTools`).
+      run: () => onFreshUser(false, false),
     },
     {
       id: 'keyhints',

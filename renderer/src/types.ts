@@ -1029,7 +1029,7 @@ declare global {
       // same reason as the two above: a page kept alive by ⌘R can be attached
       // to a main process packed before this channel existed, and the ⌘K row
       // has to be able to say so rather than throw.
-      openFreshUser?(p?: { withAgents?: boolean }): Promise<FreshUser>;
+      openFreshUser?(p?: { withAgents?: boolean; withTools?: boolean }): Promise<FreshUser>;
       // The demo inbox, beside this one. Optional for the same reason.
       openDemo?(): Promise<DemoOpened>;
       // Optional: it arrives with a main-process build, and a renderer running

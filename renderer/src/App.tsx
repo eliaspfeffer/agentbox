@@ -116,7 +116,7 @@ import { BoxFilter } from './components/BoxFilter';
 import { itemPriority, moveProduct, placeScore } from '../../shared/rank.mjs';
 import { threadsMade, approvableFiled } from './threads-made';
 import { ChatAgentsContext, type ChatAgentsValue } from './team/ChatAgents';
-import { agentLinks, chatProjects, chatTranscript, taskBrief, taskTitle, withTask } from './team/agent-mentions';
+import { agentLinks, chatProjects, chatTaskSharing, chatTranscript, taskBrief, taskTitle, withTask } from './team/agent-mentions';
 import { isCleanRun, ruleIdOf, ruleLabel } from '../../shared/repeats.mjs';
 import { NAME, Name } from '../../shared/product-name.mjs';
 import { inMyInbox, isShared, heldByAPerson, runnerOf, iSpokeLast } from '../../shared/team-rules.mjs';
@@ -2728,9 +2728,9 @@ export default function App() {
       const made = await api.compose({
         product: project.slug, title: taskTitle(text), body: brief, engine: link.engine, start: 'now',
         ...(link.model ? { model: link.model } : {}), ...(link.effort ? { effort: link.effort } : {}),
-        // Seen by the people in the conversation, on a shared project; a
-        // project of your own keeps its own privacy.
-        ...(isShared(project) && people.length ? { visibility: 'people' as const, visibleTo: people } : {}),
+        // Seen by the people in the conversation and nobody else, whoever
+        // the project is shared with; a Just you project stays Just you.
+        ...chatTaskSharing(project, people),
       });
       if (made?.id) out = withTask(out, link, made.id);
     }
@@ -3012,9 +3012,9 @@ export default function App() {
   // Claude Code sessions already running on this Mac and put them in its
   // inbox. Measured that night with the app's own discovery, three of them. ⌘K
   // has two rows for it now and this is told which test it is running.
-  const openAsNewUser = useCallback(async (withAgents: boolean) => {
+  const openAsNewUser = useCallback(async (withAgents: boolean, withTools = true) => {
     setModal(null);
-    const out = await api.openFreshUser(withAgents);
+    const out = await api.openFreshUser(withAgents, withTools);
     if (!out.ok) { showToast(out.error ?? 'It could not be opened.'); return; }
     // The notes are the honest half: no Claude Code, no keychain or no agent
     // files means that copy is something to look at rather than something to
@@ -3023,7 +3023,9 @@ export default function App() {
     // written for the other row and it would read as a fault here.
     const notes = (out.notes ?? []).filter((n) => withAgents || !n.includes('.claude'));
     const note = notes.length ? ` · ${notes[0]}` : '';
-    const what = withAgents ? `Opening a new ${NAME} that can see your agents.` : `Opening a brand new ${NAME} with nothing of yours in it.`;
+    const what = !withTools
+      ? `Opening a new ${NAME} with no Claude Code or Codex, so setup asks which plan you pay for.`
+      : withAgents ? `Opening a new ${NAME} that can see your agents.` : `Opening a brand new ${NAME} with nothing of yours in it.`;
     showToast(`${what} Yours keeps running.${note}`);
   }, [showToast]);
 

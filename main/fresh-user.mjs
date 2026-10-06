@@ -57,6 +57,9 @@ export function relaunchCommand({ execPath = process.execPath, argv = process.ar
  *  It cannot break inbox zero: the walk shows only its own three examples. */
 export function openFreshUser({
   withAgents = true,
+  // False is a new user with no Claude Code or Codex of hers, who signs in
+  // for itself: the way to see the walk's plan question (w-9f6975906c).
+  withTools = true,
   execPath = process.execPath,
   argv = process.argv,
   packaged = true,
@@ -65,7 +68,7 @@ export function openFreshUser({
 } = {}) {
   let prepared;
   try {
-    prepared = prepareHome(makeHome(now), { withAgents });
+    prepared = prepareHome(makeHome(now), { withAgents: withTools && withAgents, withTools });
   } catch (err) {
     return { ok: false, error: `Could not make a throwaway home under ${HOMES}: ${err?.message ?? err}` };
   }
@@ -80,7 +83,7 @@ export function openFreshUser({
     child = spawnFn(bin, args, {
       detached: true,
       stdio: 'ignore',
-      env: freshEnv(prepared.home),
+      env: freshEnv(prepared.home, process.env, { ownSignIns: !withTools }),
     });
     child.unref?.();
   } catch (err) {
@@ -91,7 +94,7 @@ export function openFreshUser({
   // be missing without looking broken, and a test that quietly cannot run an
   // agent is a test that lies. They are said rather than assumed.
   const notes = [];
-  if (!prepared.claudeBin) notes.push('Claude Code is not at ~/.local/bin/claude, so agents will not run in it.');
+  if (withTools && !prepared.claudeBin) notes.push('Claude Code is not at ~/.local/bin/claude, so agents will not run in it.');
   if (!prepared.keychain) notes.push('There is no ~/Library/Keychains here, so Claude Code will say it is not logged in.');
   if (withAgents && !prepared.agents) notes.push('There is no ~/.claude on this Mac, so it will have no agents to offer.');
 

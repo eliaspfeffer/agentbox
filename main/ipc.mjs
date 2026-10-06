@@ -813,6 +813,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   ipcMain.handle('zero:open-fresh-user', (_e, payload) => {
     return openFreshUser({
       withAgents: payload?.withAgents !== false,
+      withTools: payload?.withTools !== false,
       packaged: app.isPackaged,
     });
   });

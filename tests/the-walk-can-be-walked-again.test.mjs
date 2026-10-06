@@ -98,7 +98,7 @@ describe('being a brand new user', () => {
     expect(row).toContain('label: `Open ${NAME} as a new user`');
     // Two rows since 2026-08-23 (a-new-user-sees-nothing-of-hers), and this
     // is the blank one: her own things do not come with it.
-    expect(row).toContain('run: () => onFreshUser(false)');
+    expect(row).toContain('run: () => onFreshUser(false, false)');
     for (const word of ['new user', 'fresh install', 'stranger', 'website', 'download']) {
       expect(row).toContain(word);
     }
@@ -112,7 +112,7 @@ describe('being a brand new user', () => {
     expect(app).toContain('onFreshUser={openAsNewUser}');
     const at = app.indexOf('const openAsNewUser = useCallback');
     const fn = app.slice(at, app.indexOf('}, [showToast]);', at));
-    expect(fn).toContain('api.openFreshUser(withAgents)');
+    expect(fn).toContain('api.openFreshUser(withAgents, withTools)');
     // It may not touch the store, and it may not clear anything.
     expect(fn).not.toMatch(/localStorage/);
     expect(fn).not.toMatch(/restartFirstRun/);
