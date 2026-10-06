@@ -3833,16 +3833,9 @@ img.app-mark { opacity: 1; border-radius: 0; }
   color: var(--text-dim);
 }
 .snooze-preview.invalid { color: var(--text-faint); font-style: italic; }
-
-/* Refusing out loud. A time that could not be read must say so where she is
-   already looking. The alternative is scheduling something never picked
-   and letting the row explain itself half an hour later. */
-.snooze-refused {
-  margin: 10px 18px 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--chip-ask);
-}
+/* Enter on words it could not read: the same line, a step brighter, with a
+   hint. Gray on purpose; the alert orange here read as the app breaking. */
+.snooze-preview.refused { color: var(--text-dim); }
 
 .connect-code { font-family: var(--mono); letter-spacing: 0.4em; font-size: 20px; }
 
