@@ -2983,23 +2983,16 @@ body {
    the first line when it wraps instead of floating at the middle of a two-line
    block.
 */
-.opt-head-ask { align-items: flex-start; padding: 11px 10px 7px 16px; }
+/* THE RIGHT-HAND PADDING IS THE ROWS' OWN NOW. It was 10px to leave the chevron
+   its 24px box; with the fold gone (w-2e13752a85) the ask would have ended 6px
+   short of every option underneath it, and the straight right edge is most of
+   what makes the block read as one thing. */
+.opt-head-ask { align-items: flex-start; padding: 11px 16px 7px 16px; }
 .opt-head-ask span {
   font-size: 12.5px; text-transform: none; letter-spacing: 0;
   color: var(--text); font-weight: 600; line-height: 1.4;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-/* The chevron was centred against a 10.5px line. Against a 12.5px one it needs
-   a couple of pixels back to read as level with the first line of the ask. */
-.opt-head-ask .opt-collapse { margin-top: -2px; }
-.opt-collapse {
-  margin-left: auto; display: grid; place-items: center; width: 24px; height: 24px;
-  border: none; background: transparent; color: var(--text-faint); border-radius: var(--radius);
-  cursor: pointer; transition: color 0.15s, background 0.15s;
-}
-.opt-collapse:hover { color: var(--text); background: var(--wash); }
-.opt-collapse svg { width: 14px; height: 14px; transition: transform 0.18s; }
-.opt-collapse svg.flipped { transform: rotate(180deg); }
 .opt-row {
   display: flex; gap: 10px; align-items: baseline; width: 100%; text-align: left;
   background: transparent; border: none; font: inherit; color: var(--text-dim);
@@ -3014,7 +3007,13 @@ body {
   border-radius: var(--radius); padding: 0.5px 6px; flex-shrink: 0; position: relative; top: -1px;
 }
 .opt-row.selected .opt-key { border-color: var(--text-faint); color: var(--text); }
-.opt-text { flex: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* THE WORDS TAKE THE ROOM THEY NEED AND NO MORE (w-2e13752a85). This was
+   `flex: 1`, which pushed "recommended" to the far right edge, and with the
+   chevron gone that made the right-hand column a stripe of air with one word
+   floating in it against an empty heading: "there's too much white space on the
+   top right side which looks weird because of the recommended." Nothing is
+   right-aligned in this block now, so there is no column to look empty. */
+.opt-text { flex: 0 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .opt-text strong { color: var(--text); }
 
 /* A LINK IN AN OPTION IS THE SAME BLUE AS EVERY OTHER LINK IN THE APP.Nothing
@@ -7697,6 +7696,43 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
    not a screen in a walk.
 */
 .modal.ia-card { width: 560px; padding: 26px 30px 22px; }
+/* THE ONE TICKED LIST (w-db6f5e331e), as drawn in Option A: one line per
+   conversation, the tick, the name, and where it came from and when on the
+   right; one button under it. */
+.modal.ia-card.ia-one { width: 720px; }
+.ia-one .ia-line { margin: 0 0 14px; }
+.ia-lines { max-height: min(56vh, 520px); border-top: 1px solid var(--line); }
+.ia-agent.ia-line-row {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 11px 2px; border-bottom: 1px solid var(--line); --tick-line: 14px;
+}
+.ia-line-row .ia-box { margin-top: 0; }
+.ia-line-row .ia-agent-name {
+  flex: 1; min-width: 0; font-size: 14.5px; line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left;
+}
+.ia-line-meta { flex: none; font-size: 12px; color: var(--text-faint); white-space: nowrap; }
+.ia-foot.ia-foot-one { justify-content: flex-start; gap: 10px; padding-top: 18px; }
+/* As drawn: the press is the one filled thing on the card, on the left, and a
+   kept line wears the same fill in its tick. */
+.ia-foot-one .dock-send {
+  margin-left: 0; padding: 8px 16px; font-size: 14px; font-weight: 500;
+  background: var(--accent); border-color: var(--accent); color: var(--on-solid);
+}
+.ia-foot-one .dock-send:hover { background: var(--accent); border-color: var(--accent); filter: brightness(1.08); }
+.ia-foot-one .dock-send kbd {
+  color: color-mix(in srgb, var(--on-solid) 80%, transparent); background: none;
+  border-color: color-mix(in srgb, var(--on-solid) 35%, transparent);
+}
+.ia-foot-one .dock-send:disabled { background: none; border-color: var(--line-strong); color: var(--text-faint); filter: none; }
+.ia-line-row .ia-box.is-all { background: var(--accent); border-color: var(--accent); color: var(--on-solid); }
+.ia-not-now {
+  font: inherit; font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: none; color: var(--text-dim); cursor: pointer;
+}
+.ia-not-now:hover { background: var(--wash); color: var(--text); }
+.ia-not-now:disabled { opacity: 0.5; cursor: default; }
 .ia-head {
   margin: 0 0 8px; font-size: 21px; line-height: 1.24; font-weight: 500;
   letter-spacing: -0.01em; color: var(--text);
