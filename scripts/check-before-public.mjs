@@ -109,6 +109,26 @@ const HOME_DIR = os.homedir();
 const HOME = new RegExp(`${escapeRe(HOME_DIR)}(?![A-Za-z0-9._-])`);
 function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
+/** First commits of histories that were rewritten to take something private
+ * out, so must never reach the public repository again. 2026-10-06: the first
+ * public commit carried two real account ids, and main was rewritten from it.
+ * A branch still built on it has files that can match main exactly, so the
+ * line checks read nothing; only its ancestry gives it away.
+ * AGENTBOX_RETIRED_ROOTS (comma separated) replaces the list, for tests. */
+export const RETIRED_ROOTS = ['be60b8132d7d836336aed45eb30b9d484358f75c'];
+/** The old main's last commit before the rewrite, which is what a branch's own
+ * commits are cut from when they are carried across. */
+export const RETIRED_TIPS = ['99b8b0e5b04fbbc976003851ebdbb7bb58c2bf89'];
+
+function retiredRootIn(head) {
+  const roots = process.env.AGENTBOX_RETIRED_ROOTS?.split(',').filter(Boolean) ?? RETIRED_ROOTS;
+  for (const r of roots) {
+    if (!exists(r)) continue;
+    try { git(['merge-base', '--is-ancestor', r, head]); return r; } catch {}
+  }
+  return null;
+}
+
 export function readPrivateWords(file = process.env.AGENTBOX_PRIVATE_WORDS ?? path.join(os.homedir(), '.agentbox', 'private-words.txt')) {
   let text = '';
   try { text = fs.readFileSync(file, 'utf8'); } catch { return []; }
@@ -202,6 +222,13 @@ function commitsIn(base, head) {
 
 export function scan({ base, head, soft = false, words = readPrivateWords() }) {
   const findings = [];
+  const retired = retiredRootIn(head);
+  if (retired) {
+    findings.push({ file: `commit ${head.slice(0, 8)}`, line: 0, severity: 'block',
+      why: `carries the retired history (first commit ${retired.slice(0, 8)}), which held private data; `
+        + `carry your own commits across with: git rebase --onto refs/remotes/origin/main `
+        + `$(git merge-base HEAD ${RETIRED_TIPS[0]})` });
+  }
   const files = base === EMPTY_TREE ? allLines(head) : addedLines(base, head);
   for (const [file, lines] of files) {
     for (const f of checkPath(file)) findings.push({ file, line: 0, ...f });
