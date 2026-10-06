@@ -228,6 +228,17 @@ export function replyAnswered(it: Stamped): boolean {
   return stamp(it, 'answer') > 0 && stamp(it, 'result') > stamp(it, 'answer');
 }
 
+/**
+ * WHICH THREAD THE TUTORIAL LETS BE OPEN ON THIS BEAT (2026-10-06). Her own on
+ *  the beats that open and answer it, the stopped one on the beat that answers
+ *  it, and none anywhere else: a thread opened early was a walk with nothing
+ *  to say and a key that did nothing. App.tsx closes anything else at once. */
+export function walkMayOpen(run: { step: Step; item: string | null }, id: string, waiting: string | null): boolean {
+  if (run.step === 'open' || run.step === 'answer') return !!run.item && id === run.item;
+  if (run.step === 'unblock') return !!waiting && id === waiting;
+  return false;
+}
+
 export function afterCommand(run: { tutorial?: boolean } | null): 'done' | 'end' {
   return run?.tutorial ? 'end' : 'done';
 }

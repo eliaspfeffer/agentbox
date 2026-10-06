@@ -109,7 +109,7 @@ import {
   waitingId, waitingIndex,
   finishFirstRun, forcedStep, readFirstRun, walkRows,
   saveFirstRun, START as RUN_START, stepTo, TASK_BODY, TASK_TITLE, whyNotMade, type FirstRun,
-  replyAnswered, replyWritten,
+  replyAnswered, replyWritten, walkMayOpen,
 } from './onboarding';
 import { priorityCommands, priorityIdOf, priorityLabelOf, type PriorityId } from './priority';
 import { runNowCommands } from './run-now';
@@ -1080,6 +1080,19 @@ export default function App() {
     if (run?.step !== 'open' || !focused || focused.id !== run.item) return;
     setRun((r) => (r ? stepTo(r, 'answer') : r));
   }, [run?.step, focused?.id]);
+
+  // AND NO OTHER THREAD STAYS OPEN DURING THE TUTORIAL (2026-10-06). Hers, with
+  // a picture of "Write the agenda for the offsite." open under a card saying
+  // press Return to open her own: "I clicked into a page prematurely and got
+  // stuck here, and the return isn't doing anything. We want to prevent users
+  // from being able to get stuck." However a thread got open, by a click, a key
+  // or a beat changing under it, the walk closes it unless it is the one the
+  // beat is about: hers on `open` and `answer`, the stopped one on `unblock`.
+  useEffect(() => {
+    if (!practising(run) || !run || !focused) return;
+    if (walkMayOpen(run, focused.id, waitingId(run, WAITING_AT))) return;
+    setFocused(null);
+  }, [run?.step, run?.item, focused?.id]);
 
   // THE REPLY IS WRITTEN IN FOR HER (2026-10-06), hers: "when they do that or
   // click the inbox have it auto-write something". Written the moment the box
@@ -2323,8 +2336,13 @@ export default function App() {
   // hint is printed on the row under the pointer, so pressing the key it
   // prints has to happen to THAT row. A ticked selection outranks both,
   // because E over ticks is the batch close and no per-row hint is drawn then.
-  const pointed: WorkItem | undefined =
-    (hoveredId && !multiSel.size ? list.find((i) => i.id === hoveredId) : undefined) ?? (keyCard ? undefined : current);
+  // EXCEPT ON THE TUTORIAL'S BEAT THAT OPENS HER OWN THREAD (2026-10-06). With
+  // the pointer resting on an example, ↵ aimed at the example, the walk refused
+  // it as the wrong row, and nothing on the screen moved: hers, "the return
+  // isn't doing anything". The card names one row, so ↵ is that row there.
+  const walkOwn = run?.step === 'open' && run.item ? list.find((i) => i.id === run.item) : undefined;
+  const pointed: WorkItem | undefined = walkOwn
+    ?? (hoveredId && !multiSel.size ? list.find((i) => i.id === hoveredId) : undefined) ?? (keyCard ? undefined : current);
 
   /* ------------------------- a panel with a panel in it -------------------- */
   // NO HAIRLINE WITHOUT A SIDEBAR BEHIND IT.
