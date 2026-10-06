@@ -88,6 +88,7 @@ export const REQUEST_CHANNELS = {
   settingsRead: 'zero:settings-read',
   claudeRecheck: 'zero:claude-recheck',
   codexRecheck: 'zero:codex-recheck',
+  engineSetup: 'zero:engine-setup',
   codexAddAccount: 'zero:codex-add-account',
   claudeAddAccount: 'zero:claude-add-account',
   setProjectSetting: 'zero:settings-set-project',

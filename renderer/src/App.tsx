@@ -562,8 +562,10 @@ export default function App() {
      than a dependency list for the same reason `claudeRef` is one: the walk
      ends from three different callbacks and none of them should be rebuilt
      every time one of these opens. `./walk-scope.ts` is the rule. */
+  // The plan the inbox bar is setting up, over the app (w-9f6975906c).
+  const [setupPlan, setSetupPlan] = useState<Plan | null>(null);
   const floatingRef = useRef<OpenOverTheApp>(NOTHING_OVER_THE_APP);
-  floatingRef.current = { modal, settings: settingsOpen, importAgents, newProject, teamShown };
+  floatingRef.current = { modal, settings: settingsOpen, importAgents, newProject, teamShown, setupPlan: !!setupPlan };
   // WHICH PAGE OF SETTINGS A PRESS ASKED FOR, when it asked for one. ⌘K's
   // "Keyboard shortcuts" row opens Settings on the Shortcuts page rather than
   // on its front door; the cog and the plain "Settings…" row leave this null
@@ -974,7 +976,6 @@ export default function App() {
   // ends and again after a setup from the bar finishes; a page that cannot
   // reach the main process reads as ready, so the bar never appears by guess.
   const [noPlan, setNoPlan] = useState(false);
-  const [setupPlan, setSetupPlan] = useState<Plan | null>(null);
   const checkPlan = useCallback(async () => {
     const r = await Promise.all([api.engineSetup('ready', 'claude'), api.engineSetup('ready', 'codex')]);
     setNoPlan(needsPlan(r.map((x) => ({ found: !!x.found, signedIn: !!x.signedIn }))));
@@ -1261,6 +1262,7 @@ export default function App() {
     setImportAgents(shut.importAgents);
     setNewProject(shut.newProject);
     setTeamOpen(shut.teamShown);
+    if (!shut.setupPlan) setSetupPlan(null);
   }, []);
 
   const finishRun = useCallback((
