@@ -604,14 +604,14 @@ export const api = {
   // channel here means a main process older than this build, which is exactly
   // the case a ⌘R-kept page hits, and a row that appeared to work and opened
   // nothing would be the worst version of this.
-  async openFreshUser(withAgents = true): Promise<FreshUser> {
+  async openFreshUser(withAgents = true, withTools = true): Promise<FreshUser> {
     if (useFixtures) return { ok: false, error: 'Not in this preview.' };
     const zero = window.zero as Window['zero'];
     if (!zero?.openFreshUser) {
       return { ok: false, error: `This window is running an older ${NAME}. Quit it and open it again.` };
     }
     try {
-      return await zero.openFreshUser({ withAgents });
+      return await zero.openFreshUser({ withAgents, withTools });
     } catch (err) {
       return { ok: false, error: (err as Error)?.message ?? 'It could not be opened.' };
     }

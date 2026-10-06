@@ -3012,9 +3012,9 @@ export default function App() {
   // Claude Code sessions already running on this Mac and put them in its
   // inbox. Measured that night with the app's own discovery, three of them. ⌘K
   // has two rows for it now and this is told which test it is running.
-  const openAsNewUser = useCallback(async (withAgents: boolean) => {
+  const openAsNewUser = useCallback(async (withAgents: boolean, withTools = true) => {
     setModal(null);
-    const out = await api.openFreshUser(withAgents);
+    const out = await api.openFreshUser(withAgents, withTools);
     if (!out.ok) { showToast(out.error ?? 'It could not be opened.'); return; }
     // The notes are the honest half: no Claude Code, no keychain or no agent
     // files means that copy is something to look at rather than something to
@@ -3023,7 +3023,9 @@ export default function App() {
     // written for the other row and it would read as a fault here.
     const notes = (out.notes ?? []).filter((n) => withAgents || !n.includes('.claude'));
     const note = notes.length ? ` · ${notes[0]}` : '';
-    const what = withAgents ? `Opening a new ${NAME} that can see your agents.` : `Opening a brand new ${NAME} with nothing of yours in it.`;
+    const what = !withTools
+      ? `Opening a new ${NAME} with no Claude Code or Codex, so setup asks which plan you pay for.`
+      : withAgents ? `Opening a new ${NAME} that can see your agents.` : `Opening a brand new ${NAME} with nothing of yours in it.`;
     showToast(`${what} Yours keeps running.${note}`);
   }, [showToast]);
 
