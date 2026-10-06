@@ -424,6 +424,22 @@ export function ThreadComposer({
   };
 
   const send = () => (person ? sendMessage() : sendTask());
+  // ⌘↵ SENDS WHEREVER THE CURSOR IS while the card is open (w-9f6975906c).
+  // It used to be heard only inside the card, so once a menu or a click had
+  // taken focus out of it the key did nothing: "Command+Enter in the tutorial
+  // isn't working so the only thing I can do is hit Skip". The card's own
+  // handler still runs first and marks the press handled, so it never sends twice.
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !(e.metaKey || e.ctrlKey) || e.key !== 'Enter') return;
+      e.preventDefault();
+      void sendRef.current();
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, []);
 
   const addFiles = async (files: FileList | File[] | null) => {
     if (!files || !files.length) return;

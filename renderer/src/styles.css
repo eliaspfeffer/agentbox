@@ -6524,8 +6524,12 @@ a.set-ghost { text-decoration: none; display: inline-block; }
    under full strength, still one small word with no border, no fill and no cap
    on it.
 */
+/* BOTTOM RIGHT, NOT TOP RIGHT (w-9f6975906c, 2026-10-05). It sat at top: 0,
+   inside the title bar band, where a real click 4 to 36 points down never
+   reaches the page (memory: the top 40pt eats clicks). Her words: "Skip isn't
+   even processing ... I got completely stuck". */
 .fr-out {
-  position: fixed; right: 16px; top: 0; height: 38px; z-index: 302;
+  position: fixed; right: 16px; bottom: 14px; height: 38px; z-index: 302;
   display: inline-flex; align-items: center;
   border: 0; background: none; padding: 0 6px;
   font: inherit; font-size: 12px; color: var(--text);
