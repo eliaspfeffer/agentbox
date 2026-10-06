@@ -54,13 +54,14 @@ describe('the board is a beat of the walk', () => {
 
   it('is its own beat, and the walk counts it', () => {
     // Nineteen with the board in it until 2026-10-05 (w-9f6975906c), when the
-    // three introduction slabs went and everything here came down three.
-    expect(BEAT.where).toBe(13);
-    expect(BEAT.board).toBe(14);
-    expect(BEAT.command).toBe(15);
-    expect(BEAT.done).toBe(16);
-    expect(BEAT.landed).toBe(16);
-    expect(N_BEATS).toBe(16);
+    // three introduction slabs went and everything here came down three. Up one
+    // on 2026-10-06: the look around added two beats and To took one away.
+    expect(BEAT.where).toBe(14);
+    expect(BEAT.board).toBe(15);
+    expect(BEAT.command).toBe(16);
+    expect(BEAT.done).toBe(17);
+    expect(BEAT.landed).toBe(17);
+    expect(N_BEATS).toBe(17);
     // Nothing shares the board's number: `working`/`open` and `done`/`landed`
     // are the only pairs that double up, and this is not one of them.
     const sharing = Object.entries(BEAT).filter(([, n]) => n === BEAT.board).map(([s]) => s);
@@ -161,12 +162,26 @@ describe('where the ring sits for the board beat', () => {
 });
 
 describe('when the board beat ends', () => {
-  it('ends on the board being on the screen, not on a click', () => {
-    // Read off the view the inbox is drawn in. The press is two deep and the
-    // beat is about the board rather than about either press that reaches it,
-    // so a click handler here would end the beat with the menu still open.
-    expect(app).toMatch(/run\?\.step !== 'board' \|\| inboxDisplay\.view !== 'board'/);
-    expect(app).toMatch(/inboxDisplay\.view !== 'board'\) return;\s*\n\s*setRun\(\(r\) => \(r \? stepTo\(r, 'command'\) : r\)\)/);
+  // AND IT ENDS BACK ON THE LIST SINCE 2026-10-06. Ending the moment the board
+  // appeared printed the ⌘K card across the board's first column, and the walk
+  // then landed her in her own project on an empty board of four "Nothing here"
+  // columns. So the board stays up under a card saying what it is, and B again
+  // brings the list back and ends the beat.
+  it('ends back on the list once the board has been on the screen, not on a click', () => {
+    // Read off the view the inbox is drawn in, never off a click: the press is
+    // two deep, and a click handler would end the beat with the menu open.
+    expect(app).toMatch(/if \(inboxDisplay\.view === 'board'\) \{ boardSeen\.current = true; return; \}/);
+    expect(app).toMatch(/if \(!boardSeen\.current\) return;\s*\n\s*setRun\(\(r\) => \(r \? stepTo\(r, 'command'\) : r\)\)/);
+  });
+
+  it('says what the board is while it is up, and how to get back', () => {
+    const up = coach('board', 0, { board: true });
+    expect(up.quiet).toContain('columns');
+    expect(up.key).toBe('B');
+    expect(loud(up)).toBe('Press B again to go back to the list.');
+    // THE CASE THAT MUST NOT MATCH: before the board is up, the card is still
+    // the one that says how to reach it.
+    expect(loud(coach('board', 0))).toContain('View and filters');
   });
 
   it('is what the tour hands on to, rather than the palette', () => {

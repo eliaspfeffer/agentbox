@@ -498,7 +498,8 @@ describe('the introduction, in front of the app', () => {
     expect(INTRO).toEqual(['hand']);
     // Nineteen since 2026-10-01: who a thread is for, and the board, each became a beat of their own.
     // Sixteen since 2026-10-05 (w-9f6975906c), with the three slabs gone.
-    expect(N_BEATS).toBe(16);
+    // Seventeen since 2026-10-06: the look around added two and To took one.
+    expect(N_BEATS).toBe(17);
     // THE HAND-OFF COMES STRAIGHT AFTER THE THREE SETUP SCREENS.
     expect(INTRO.map((s) => BEAT[s])).toEqual([4]);
   });
@@ -566,10 +567,11 @@ describe('the introduction, in front of the app', () => {
     expect(made.practice).toBe(null);
   });
 
-  it('opens the plus only once the practice project is really there', () => {
+  it('opens the look around only once the practice project is really there', () => {
     const at = { ...START, step: 'hand', product: 'orbit' };
     const on = advance(at, { t: 'practice', product: PRACTICE_SLUG, examples: ['a', 'b', 'c'] });
-    expect(on.step).toBe('make');
+    // The look around, then the plus, since 2026-10-06.
+    expect(on.step).toBe('tour');
     expect(on.practice).toBe(PRACTICE_SLUG);
     // The three rows come with it, so nothing has to be staged mid-flight.
     expect(on.examples).toEqual(['a', 'b', 'c']);
@@ -578,14 +580,23 @@ describe('the introduction, in front of the app', () => {
     expect(on.product).toBe('orbit');
   });
 
-  it('keeps the three off the screen until the beat that clears them', () => {
-    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'w-mine' }];
+  // THEY WERE KEPT OFF THE SCREEN UNTIL THE BEAT THAT CLEARS THEM, until
+  // 2026-10-06. The look around stands on the practice inbox and has to show
+  // something in it, and an inbox that then emptied itself while she wrote her
+  // first thread would be the app hiding things for no reason. So they are in
+  // the list from the first look, with her own thread beside them.
+  it('shows the examples from the look around on, and nothing before it', () => {
+    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'w-mine' }, { id: 'the-directive' }];
     const run = {
       ...START, step: 'make', product: 'orbit', practice: PRACTICE_SLUG,
       examples: ['a', 'b', 'c'], item: 'w-mine',
     };
-    expect(walkRows(rows, run)).toEqual([{ id: 'w-mine' }]);
-    expect(walkRows(rows, { ...run, step: 'clear' }).map((r) => r.id)).toEqual(['a', 'b', 'c']);
+    expect(walkRows(rows, { ...run, step: 'tour', item: null }).map((r) => r.id)).toEqual(['a', 'b', 'c']);
+    expect(walkRows(rows, run).map((r) => r.id)).toEqual(['a', 'b', 'c', 'w-mine']);
+    expect(walkRows(rows, { ...run, step: 'clear' }).map((r) => r.id)).toEqual(['a', 'b', 'c', 'w-mine']);
+    // THE CASE THAT MUST NOT MATCH: the directive making the project composed
+    // is never in it, and the hand-off before the practice project has none.
+    expect(walkRows(rows, { ...run, step: 'hand' }).map((r) => r.id)).toEqual(['w-mine']);
   });
 
   it('listens for the key from the next tick, not the tick that opened it', () => {

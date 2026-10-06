@@ -417,9 +417,12 @@ describe('the wiring, which is the half a pure test cannot see', () => {
   // is what lets this one task into the practice project, which every other
   // task there is refused (compose-says.ts practiceRefusal).
   it('composes the example task with the mark on it', () => {
-    // `walkCard` is the two beats the card is open for, who it is to and the
-    // send, so the task, the project and the label are decided in one place.
-    expect(app).toMatch(/const walkCard = run\?\.step === 'who' \|\| run\?\.step === 'task';/);
+    // `walkCard` is the beat that opens the card and the beat that sends it,
+    // so the task, the project and the label are decided in one place. AND THE
+    // OPENING BEAT IS IN IT SINCE 2026-10-06: the card reads its words once,
+    // when it mounts, and it mounts on `make`, so leaving `make` out opened it
+    // with an empty box under "Press ⌘↵ or click Send".
+    expect(app).toMatch(/const walkCard = run\?\.step === 'make' \|\| run\?\.step === 'task';/);
     expect(app).toMatch(/scripted=\{walkCard \? \{ labels: \[FIRST_RUN_LABEL\] \} : null\}/);
     const card = src('threads', 'ThreadComposer.tsx');
     expect(card).toMatch(/\.\.\.\(scripted \? \{ labels: scripted\.labels \} : \{\}\)/);
@@ -435,7 +438,8 @@ describe('the wiring, which is the half a pure test cannot see', () => {
   });
 
   it('writes the answer itself, after the wait', () => {
-    expect(app).toMatch(/api\.firstRunAnswer\(\{ product, id \}\)/);
+    // `round` since 2026-10-06: a reply to it is answered the same way.
+    expect(app).toMatch(/api\.firstRunAnswer\(\{ product, id, round \}\)/);
     expect(app).toMatch(/\}, ANSWER_AFTER_MS\);/);
   });
 

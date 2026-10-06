@@ -13,7 +13,7 @@ import { checkProjectFolder } from '../shared/project-folder-check.mjs';
 import { EXAMPLES, stampsFor } from '../shared/first-run-examples.mjs';
 import {
   PRACTICE_ANSWER, PRACTICE_BACKDROP, PRACTICE_FLAG, PRACTICE_NAME, PRACTICE_NOTE, PRACTICE_ROWS, PRACTICE_SLUG,
-  PRACTICE_TASK_TRACE,
+  PRACTICE_REPLY_ANSWER, PRACTICE_TASK_TRACE,
 } from '../shared/first-run-practice.mjs';
 import { NOTE_NAME } from './rail-note.mjs';
 import { iconPathFor } from './project-identity.mjs';
@@ -1028,9 +1028,23 @@ export class Store {
   // was for. Only when a line was really found: the sentence that says a folder
   // has no readme in it is a true answer and it is not a description, so it is
   // never written under the project's name.
-  finishFirstRunTask(slug, id) {
+  finishFirstRunTask(slug, id, round = 0) {
     const { workItemsDisk } = this.modules;
     const product = this.listProducts().find((p) => p.slug === slug) ?? null;
+    // A REPLY TO IT IS ANSWERED HERE TOO (2026-10-06). The first answer offers
+    // to make the summary shorter; any reply after that gets the shorter one,
+    // and no second trace, because the run it did is already on the thread.
+    // AND THE REPLY IS SETTLED FIRST, the way the supervisor settles one when a
+    // session exits: without it the row reads as an answer still waiting for an
+    // agent and stays in In progress (`answerSettled`, shared/answers.mjs).
+    if (product?.practice && round > 0) {
+      const before = this.readItem(slug, id);
+      this.settleAnswer(slug, id, before?.wrote?.answer?.ts ?? 0);
+      const item = workItemsDisk.updateWorkItem(
+        this.productDir(slug), id, { result: PRACTICE_REPLY_ANSWER }, { source: 'agent' },
+      );
+      return { item, line: PRACTICE_REPLY_ANSWER, oneLiner: null };
+    }
     // AND SINCE 2026-08-23 THE TASK IS SENT IN THE PRACTICE PROJECT, which
     // points at no folder at all. Everything below reads one, so it cannot run
     // here: a project that is not theirs has nothing honest to say about their

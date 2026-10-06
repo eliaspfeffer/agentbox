@@ -270,8 +270,10 @@ describe('2. the two of them are two things, and a stranger can tell them apart'
     // Ten, not eleven, since w-ec62ab6b38 (2026-09-28) took the note beat out,
     // and eleven again since 2026-10-01: writing a thread is the card opening on
     // who it is for and then the send, which the walk never used to say.
+    // And since 2026-10-06 it opens on the look around, two stops, and the
+    // beat about who a thread is to is gone with single player.
     expect(IN_PRACTICE).toEqual([
-      'make', 'who', 'task', 'working', 'open', 'answer',
+      'tour', 'tabs', 'make', 'task', 'working', 'open', 'answer',
       'clear', 'snooze', 'unblock', 'where', 'board', 'command',
     ]);
     // And the band that says nothing in here is real is on the screen for all
@@ -342,15 +344,19 @@ describe('2. the two of them are two things, and a stranger can tell them apart'
 /* ========================================================================== */
 
 describe('3. the walk itself teaches where the tutorial lives', () => {
-  const last = coach('command', 0);
+  // THE HALF WITH THE LIST OPEN SINCE 2026-10-06. The word to type is said
+  // while the list it is typed into is on the screen; the half before it says
+  // only the key that opens it, as one instruction rather than three.
+  const first = coach('command', 0);
+  const last = coach('command', 0, { palette: true });
 
   it('says on the last card that this tutorial is one of the things ⌘K holds', () => {
     // a tester found the way back only because she was told out loud. The
     // sentence points at itself; it said "so is this walk" until 2026-08-28,
     // when walk stopped being a word anybody outside this repository reads.
-    const said = `${last.quiet} ${last.lead}${last.key}${last.tail}`;
+    const said = `${first.quiet} ${first.lead}${first.key}${first.tail}`;
     expect(said).toContain('⌘K');
-    expect(last.quiet.toLowerCase()).toContain('so is this');
+    expect(last.quiet.toLowerCase()).toContain('take this again');
   });
 
   it('names the word to type, because the key on its own was not enough', () => {
@@ -380,10 +386,12 @@ describe('3. the walk itself teaches where the tutorial lives', () => {
   });
 
   it('still ends on the thing she does next, which is her own first real task', () => {
-    expect(last.lead).toBe('Press ');
-    expect(last.key).toBe('⌘K');
+    expect(first.lead).toBe('Press ');
+    expect(first.key).toBe('⌘K');
+    // ON THE LANDING SINCE 2026-10-06, which is the last thing the walk says;
+    // the ⌘K card asked for two different moves in one sentence.
     // w-ec62ab6b38 (2026-09-28): the app's word for a row is thread now, not task.
-    expect(last.tail).toContain('first real thread');
+    expect(COPY.finishNext.join(' ')).toContain('real thread');
   });
 
   it('teaches it on the tutorial as well as on the onboarding, because it is one card', () => {

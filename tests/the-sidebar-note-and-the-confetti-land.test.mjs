@@ -72,11 +72,17 @@ describe('the last card asks one thing and the celebration is in her own project
     expect(COPY.finishHead).toBe('You finished the tutorial.');
   });
 
-  it('is a card on a Mac with nothing to import too, since 2026-08-28', () => {
-    // The card that used to be skipped here now appears with its empty answer
-    // on it, which is where somebody with no agents yet is told Agentbox takes
-    // them and where the door is.
+  // IT WAS A CARD ON A MAC WITH NOTHING TO IMPORT FROM 2026-08-28 TO 2026-10-06,
+  // reading "No agents to bring across yet" over a ~/.claude/agents path. That
+  // was every new user's last screen, and it read as setup having failed. So a
+  // Mac with nothing to bring goes straight to the confetti again, and the
+  // component says so in one effect.
+  it('is no card on a Mac with nothing to import, since 2026-10-06', () => {
     expect(finishCard({ missing: false }, { read: true, some: false }))
+      .toMatchObject({ show: false, skip: true, blocked: false });
+    expect(walk).toContain('useEffect(() => { if (skip) onDone([]); }, [skip]);');
+    // THE CASE THAT MUST NOT MATCH: a Mac WITH agents still gets the card.
+    expect(finishCard({ missing: false }, { read: true, some: true }))
       .toMatchObject({ show: true, blocked: false });
     // AND NOT WHILE HER MAC IS STILL BEING READ. A slow disk must not tip
     // somebody into the inbox before the offer has had a chance to exist.

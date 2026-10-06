@@ -25,7 +25,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import { SummaryPanel } from '../renderer/src/threads/Summary';
 import { InboxClear } from '../renderer/src/threads/Pages';
-import { COPY, coach } from '../renderer/src/onboarding';
+import { COACHED, COPY, coach } from '../renderer/src/onboarding';
 
 const TEAM_WORDS = /\bteam\b|teammate|Visible to/i;
 const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -47,13 +47,18 @@ describe('the summary panel', () => {
 });
 
 describe('the walk', () => {
-  it('says a thread goes to an agent, and names no team, on a Mac with no team', () => {
-    const say = coach('who', 0, {});
-    expect(say.quiet).not.toMatch(TEAM_WORDS);
-    expect(say.quiet).toMatch(/agent/);
-  });
-  it('still names a person on your team, on a team', () => {
-    expect(coach('who', 0, { team: true }).quiet).toBe('Every thread goes to an agent, or to a person on your team.');
+  // THE "WHO" BEAT IS GONE (2026-10-06), the one card that named a team in the
+  // middle of the walk: single player, so a thread only ever goes to an agent.
+  // What is pinned now is the whole walk: no card in it names a team on a
+  // Mac with no team, in any half of any beat.
+  it('names no team on any card of the walk, on a Mac with no team', () => {
+    expect(coach('who', 0, {})).toBeNull();
+    for (const step of COACHED) {
+      for (const ctx of [{}, { opened: true }, { picking: true }, { palette: true }, { board: true }, { replies: 1 }]) {
+        const say = coach(step, 0, ctx);
+        if (say) expect(`${say.quiet} ${say.lead}${say.tail}`, `${step} ${JSON.stringify(ctx)}`).not.toMatch(TEAM_WORDS);
+      }
+    }
   });
   it('ends with a next step that names no team', () => {
     expect(COPY.finishNext.join(' ')).not.toMatch(TEAM_WORDS);

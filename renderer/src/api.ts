@@ -539,7 +539,9 @@ export const api = {
   // folder chosen two screens earlier and writes the result on the real row;
   // there is no session, so this returns in milliseconds and the two second
   // pause in front of it is the walk's, not the work's.
-  async firstRunAnswer(p: { product: string; id: string }): Promise<{ line: string; found: boolean } | null> {
+  // `round` is how many times she has replied to it; past the first, the
+  // answer is the changed summary (2026-10-06).
+  async firstRunAnswer(p: { product: string; id: string; round?: number }): Promise<{ line: string; found: boolean } | null> {
     // Fixtures have no disk under them, so the walk gets a line that is true
     // about the fixtures rather than a pretend one about her Mac.
     if (useFixtures) return { line: 'A fixture project, with no folder under it to read.', found: false };

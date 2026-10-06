@@ -1,0 +1,222 @@
+// THE TUTORIAL LOOKS AROUND FIRST, AND ANSWERS A REPLY.
+//
+// Her three notes after walking the downloaded app as a new user, 2026-10-06
+// (w-9f6975906c):
+//
+//   "hitting 'to' doesn't matter because we're in single player mode so it's
+//    only ever 'to' the agent."
+//   "your first task doesn't let you actually reply but forces you to do 'e'"
+//   "it's hard to understand the app as a whole because it just jumps to
+//    creating a new task without spending a second on the interface"
+//
+// What was measured by driving a throwaway new-user copy of the app end to end
+// before the change: the walk went hand-off, plus, To, send, with nothing
+// said about the inbox in between; the new thread card opened with an empty
+// box, because it mounted one beat before the walk handed it the words; a
+// reply on her first thread moved the walk on but nothing ever answered it,
+// so the thread sat in In progress for the rest of the walk; and a new user's
+// last screen was "No agents to bring across yet" over a ~/.claude/agents
+// path. After the change, all four are gone, and the same drive goes welcome
+// to landing with a reply on the way.
+//
+// One describe per change. Everything here is behaviour, except where the
+// wording IS the behaviour (what the reply card tells her to do).
+
+import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  ANCHOR, BEAT, COACHED, START, STEPS, advance, beatRows, coach, finishCard, readFirstRun,
+  replyAnswered, replyWritten, walkRows,
+} from '../renderer/src/onboarding.ts';
+import { PRACTICE_ANSWER, PRACTICE_REPLY_ANSWER, PRACTICE_SLUG } from '../shared/first-run-practice.mjs';
+import { answerSettled } from '../shared/answers.mjs';
+import { Store } from '../main/store.mjs';
+
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const app = read('renderer/src/App.tsx');
+const loud = (say) => `${say.lead}${say.key ?? ''}${say.tail}`;
+
+describe('1. the beat about To is gone', () => {
+  it('is not a step, not coached, and rings nothing', () => {
+    expect(STEPS).not.toContain('who');
+    expect(COACHED).not.toContain('who');
+    expect(BEAT.who).toBeUndefined();
+    expect(ANCHOR.who).toBeUndefined();
+  });
+
+  it('goes from opening the card straight to sending it', () => {
+    expect(STEPS.indexOf('task')).toBe(STEPS.indexOf('make') + 1);
+    expect(app).toMatch(/if \(run\?\.step !== 'make' \|\| modal !== 'compose'\) return;\s*\n\s*setRun\(\(r\) => \(r \? stepTo\(r, 'task'\) : r\)\);/);
+  });
+
+  it('resumes a walk saved on it at the send, with the card open', () => {
+    const store = new Map([['zero.firstRun', JSON.stringify({ step: 'who', product: 'p', practice: 'practice' })]]);
+    const run = readFirstRun({ getItem: (k) => store.get(k) ?? null, setItem() {}, removeItem() {} });
+    expect(run.step).toBe('task');
+  });
+
+  it('still resumes the retired theme step at the hand-off, which `look` meant before', () => {
+    const store = new Map([['zero.firstRun', JSON.stringify({ step: 'look', product: 'p' })]]);
+    const run = readFirstRun({ getItem: (k) => store.get(k) ?? null, setItem() {}, removeItem() {} });
+    expect(run.step).toBe('hand');
+  });
+});
+
+describe('2. the card opens with the practice thread already written in it', () => {
+  it('hands the card its words on the beat that opens it, not one beat later', () => {
+    // The card reads `initial` once, when it mounts, and it mounts on `make`.
+    expect(app).toMatch(/const walkCard = run\?\.step === 'make' \|\| run\?\.step === 'task';/);
+    expect(app).toMatch(/initial=\{walkCard \? \{ body: `\$\{TASK_TITLE\}\\n\\n\$\{TASK_BODY\}` \} : composeInitial\}/);
+  });
+});
+
+describe('3. a look around before the first thread', () => {
+  it('is two stops between the hand-off and the plus', () => {
+    expect(STEPS.slice(STEPS.indexOf('hand'), STEPS.indexOf('make') + 1)).toEqual(['hand', 'tour', 'tabs', 'make']);
+    expect(advance({ ...START, step: 'hand', product: 'mine' }, { t: 'practice', product: PRACTICE_SLUG, examples: ['a'] }).step).toBe('tour');
+  });
+
+  it('rings the list and then the tabs', () => {
+    expect(ANCHOR.tour[0]).toBe('.list-pane .list');
+    expect(ANCHOR.tabs).toContain('.workspace-navigation .workspace-tabs');
+  });
+
+  it('says what each is in one sentence and moves on with a Next, by key or click', () => {
+    for (const step of ['tour', 'tabs']) {
+      const say = coach(step, 0);
+      expect(say.next, step).toBe(true);
+      expect(say.key, step).toBe('↵');
+      expect(say.lead.split(/[.!?]\s/).length, step).toBeLessThanOrEqual(2);
+    }
+    expect(coach('tour', 0).quiet).toContain('inbox');
+    expect(loud(coach('tabs', 0))).toMatch(/Needs you[\s\S]*In progress/);
+    // THE CASE THAT MUST NOT MATCH: no other card grows a Next.
+    for (const step of COACHED.filter((s) => s !== 'tour' && s !== 'tabs')) {
+      expect(coach(step, 0)?.next, step).toBeUndefined();
+    }
+  });
+
+  it('stands on a practice inbox with its examples in it, and keeps them there after', () => {
+    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'mine' }];
+    const run = { ...START, practice: PRACTICE_SLUG, examples: ['a', 'b'], item: null };
+    expect(walkRows(rows, { ...run, step: 'tour' }).map((r) => r.id)).toEqual(['a', 'b']);
+    expect(walkRows(rows, { ...run, step: 'open', item: 'mine' }).map((r) => r.id)).toEqual(['a', 'b', 'mine']);
+  });
+
+  it('lets ↵ on the card move the walk on and never reach the app underneath', () => {
+    const card = read('renderer/src/components/Onboarding.tsx');
+    expect(card).toMatch(/if \(say\.next && keyToken\(e\) === say\.key && next\.current\) \{\s*\n\s*e\.preventDefault\(\);\s*\n\s*e\.stopPropagation\(\);\s*\n\s*e\.stopImmediatePropagation\(\);\s*\n\s*next\.current\(\);/);
+    expect(card).toMatch(/onNext=\{say\.next \? \(\) => go\(run\.step\) : undefined\}/);
+  });
+});
+
+describe('4. a reply on her first thread is answered', () => {
+  it('tells her what to reply with, and that closing it is the other way', () => {
+    const first = coach('answer', 0);
+    expect(first.quiet).toContain('shorter');
+    expect(loud(first)).toBe('Click the reply box to ask for that, or press E to close it.');
+    // And once the change has come back, closing is the one thing left.
+    const after = coach('answer', 0, { replies: 1 });
+    expect(loud(after)).toBe('Press E to close it.');
+    expect(coach('open', 0, { replies: 1 }).quiet).toContain('made the change');
+    // The offer and the answer to it are the two practice strings.
+    expect(PRACTICE_ANSWER).toContain('shorter');
+    expect(PRACTICE_REPLY_ANSWER.toLowerCase()).toContain('shorter now');
+  });
+
+  it('sends it back to work from her open thread, and only from there', () => {
+    const open = { ...START, step: 'answer', item: 'mine', sentAt: 1 };
+    const back = advance(open, { t: 'replied', at: 50 });
+    expect(back).toMatchObject({ step: 'working', sentAt: 50, replies: 1 });
+    expect(advance(advance(back, { t: 'answered' }), { t: 'answered' }).step).toBe('open');
+    // THE CASES THAT MUST NOT MATCH: a reply anywhere else moves nothing, and
+    // a walk with no thread of its own has nothing to send back.
+    for (const step of ['open', 'working', 'clear', 'unblock', 'where']) {
+      const run = { ...START, step, item: 'mine' };
+      expect(advance(run, { t: 'replied', at: 5 }), step).toBe(run);
+    }
+    const none = { ...START, step: 'answer', item: null };
+    expect(advance(none, { t: 'replied', at: 5 })).toBe(none);
+  });
+
+  it('knows a reply is in, and when it has been answered, off the ledger stamps', () => {
+    const stamped = (answer, result) => ({ wrote: { answer: answer && { ts: answer }, result: result && { ts: result } } });
+    expect(replyWritten(stamped(20, 10))).toBe(true);
+    expect(replyAnswered(stamped(20, 10))).toBe(false);
+    expect(replyWritten(stamped(20, 30))).toBe(false);
+    expect(replyAnswered(stamped(20, 30))).toBe(true);
+    // A row nobody has replied to is neither, whatever its result says.
+    expect(replyWritten(stamped(0, 10))).toBe(false);
+    expect(replyAnswered(stamped(0, 10))).toBe(false);
+  });
+
+  it('writes the reply at once in the walk, rather than after the undo window', () => {
+    const fn = app.slice(app.indexOf('const answerWith = useCallback'), app.indexOf('A LIVE CORRECTION IS HELD'));
+    expect(fn).toMatch(/runRef\.current\?\.step === 'answer' && runRef\.current\.item === item\.id/);
+    expect(fn).toMatch(/await api\.answer\(/);
+    expect(fn).toMatch(/fire\(\{ t: 'replied', at: Date\.now\(\) \}\)/);
+  });
+
+  it('picks her own thread on the beat that opens it, wherever the list put it', () => {
+    expect(app).toMatch(/const walkOpenAt = run\?\.step === 'open' && run\.item \? list\.findIndex\(\(i\) => i\.id === run\.item\) : -1;/);
+    // And ↵ aimed at an example on that beat is the wrong row.
+    const rows = [{ id: 'ex' }, { id: 'mine' }];
+    expect(beatRows('open', { ...START, step: 'open', item: 'mine', examples: ['ex'] }, rows, -1, -1)).toEqual(['mine']);
+  });
+
+  // MEASURED IN THE BUILT APP BEFORE THIS LINE EXISTED: the shorter answer was
+  // written and the row stayed in In progress, because a reply only counts as
+  // answered once the supervisor has marked it delivered, and in the practice
+  // project no session ever runs to mark it.
+  it('answers it in the store, settled, so it comes back to Needs you rather than sitting in In progress', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reply-answered-'));
+    const home = process.env.ASTRAL_HOME;
+    process.env.ASTRAL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'reply-answered-home-'));
+    try {
+      const store = new Store({ accountRoot: dir, products: [], personalProducts: [] });
+      await store.init();
+      store.watch = () => {};
+      const made = store.createPractice();
+      const item = store.fileItem(made.slug, { title: 'Add a summary', kind: 'task', labels: ['first-run'] });
+      store.finishFirstRunTask(made.slug, item.id);
+      store.answerItem(made.slug, item.id, { answer: 'Make it shorter, please.' });
+      const before = store.readItem(made.slug, item.id);
+      expect(replyWritten(before)).toBe(true);
+      expect(answerSettled(before)).toBe(false);
+      store.finishFirstRunTask(made.slug, item.id, 1);
+      const after = store.readItem(made.slug, item.id);
+      expect(after.result).toBe(PRACTICE_REPLY_ANSWER);
+      expect(replyAnswered(after)).toBe(true);
+      expect(answerSettled(after)).toBe(true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      if (home === undefined) delete process.env.ASTRAL_HOME; else process.env.ASTRAL_HOME = home;
+    }
+  });
+});
+
+describe('5. a new user is not told they have no agents', () => {
+  it('goes straight to the landing when there is nothing to bring in', () => {
+    expect(finishCard({ missing: false }, { read: true, some: false })).toMatchObject({ show: false, skip: true });
+    // THE CASES THAT MUST NOT MATCH: agents found still get the card, and a
+    // Mac with no Claude Code is still stopped.
+    expect(finishCard({ missing: false }, { read: true, some: true })).toMatchObject({ show: true, blocked: false });
+    expect(finishCard({ missing: true }, { read: true, some: false })).toMatchObject({ show: true, blocked: true });
+  });
+});
+
+describe('6. the board and the tab tour end where they should', () => {
+  it('keeps the board up under its own card until B takes it back to the list', () => {
+    expect(loud(coach('board', 0, { board: true }))).toBe('Press B again to go back to the list.');
+    expect(app).toMatch(/if \(!boardSeen\.current\) return;/);
+  });
+
+  it('does not make All a stop on the tab tour', () => {
+    expect(app).toMatch(/if \(view !== 'inbox' && view !== 'all'\) \{ toured\.current\.add\(view\); return; \}/);
+    expect(loud(coach('where', 0, { view: 'done', tabs: ['inbox', 'progress', 'snoozed', 'done', 'all'] }))).toBe('Press ⇥ to go on.');
+  });
+});

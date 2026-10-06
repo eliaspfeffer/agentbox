@@ -108,6 +108,7 @@ import {
   waitingId, waitingIndex,
   finishFirstRun, forcedStep, readFirstRun, walkRows,
   saveFirstRun, START as RUN_START, stepTo, TASK_BODY, TASK_TITLE, whyNotMade, type FirstRun,
+  replyAnswered, replyWritten,
 } from './onboarding';
 import { priorityCommands, priorityIdOf, priorityLabelOf, type PriorityId } from './priority';
 import { runNowCommands } from './run-now';
@@ -997,7 +998,13 @@ export default function App() {
   // is for and the one that sends it. Both want the walk's own task in the box,
   // the practice project under it and the label on the row it makes, so the
   // card is told once rather than in three places that could disagree.
-  const walkCard = run?.step === 'who' || run?.step === 'task';
+  // AND `make` IS ONE OF THEM (2026-10-06), because the card is OPENED on
+  // `make`: N or the button opens it and only then does the walk move on. The
+  // card reads `initial` once, when it mounts, so a card that mounted while
+  // this said false opened with an empty box under "Press ⌘↵ or click Send",
+  // which is what she photographed on 2026-10-05 and what a hack made Send
+  // paper over. Now the words are there from the first frame.
+  const walkCard = run?.step === 'make' || run?.step === 'task';
   // WHAT THE LISTS UNDERNEATH ARE SCOPED TO. Only the practice run: it has to
   // make the whole app the practice project's, the mask and the counts included.
   // Her own filter is not this. It narrows the box on screen and nothing else
@@ -1022,8 +1029,10 @@ export default function App() {
     // the walk on the beat about who a thread is for comes back to a card
     // telling them to click To, and without this there would be no card on the
     // screen to click it on.
-    if (run.step === 'who' || run.step === 'task') setModal('compose');
-    if (run.step === 'working') { setModal(null); setView('progress'); setSelected(0); }
+    if (run.step === 'task') setModal('compose');
+    // AND A REPLY COMES BACK HERE TOO (2026-10-06), from inside the open
+    // thread, so the thread is shut on the way.
+    if (run.step === 'working') { setModal(null); setFocused(null); setView('progress'); setSelected(0); }
     // AND IT COMES BACK TO HER INBOX RATHER THAN OPENING ITSELF.
     if (run.step === 'open') { setModal(null); setView('inbox'); setSelected(0); }
     if (run.step === 'clear') { setModal(null); setFocused(null); setView('inbox'); setSelected(0); }
@@ -1057,11 +1066,11 @@ export default function App() {
   // beat moves on whether she pressed C or clicked the plus, and it is the
   // app's behaviour she is learning rather than the walk's.
   useEffect(() => {
-    // THE CARD OPENING ENDS THE FIRST BEAT AND STARTS THE ONE ABOUT WHO IT IS
-    // FOR (2026-10-01). It used to go straight to the send; To is the card's
-    // first line and the walk never said a word about it.
+    // THE CARD OPENING ENDS THE FIRST BEAT AND STARTS THE SEND. There was a
+    // beat about who it is for in between from 2026-10-01 to 2026-10-06; it
+    // went with single player.
     if (run?.step !== 'make' || modal !== 'compose') return;
-    setRun((r) => (r ? stepTo(r, 'who') : r));
+    setRun((r) => (r ? stepTo(r, 'task') : r));
   }, [run?.step, modal]);
 
   // AND SHE OPENS IT HERSELF. Beat six's second half ends when the row she was
@@ -1077,7 +1086,12 @@ export default function App() {
     if (run?.step !== 'working' || !run.item || !snap) return;
     const it = snap.items.find((i) => i.id === run.item);
     if (!it) return;
-    const landed = !!it.result || it.status === 'done' || it.status === 'blocked';
+    // AFTER A REPLY THE ROW ALREADY HAS A RESULT, the first one, so "it has a
+    // result" would land the reply the moment it was sent. What lands it is a
+    // result written after her reply (`replyAnswered`).
+    const landed = run.replies
+      ? replyAnswered(it)
+      : !!it.result || it.status === 'done' || it.status === 'blocked';
     if (!landed) return;
     // IT DOES NOT OPEN ITSELF ANY MORE. It lands in the inbox and the card
     // beside it says to press ↵, which is the next beat.
@@ -1100,18 +1114,26 @@ export default function App() {
   // all. The readme read above cannot run there and would have nothing honest
   // to say if it did, so main/store.mjs writes the pre-written answer instead.
   // Same row, same ledger, same two seconds.
+  //
+  // AND A REPLY IS ANSWERED THE SAME WAY (2026-10-06). `round` is how many
+  // times she has replied, and the store writes the changed summary for any
+  // round past the first. It waits for her reply to be in the ledger first, so
+  // the answer is never written before the message it answers.
+  const replyIn = !!run?.replies && !!snap?.items.some((i) => i.id === run?.item && replyWritten(i));
   useEffect(() => {
     if (run?.step !== 'working' || !run.item) return;
+    if (run.replies && !replyIn) return;
     const product = run.practice ?? run.product;
     if (!product) return;
     const id = run.item;
+    const round = run.replies ?? 0;
     let live = true;
     const t = setTimeout(async () => {
-      try { await api.firstRunAnswer({ product, id }); } catch { /* the slow line covers it */ }
+      try { await api.firstRunAnswer({ product, id, round }); } catch { /* the slow line covers it */ }
       if (live) await refresh();
     }, ANSWER_AFTER_MS);
     return () => { live = false; clearTimeout(t); };
-  }, [run?.step, run?.item, run?.product, run?.practice]);
+  }, [run?.step, run?.item, run?.product, run?.practice, run?.replies, replyIn]);
 
   // AND NOTHING FROM CLAUDE CODE STARTS WHILE THE WALK IS UP.Making the project
   // one screen earlier composes a real directive, and on her own walk that
@@ -1950,13 +1972,19 @@ export default function App() {
   // The set is a ref rather than state because nothing renders off it; what
   // renders is the view, and the view is already state.
   const toured = useRef<Set<string>>(new Set());
+  //
+  // AND ALL IS NOT A STOP (2026-10-06). All is every tab at once, so it has
+  // nothing of its own to show, and requiring it made the tour five presses
+  // with a card reading "Press Tab or click All for the next one" and then
+  // the opening card again on Needs you. The press that leaves the last real
+  // tab ends the tour, wherever it lands.
   useEffect(() => {
     if (run?.step !== 'where') { toured.current = new Set(); return; }
-    if (view !== 'inbox') { toured.current.add(view); return; }
+    if (view !== 'inbox' && view !== 'all') { toured.current.add(view); return; }
     // EVERY TAB THE APP IS DRAWING, not a list of two written down here. With a
     // row snoozed there are three to see, and the third is where the row she
     // put off went, which is the same lesson as the other two.
-    if (tabOrder.some((v) => v !== 'inbox' && !toured.current.has(v))) return;
+    if (tabOrder.some((v) => v !== 'inbox' && v !== 'all' && !toured.current.has(v))) return;
     setRun((r) => (r ? stepTo(r, 'board') : r));
   }, [view, run?.step, tabOrder]);
 
@@ -2101,8 +2129,18 @@ export default function App() {
   // board rather than about either press that reaches it. It reads the derived
   // `inboxDisplay` rather than either half, so it ends on the board whichever
   // page the walk is standing on.
+  //
+  // AND IT ENDS BACK ON THE LIST (2026-10-06). It used to end the moment the
+  // board appeared, so the ⌘K card printed straight over the board's first
+  // column and the walk landed her in her own project on an empty board of
+  // four "Nothing here" columns. Now the board stays up under a card saying
+  // what it is, and pressing B again, which is the second thing worth knowing
+  // about it, brings the list back and ends the beat.
+  const boardSeen = useRef(false);
   useEffect(() => {
-    if (run?.step !== 'board' || inboxDisplay.view !== 'board') return;
+    if (run?.step !== 'board') { boardSeen.current = false; return; }
+    if (inboxDisplay.view === 'board') { boardSeen.current = true; return; }
+    if (!boardSeen.current) return;
     setRun((r) => (r ? stepTo(r, 'command') : r));
   }, [run?.step, inboxDisplay.view]);
   // Your own rows are on the page unless you took yourself off it.
@@ -2218,6 +2256,13 @@ export default function App() {
   const list = search !== null ? (hits ?? []).map((h) => h.item) : boardOrder ?? displayedBox;
 
   const current: WorkItem | undefined = list[Math.min(selected, Math.max(0, list.length - 1))];
+  // THE TUTORIAL'S OWN THREAD IS THE SELECTED ROW ON THE BEAT THAT OPENS IT
+  // (2026-10-06). The beat set row 0 and assumed it was hers, which held while
+  // the inbox showed nothing else. With the examples in the list from the
+  // first look, and after a reply in particular, hers is not always first, and
+  // ↵ opened "Drafted a reply to the venue" under a card about her own thread.
+  const walkOpenAt = run?.step === 'open' && run.item ? list.findIndex((i) => i.id === run.item) : -1;
+  useEffect(() => { if (walkOpenAt >= 0) setSelected(walkOpenAt); }, [walkOpenAt]);
   // WHAT J AND K WALK: every thread drawn, a teammate's included
   // (threads/walk-rules.ts). With nobody else picked it is `list` itself.
   const stops = useMemo(
@@ -3281,6 +3326,18 @@ export default function App() {
     // reads her reply when it exits (deliverMidflightReply). Reopening would
     // put a second worker on the same item.
     const status = statusForReply(item.status);
+    // A REPLY TO HER OWN THREAD IN THE TUTORIAL (2026-10-06). It is written at
+    // once rather than after the three seconds Z can take it back, because Z
+    // has not been taught yet and the walk moves on from this press: the
+    // thread goes back to work and comes back answered (`replied` in
+    // onboarding.ts). Her words: "your first task doesn't let you actually
+    // reply but forces you to do 'e'".
+    if (runRef.current?.step === 'answer' && runRef.current.item === item.id) {
+      await api.answer({ product: item.product, id: item.id, answer: text, ...(status ? { status } : {}) });
+      fire({ t: 'replied', at: Date.now() });
+      await refresh();
+      return;
+    }
     // A LIVE CORRECTION IS HELD FOR THE SAME THREE SECONDS AS EVERYTHING ELSE,
     // and then it is gone for good.
     //
@@ -3532,7 +3589,7 @@ export default function App() {
         setFollowing(null);
       } });
     }, talking ? 'Sent' : `Sent → ${item.productName}`, restore, stay, { product: item.product, id: item.id }, undid);
-  }, [deferCommit, snap?.supervisor.running, snap?.products, showToast, refresh, markSeen, pushUndo, startChatAgents]);
+  }, [deferCommit, snap?.supervisor.running, snap?.products, showToast, refresh, markSeen, pushUndo, startChatAgents, fire]);
 
   /* ------------------------ answering one of her agents -------------------- */
   // THE ONE THING AGENTBOX SAYS OUT LOUD TO THE REST OF HER MACHINE. The reply goes
@@ -5511,7 +5568,10 @@ export default function App() {
                     // "Nothing needs you" is about you alone; with a teammate
                     // on the page the quiet line says it instead.
                     : view === 'inbox' && !withOthers
-                      ? run === null && <InboxClear running={progress.length} scheduled={snoozed.length} team={!!team}
+                      // AND NOT UNDER THE LANDING (2026-10-06), which says the
+                      // same thing louder: "Nothing needs you" and "You finished
+                      // the tutorial" were drawn one on top of the other.
+                      ? run === null && !landing && <InboxClear running={progress.length} scheduled={snoozed.length} team={!!team}
                           onView={(next) => { setView(next as View); setSelected(0); setMultiSel(new Set()); }}
                           onCompose={() => setModal('compose')} />
                       : <EmptyTab view={view} />
@@ -5630,11 +5690,6 @@ export default function App() {
              reads; everything else about the card is the card anybody uses. */
           initial={walkCard ? { body: `${TASK_TITLE}\n\n${TASK_BODY}` } : composeInitial}
           scripted={walkCard ? { labels: [FIRST_RUN_LABEL] } : null}
-          // AND THE BEAT ABOUT WHO IT IS FOR ENDS WHEN THE LIST IS REALLY OPEN,
-          // the way every other beat ends on the thing it asked for happening.
-          onOpenMenu={(which) => {
-            if (which === 'to' && runRef.current?.step === 'who') setRun((r) => (r ? stepTo(r, 'task') : r));
-          }}
           onOpenConversation={openConversation}
           // "Reorder" beside the project menu's heading: Settings on the
           // Projects page, which is where the order is set. The draft is
@@ -6090,6 +6145,9 @@ export default function App() {
              over two different beats, and a single "something is open" flag
              would have the snooze card talking about ⌘K. */
           palette={modal === 'palette'}
+          // Whether the board is what the page is drawn as, for the board
+          // beat's second half (2026-10-06).
+          board={inboxDisplay.view === 'board'}
           view={view}
           /* THE TABS THE WALK NAMES ARE THE TABS TAB MOVES ALONG. Its tour
              tells somebody to press Tab and then says where that press lands,

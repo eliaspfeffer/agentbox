@@ -117,24 +117,20 @@ describe('the ⌘K beat', () => {
   it('says nothing about the palette until the palette is up', () => {
     const shut = coach('command', 0, {});
     expect(shut.quiet).not.toContain('day ends');
-    // WHAT IS THERE INSTEAD IS THE WAY BACK, which is hers off a tester's
-    // onboarding and has nowhere else to go: the card is two lines, and the
-    // other half of this beat is only read by somebody who pressed.
-    expect(shut.quiet).toContain('type tutorial');
-    // w-ec62ab6b38 (2026-09-28): her word for a row is thread now, not task.
-    // AND IT NAMES THE ⌘ BUTTON SINCE 2026-10-01. ⌘K is the least guessable
-    // press in the walk and this is the beat that exists to teach it, so a card
-    // naming only the chord fails at its one job for anybody who does not use
-    // shortcuts. The button is inside this beat's ring and opens the same list.
-    // "to find any command" paid for it: the other half of this beat already
-    // says what the list is, and the loud line has to stay one sentence.
-    expect(`${shut.lead}${shut.tail}`).toBe('Press  or click the ⌘ button, or N for your first real thread.');
+    // ONE INSTRUCTION SINCE 2026-10-06. It read "Press ⌘K or click the ⌘
+    // button, or N for your first real thread", and driving the default
+    // layout found no ⌘ button to click: the card had nothing to ring and
+    // floated over the list. The way back to the tutorial moved to the half
+    // with the list open, which the beat cannot end without, and the first real
+    // thread is on the landing.
+    expect(`${shut.lead}${shut.tail}`).toBe('Press  to see them all.');
     expect(shut.key).toBe('⌘K');
   });
 
   it('says what the palette is for, and the one key that leaves it', () => {
     const open = coach('command', 0, { palette: true });
-    expect(open.quiet).toBe(`Every command in ${NAME} is in this list.`);
+    // AND THE WAY BACK TO THE TUTORIAL, while the list it is typed into is up.
+    expect(open.quiet).toBe(`Every command in ${NAME} is in this list. Type tutorial to take this again.`);
     expect(open.key).toBe('esc');
   });
 
@@ -175,8 +171,10 @@ describe('the ⌘K beat', () => {
     // are no neighbouring buttons left to stand off.
     const src = wiring('renderer/src/components/Onboarding.tsx');
     // The tab tour stands beside its ring except in the team layout, where a
-    // card beside one tab sat on the tabs after it (2026-10-01).
-    expect(src).toContain("beside={(run.step === 'where' && !teamStrip) || (run.step === 'command' && !!palette)}");
+    // card beside one tab sat on the tabs after it (2026-10-01). And the look
+    // around's tabs card stands beside the same strip (2026-10-06): under it,
+    // it printed over the first three thread titles.
+    expect(src).toContain("beside={((run.step === 'where' || run.step === 'tabs') && !teamStrip) || (run.step === 'command' && !!palette)}");
     expect(src).not.toContain("run.step === 'answer' ||");
     expect(src).not.toContain('.focus-actions button');
     expect(src).toContain('const all = [...document.querySelectorAll(sel)];');
@@ -237,6 +235,6 @@ describe('the tab strip', () => {
     expect(src).toContain('[...(teamTab(goingTo) ? [teamTab(goingTo) as string] : []), `.workspace-navigation [data-tab="${goingTo}"]`, `.tabs .tab[data-tab="${goingTo}"]`, ...ANCHOR.where ?? []]');
     expect(src).toContain("const goingTo = run.step === 'where' ? nextTab(tabs, view) : null;");
     // And the card stands off the sidebar's right edge on that beat.
-    expect(src).toContain("besideOf={run.step === 'where' ? '.workspace-navigation, .tabs' : undefined}");
+    expect(src).toContain("besideOf={run.step === 'where' || run.step === 'tabs' ? '.workspace-navigation, .tabs' : undefined}");
   });
 });

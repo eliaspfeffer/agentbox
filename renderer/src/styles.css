@@ -6748,6 +6748,19 @@ a.set-ghost { text-decoration: none; display: inline-block; }
    second thing to learn.
 */
 .fr-lights { display: flex; gap: 8px; margin-top: 12px; }
+/* THE LOOK AROUND'S NEXT (2026-10-06). The card is pointer-events: none so a
+   stray click falls through to the app; this one button takes clicks back. It
+   is the quiet bordered button the setup screens use, with the ↵ cap inside. */
+.fr-tether .fr-next {
+  pointer-events: auto;
+  display: inline-flex; align-items: center; gap: 10px;
+  margin-top: 12px; padding: 6px 10px 6px 14px;
+  font: inherit; font-size: 14px; font-weight: 500; color: var(--text);
+  background: transparent; border: 1px solid var(--line-strong, rgba(255, 255, 255, 0.22));
+  border-radius: 6px; cursor: pointer;
+}
+.fr-tether .fr-next:hover { background: rgba(255, 255, 255, 0.06); }
+.fr-tether .fr-next .cap, .fr-tether .fr-next kbd { margin: 0; }
 /* DOTS, NOT KEYS (2026-10-01): two E caps under "Press E" read as "E E". */
 .fr-tether .fr-lights .fr-dot {
   width: 8px; height: 8px; border-radius: 50%;
@@ -7325,6 +7338,10 @@ a.set-ghost { text-decoration: none; display: inline-block; }
   text-shadow: 0 2px 18px var(--fr-card-drop);
 }
 .fr-landed-next li { position: relative; padding-left: 16px; }
+/* ONE LINE IS A SENTENCE, NOT A LIST (2026-10-06): the public app has one next
+   step, and a lone bullet under a headline read as a list missing its rest. */
+.fr-landed-next li:only-child { padding-left: 0; }
+.fr-landed-next li:only-child::before { display: none; }
 .fr-landed-next li::before {
   content: ''; position: absolute; left: 0; top: 0.62em;
   width: 5px; height: 5px; border-radius: 50%; background: var(--text-dim);
