@@ -349,14 +349,20 @@ describe('the new-task card, which is the one she came back about twice', () => 
     }
   });
 
-  // ONE RULE, TWO CARDS, the same invariant GameShell carries for the games.
-  // NewProject renders `modal compose np-card`, so the new-project card is this
-  // card, which is what was approved. If it ever stops sharing the
-  // class, one of the two silently goes back to being the app's grey.
-  it('keeps the new-project card on the same rule', () => {
+  // THE NEW-PROJECT CARD IS GONE (w-33e1c968f0, 2026-10-05), so there is no
+  // second card to keep on this rule. It used to render `modal compose
+  // np-card` precisely so it could not drift onto a ground of its own; making
+  // a project is now the Mac's own folder window and draws nothing. What is
+  // left to guard is that it does not come back as a surface with its own
+  // look: no card in that component, and no skin rule naming its old class.
+  it('has no new-project card to keep on the same rule', () => {
     const np = fs.readFileSync(path.join(root, 'renderer/src/components/NewProject.tsx'), 'utf8');
-    expect(np, 'NewProject no longer renders .modal.compose, so it has its own ground now')
-      .toMatch(/className="modal compose np-card"/);
+    expect(np, 'a card is back in NewProject; if it stays it belongs on .modal.compose')
+      .not.toMatch(/className="modal/);
+    expect(
+      skinRules.some((r) => r.sel.includes('np-card')),
+      'np-card has a skin rule again, which is a ground of its own for a card that no longer exists',
+    ).toBe(false);
   });
 
   // THE SAME TOKEN, NOT A SECOND IDEA, which is the whole point of the line it

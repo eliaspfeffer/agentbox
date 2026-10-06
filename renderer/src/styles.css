@@ -5193,50 +5193,22 @@ a.set-ghost { text-decoration: none; display: inline-block; }
 }
 
 /* ==========================================================================
-   THE NEW PROJECT CARD
-   ========================================================================== It
-   is the new-task card with one line instead of a page: same width, same type,
-   same footer sentence, same button, same sharp corner. NOTHING HERE INVENTS A
-   LOOK, and every value below is the one the approved drawing was measured at
-   (`scripts/shot-project.mjs`), tokens only, no literal colour and no new
-   typeface.
-*/
-.np-name {
-  width: 100%; box-sizing: border-box;
-  background: none; border: none; outline: none;
-  color: var(--text); font-family: inherit; font-size: 15px; line-height: 1.55;
-  padding: 18px 18px 16px; text-align: left;
-}
-.np-name::placeholder { color: var(--text-faint); }
+   THE NEW PROJECT CARD IS GONE (w-33e1c968f0, 2026-10-05)
+   ==========================================================================
+   It was the new-task card with one line instead of a page: a name typed, a
+   sentence with the folder in it as a dotted word, one button. Its CSS stood
+   here: .np-name, .np-sentence, .np-clauses, .np-word, .np-refused.
 
-/* The sentence under it, which is the whole of "Where's its code?". One line of
-   English, one clickable phrase in it, and the button on the right: the same
-   footer grammar the new-task card already taught the hand. */
-.np-sentence {
-  display: flex; align-items: center; gap: 14px;
-  padding: 9px 14px 10px 18px; border-top: 1px solid var(--line);
-  text-align: left;
-}
-/* The clause is a button so the folder can be chosen from the keyboard as well
-   as the mouse, but it must not LOOK like one: the dotted words inside it are
-   the affordance, exactly as in the new-task card's footer. */
-.np-clauses {
-  flex: 1; min-width: 0; font: inherit; font-size: 13px; line-height: 21px;
-  color: var(--text-faint); background: none; border: none; padding: 0;
-  text-align: left; cursor: pointer;
-}
-.np-clauses:focus-visible { outline: none; }
-.np-sentence .dock-send:disabled { opacity: 0.42; cursor: default; background: none; }
-/* Dotted, never a border: a border plus padding makes the box taller than the
-   words beside it and the baseline of the whole line breaks. That is the same
-   law the new-task card's `.compose-word` is written under. */
-.np-word {
-  display: inline-block; font: inherit; color: var(--text-dim);
-  text-decoration: underline dotted var(--line-strong);
-  text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: pointer;
-}
-.np-clauses:hover .np-word,
-.np-clauses:focus-visible .np-word { color: var(--text); text-decoration-color: var(--text-faint); }
+   The card proposed `<parent>/<name>` and created that folder on Make it,
+   which put an empty ~/dev/agentbox on a tester's Mac while their clone sat in
+   ~/agentbox. Three rounds of drawings for a clearer picker all read as
+   confusing, so making a project is the Mac's own folder window now and draws
+   nothing of ours at all. Deleted rather than left here greying over, because
+   dead rules with a long note above them read as a card somebody can bring
+   back. If one ever is wanted, it goes on `.modal.compose` like every other
+   card, which is what tests/skin-grounds.test.mjs still holds.
+*/
+
 
 /* The drawn ROW was visually unappealing, so there is no row. The
    heading the list already has gets a small +, which is where a hand looks and
@@ -5398,15 +5370,17 @@ a.set-ghost { text-decoration: none; display: inline-block; }
    is 41 away from it and carries the lake's blue. NO BLUR AND NO WASH ON TOP.
    Both are ways of half-showing what is behind, and the requirement is
    completely opaque. A blur on an opaque fill also costs a compositing layer for an effect
-   that cannot be seen. ONE RULE, TWO CARDS: NewProject renders `modal compose
-   np-card`, so the new-project card is covered by this selector and cannot
-   drift away from the new-task card it was drawn as. Do not narrow this
-   selector to `.compose:not(.np-card)` without redrawing both. A flat fill is
+   that cannot be seen. ONE RULE, EVERY CARD: anything drawn as a card here renders
+   `modal compose`, so it is covered by this selector and cannot drift away
+   from the new-task card they are all drawn as. Do not narrow this selector
+   per card without redrawing all of them. (The new-project card was the second
+   one here until w-33e1c968f0 deleted it; making a project is the Mac's own
+   folder window now and draws nothing.) A flat fill is
    also what makes the two agree for free: every earlier candidate that carried
    the photograph gave the 232px card and the 104px card two different pictures.
    THE PALETTE CAME NEXT, AND IT TAKES THE SAME TOKEN. Its own block is below.
    It renders `modal compose rules-card`, so it is covered by this selector for
-   the same reason np-card is, and it took this token rather than a second idea,
+   the same reason the rest are, and it took this token rather than a second idea,
    exactly as the paragraph below said it would have to. THE REST OF THE MODALS
    HAVE NOT MOVED. Settings and snooze were not in scope, and connect went
    out with the cloud cut. The block at the top of this section still says why
@@ -6295,12 +6269,10 @@ a.set-ghost { text-decoration: none; display: inline-block; }
    skimmed.
 */
 .fr-note.fr-refused { color: var(--text); }
-/* The New Project card's version of the same. Under the sentence there, since
-   that card's sentence is the control itself and cannot be replaced. */
-.np-refused {
-  margin: 0; padding: 0 18px 12px; font-size: 13px; line-height: 1.5;
-  color: var(--text); text-align: left;
-}
+/* The new project card had its own version of this line, under the sentence,
+   because that card's sentence was the control itself. The card went with
+   w-33e1c968f0 and the sentence goes to the toast now, so the rule went with
+   it. This one, the setup's, stays: the walk still has a screen to say it on. */
 /* --- THE FOLDER SCREEN, REBUILT (w-ec62ab6b38, 2026-09-28) ---------------
    The question as the heading, one line under it, then a list of the folders
    the user already runs agents in. The card is the intro pictures' glass, so the
@@ -8487,7 +8459,8 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
    open, which is a browser tab. It is the same card the other modals are, so
    it takes the same tokens rather than a second idea: `--film-strong` for the
    rows and never `--control-face`, which is a white film and shows up as a
-   plain white slab on the light theme. The block at .np-card says the rest.
+   plain white slab on the light theme. The `:root[data-skin] .modal.compose`
+   block says the rest.
 */
 .fp-card {
   width: min(560px, 92vw);
