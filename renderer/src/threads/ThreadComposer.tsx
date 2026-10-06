@@ -46,12 +46,12 @@ import { LAST_PRODUCT_KEY } from '../compose-project';
 import { practiceRefusal, noProjectYet } from '../compose-says';
 import { defaultModelFor, engineModelLabel, readLastModel, writeLastModel, type ModelChoice } from '../models';
 import { defaultEffortFor, effortChoicesFor, effortPicked, effortShown, readLastEffort, writeLastEffort } from '../effort';
-import { engineThisMacOffers, readLastEngine, writeLastEngine } from '../engines';
+import { readLastEngine, startingEngine, writeLastEngine } from '../engines';
 import { repeatPresets } from '../components/When';
 import { fitMenu } from '../keep-in-window';
 import {
   allModels, findPeople, harnessFields, laterHint, momentFromWords, mondayMorning, moreCount,
-  joinNames, landsIn, placeholderFor, projectsOffered, projectSwatch, recentModels, sameModel,
+  joinNames, placeholderFor, projectsOffered, projectSwatch, recentModels, sameModel,
   sharingFields, startingProject, startingVisibility, startingChosen, teammates, threadMessage, tomorrowMorning, chosenWords, VISIBILITY_ROWS,
   type Harness, type ModelPick, type Visibility,
 } from './composer-rules';
@@ -196,10 +196,11 @@ export function ThreadComposer({
   /* ------------------------------ model --------------------------------- */
   const engineRows = engines?.length ? engines : [ENGINES[0]];
   const codexOffered = engineRows.some((e) => e.id === 'codex');
+  const claudeOffered = engineRows.some((e) => e.id === 'claude');
   const codexDefault = codexModelDefault ?? null;
   const modelOpts = { codexModels, codexDefault };
   const remembered = (): ModelPick => {
-    const engine: Harness = engineThisMacOffers(readLastEngine(), engineRows) === 'codex' ? 'codex' : 'claude';
+    const engine: Harness = startingEngine(readLastEngine(), engines);
     return { engine, model: readLastModel(undefined, engine, codexDefault) ?? defaultModelFor(engine, codexDefault) };
   };
   const [pick, setPick] = useState<ModelPick>(remembered);
@@ -207,7 +208,9 @@ export function ThreadComposer({
   // the rule the old card followed: a word this Mac cannot run is not held.
   useEffect(() => {
     if (pick.engine === 'codex' && !codexOffered) setPick({ engine: 'claude', model: readLastModel(undefined, 'claude') ?? defaultModelFor('claude') });
-  }, [codexOffered]);
+    // And the other way (w-db6f5e331e): a Mac with Codex and no Claude Code.
+    if (pick.engine === 'claude' && !claudeOffered && codexOffered) setPick({ engine: 'codex', model: readLastModel(undefined, 'codex', codexDefault) ?? defaultModelFor('codex', codexDefault) });
+  }, [codexOffered, claudeOffered]);
   const [effort, setEffort] = useState<string | null>(() => readLastEffort(undefined, pick.engine));
   const pickModel = (p: ModelPick) => {
     setPick(p);
@@ -226,10 +229,10 @@ export function ThreadComposer({
   };
   const labelOf = (p: ModelPick) => engineModelLabel(p.engine, p.model, modelOpts);
   const recent = useMemo(
-    () => recentModels(items, { codexModels, codexDefault, codexOffered }),
-    [items, codexModels, codexDefault, codexOffered],
+    () => recentModels(items, { codexModels, codexDefault, codexOffered, claudeOffered }),
+    [items, codexModels, codexDefault, codexOffered, claudeOffered],
   );
-  const every = useMemo(() => allModels({ codexModels, codexOffered }), [codexModels, codexOffered]);
+  const every = useMemo(() => allModels({ codexModels, codexOffered, claudeOffered }), [codexModels, codexOffered, claudeOffered]);
   const more = moreCount(recent, every);
 
   /* ------------------------------ menus --------------------------------- */
@@ -396,7 +399,21 @@ export function ThreadComposer({
     if (!canSend || !person) return;
     setSending(true);
     setError(null);
-    const res = await api.teamMessage(extra.length ? [person.id, ...also] : person.id, text.trim());
+    // THE LEVEL GOES WITH THE WORDS (w-7ba439c883): it decides where the
+    // message sits in the inbox it lands in. Only on the first message of a
+    // conversation, which is the main process's rule, not this card's.
+    //
+    // A LEVEL NOBODY PICKED IS NOT SENT, and the chip reads Medium either way.
+    // The two land in the same place, because an unsent level is composeItem's
+    // 0 and the inbox reads 0 as Medium. What it keeps is the other Mac's own
+    // reading of the message (main/message-priority.mjs): a level the sender
+    // chose is theirs and is left alone, and a message nobody ranked is still
+    // sorted there rather than arriving flat.
+    const res = await api.teamMessage(
+      extra.length ? [person.id, ...also] : person.id,
+      text.trim(),
+      prio ? priorityValueOf(prio) : undefined,
+    );
     if (!res.ok) {
       setError(`Not sent: ${res.error ?? 'the team cloud did not answer.'}`);
       setSending(false);
@@ -485,10 +502,14 @@ export function ThreadComposer({
         </button>
         <span className="tc-sep" />
         <div className="tc-cols">
-          <div className="tc-col">
-            <span className="tc-menu-head">{engineLabel('claude')}</span>
-            {every.claude.map(modelRow)}
-          </div>
+          {/* Only a column with rows (w-db6f5e331e): a Mac without Claude
+              Code drew an empty CLAUDE CODE heading here. */}
+          {every.claude.length > 0 && (
+            <div className="tc-col">
+              <span className="tc-menu-head">{engineLabel('claude')}</span>
+              {every.claude.map(modelRow)}
+            </div>
+          )}
           {every.codex.length > 0 && (
             <div className="tc-col">
               <span className="tc-menu-head">{engineLabel('codex')}</span>
@@ -565,6 +586,20 @@ export function ThreadComposer({
         </button>
       ))}
     </div>
+  );
+
+  /* ONE CHIP, DRAWN IN BOTH BARS (w-7ba439c883). A task and a message both
+     carry a level now, so the trigger is written once here rather than twice in
+     the bars below: two copies of the same four words is how the composer and
+     the reply dock drifted apart the first time (components/Priority.tsx). */
+  const priorityChip = (
+    <span className="tc-anchor" ref={anchor('priority')}>
+      <button type="button" data-trigger className={`tc-chip ${open === 'priority' ? 'open' : ''}`} title="Priority"
+        aria-haspopup="listbox" aria-expanded={open === 'priority'} onClick={() => toggle('priority')} onKeyDown={triggerKeys('priority')}>
+        <PrioGlyph id={prioShown} />{priorityLabelOf(prioShown)}
+      </button>
+      {open === 'priority' && priorityMenu}
+    </span>
   );
 
   // WHO SEES IT: three rows, and Chosen people turns the menu into the same
@@ -770,13 +805,14 @@ export function ThreadComposer({
 
         {person ? (
           <div className="tc-bar">
-            {/* WHERE IT GOES, NOT WHO SEES IT (w-a8e752a9f2). "Only you and
-                Maya see this." sat directly under a To field reading Maya, so
-                it was the second place on the card saying the same thing. The
-                corner keeps a line rather than going bare, and that line now
-                says the thing the card does not: a message to a teammate
-                becomes a thread in their inbox. */}
-            <span className="tc-only">{landsIn(group.map((p) => firstName(p)))}</span>
+            {/* HOW URGENT IT IS, AND NOTHING ELSE (w-7ba439c883, approved
+                2026-10-05). The corner used to carry "Goes to Maya's inbox.",
+                which was put there because a bare corner reads as a control
+                that failed to draw; with the chip in it the corner is not bare,
+                and the sentence was saying what the To field one line above
+                already says. The chip is the task card's own, because a message
+                lands in a list sorted by the same four words. */}
+            {priorityChip}
             <span className="tc-send solo">
               <button type="button" className="tc-send-main" disabled={!canSend} onClick={() => void send()} title="Send · ⌘↵">
                 Send <kbd>⌘↵</kbd>
@@ -793,13 +829,7 @@ export function ThreadComposer({
               </button>
               {open === 'project' && projectMenu}
             </span>
-            <span className="tc-anchor" ref={anchor('priority')}>
-              <button type="button" data-trigger className={`tc-chip ${open === 'priority' ? 'open' : ''}`} title="Priority"
-                aria-haspopup="listbox" aria-expanded={open === 'priority'} onClick={() => toggle('priority')} onKeyDown={triggerKeys('priority')}>
-                <PrioGlyph id={prioShown} />{priorityLabelOf(prioShown)}
-              </button>
-              {open === 'priority' && priorityMenu}
-            </span>
+            {priorityChip}
             {team && (
               <span className="tc-anchor" ref={anchor('visibility')}>
                 <button type="button" data-trigger className={`tc-chip ${open === 'visibility' ? 'open' : ''}`} title="Who sees it"

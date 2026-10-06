@@ -71,6 +71,16 @@ export function inMyInbox(item, product, me) {
   return runnerOf(item, product) === me;
 }
 
+// A CONVERSATION WHERE YOU SPOKE LAST IS DONE FOR YOU (w-57a202a968), until
+// the other person writes again and `inMyInbox` brings it back. Without it a
+// message you answered was on no tab and no column: out of your inbox by the
+// rule above, never In progress, and not Done because its status is not done.
+// Her words: "It's not supposed to leave the board; it's supposed to go in Done."
+export function iSpokeLast(item, product, me) {
+  if (!me || !product?.team?.direct || item?.status === 'done') return false;
+  return lastSpeaker(item) === me;
+}
+
 // A REPLY HANDS A PERSON-TO-PERSON ROW TO THE OTHER PERSON, so a conversation
 // goes back and forth between two inboxes instead of sitting in both. Returns
 // who it goes to, or null when a reply changes nothing about whose it is.
@@ -92,10 +102,36 @@ export function handedOnByReply(item, product, me) {
 const A_TEAMMATE_MAY_SET = ['problem', 'progress', 'solution', 'blockedBy', 'blocks', 'assignee'];
 // The status rides too: a new message reopens a conversation put away, and a
 // message record never starts an agent (mayRunHere).
-const IN_A_MESSAGE_ALSO = ['title', 'body', 'answer', 'people', 'status'];
+//
+// AND A REACTION, which is the chips under a message (w-560647d4db). It is on
+// this list rather than the one above because it is only ever drawn in a
+// conversation, and because an unrecognised delta on an ordinary shared task
+// would be a teammate writing a field nothing there reads. It cannot start an
+// agent: `STARTS_A_RUN` above names the four fields that can, and a reaction
+// touches none of them, so a chip never puts the row in anybody's inbox.
+const IN_A_MESSAGE_ALSO = ['title', 'body', 'answer', 'people', 'status', 'react'];
+// AND THE LEVEL THE SENDER PICKED, ON THE OPENING LINE ALONE (w-7ba439c883).
+// A message now carries how urgent its sender thought it was, and that number
+// decides where it sits in the inbox it lands in, so it has to survive the
+// pull. It may not become a way to re-rank a row afterwards, though: the level
+// rides the line that MAKES the row and no other.
+//
+// `kind` is how that line is known. Only a row's first line sets it, and a
+// teammate may not set it here at all, so it is a marker rather than a field:
+// it is read, then dropped with everything else that is not allowed.
+//
+// WHAT THIS DOES NOT STOP, said plainly: a teammate who forges a line carrying
+// a kind can still re-rank the one conversation the two of you share. They can
+// already rewrite that row's title, body, answer and status (above), so this
+// opens no row that was closed to them, and nothing outside a conversation is
+// reachable either way.
+const WHEN_A_MESSAGE_OPENS = ['priority'];
+const opensARow = (patch) => 'kind' in patch;
 export function whatATeammateMaySet(line, { direct = false } = {}) {
   if (!line || typeof line !== 'object' || !line.patch || typeof line.patch !== 'object') return null;
-  const allowed = direct ? [...A_TEAMMATE_MAY_SET, ...IN_A_MESSAGE_ALSO] : A_TEAMMATE_MAY_SET;
+  const allowed = direct
+    ? [...A_TEAMMATE_MAY_SET, ...IN_A_MESSAGE_ALSO, ...(opensARow(line.patch) ? WHEN_A_MESSAGE_OPENS : [])]
+    : A_TEAMMATE_MAY_SET;
   const kept = {};
   for (const field of allowed) if (field in line.patch) kept[field] = line.patch[field];
   const patch = pickFields(kept);

@@ -486,8 +486,13 @@ export const api = {
   async teamSync(): Promise<TeamCallResult> { return teamCall(() => window.zero!.teamSync()); },
   // A task somebody gave you: to an agent (on your Mac), keep it, or hand it back.
   async teamRoute(p: { product: string; id: string; route: 'agent' | 'me' | 'back' }): Promise<TeamCallResult> { return teamCall(() => window.zero!.teamRoute(p)); },
-  // A MESSAGE TO A PERSON (people get messages, never tasks).
-  async teamMessage(to: string | string[], body: string): Promise<TeamCallResult> { return teamCall(() => window.zero!.teamMessage({ to, body })); },
+  // A chip put on or taken off one message. `on` is the uid of the ledger line
+  // the message was written as (w-560647d4db).
+  async teamReact(p: { product: string; id: string; on: string; emoji: string; off?: boolean }): Promise<TeamCallResult> { return teamCall(() => window.zero!.teamReact(p)); },
+  // A MESSAGE TO A PERSON (people get messages, never tasks), at the level the
+  // sender picked. The level counts on the first message of a conversation and
+  // is ignored after, which is the main process's rule (main/team/index.mjs).
+  async teamMessage(to: string | string[], body: string, priority?: number): Promise<TeamCallResult> { return teamCall(() => window.zero!.teamMessage({ to, body, priority })); },
   // An edit to a thread's summary, visibility or priority, made in place.
   async threadEdit(product: string, id: string, patch: ThreadEditPatch): Promise<{ ok: boolean; error?: string }> {
     if (useFixtures || !window.zero?.threadEdit) return { ok: true };

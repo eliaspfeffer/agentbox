@@ -2915,9 +2915,27 @@ body {
 .dock-send:hover { background: var(--wash-strong); border-color: var(--text-faint); }
 .dock-send:active { transform: translateY(1px); }
 
-/* `relative` is what the peek card below hangs off. It changes nothing about
-   the strip's own box. */
-.opt-strip { border-bottom: 1px solid var(--line); flex-shrink: 0; position: relative; }
+/* THE OFFER IS A BLOCK IN THE THREAD NOW, NOT A LID ON THE REPLY CARD
+   (w-560647d4db). It used to be the top edge of the dock, so one hairline along
+   its bottom was the whole of its box: everything else around it was the card.
+   Standing at the foot of its own turn it needs a box of its own, and it takes
+   the one the threads a thread filed already wear directly above it
+   (components/threads-made.css), because they are two halves of the same
+   moment: here is what I did, here is what I need from you.
+
+   `relative` is what the peek card below hangs off. */
+.opt-strip {
+  margin: 22px 0 6px; border: 1px solid var(--line); border-radius: var(--radius);
+  flex-shrink: 0; position: relative;
+}
+/* THE ONE PLACE IT IS STILL A LID ON THE REPLY CARD: a document full screen,
+   where the pane's body is off the screen and this dock is all there is
+   (components/Focus.tsx, `offerInDock`). There it wears what it always wore —
+   the card's own top edge — because a bordered box with margins floating inside
+   the card is a second card inside the first. */
+.dock-card > .opt-strip {
+  margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+}
 
 /* THE OPTION UNDER THE POINTER, IN FULL. The chosen version opens above and
    nothing moves. `bottom: 100%` puts it entirely outside the strip's box, so the strip
@@ -2965,23 +2983,16 @@ body {
    the first line when it wraps instead of floating at the middle of a two-line
    block.
 */
-.opt-head-ask { align-items: flex-start; padding: 11px 10px 7px 16px; }
+/* THE RIGHT-HAND PADDING IS THE ROWS' OWN NOW. It was 10px to leave the chevron
+   its 24px box; with the fold gone (w-2e13752a85) the ask would have ended 6px
+   short of every option underneath it, and the straight right edge is most of
+   what makes the block read as one thing. */
+.opt-head-ask { align-items: flex-start; padding: 11px 16px 7px 16px; }
 .opt-head-ask span {
   font-size: 12.5px; text-transform: none; letter-spacing: 0;
   color: var(--text); font-weight: 600; line-height: 1.4;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-/* The chevron was centred against a 10.5px line. Against a 12.5px one it needs
-   a couple of pixels back to read as level with the first line of the ask. */
-.opt-head-ask .opt-collapse { margin-top: -2px; }
-.opt-collapse {
-  margin-left: auto; display: grid; place-items: center; width: 24px; height: 24px;
-  border: none; background: transparent; color: var(--text-faint); border-radius: var(--radius);
-  cursor: pointer; transition: color 0.15s, background 0.15s;
-}
-.opt-collapse:hover { color: var(--text); background: var(--wash); }
-.opt-collapse svg { width: 14px; height: 14px; transition: transform 0.18s; }
-.opt-collapse svg.flipped { transform: rotate(180deg); }
 .opt-row {
   display: flex; gap: 10px; align-items: baseline; width: 100%; text-align: left;
   background: transparent; border: none; font: inherit; color: var(--text-dim);
@@ -2996,7 +3007,13 @@ body {
   border-radius: var(--radius); padding: 0.5px 6px; flex-shrink: 0; position: relative; top: -1px;
 }
 .opt-row.selected .opt-key { border-color: var(--text-faint); color: var(--text); }
-.opt-text { flex: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* THE WORDS TAKE THE ROOM THEY NEED AND NO MORE (w-2e13752a85). This was
+   `flex: 1`, which pushed "recommended" to the far right edge, and with the
+   chevron gone that made the right-hand column a stripe of air with one word
+   floating in it against an empty heading: "there's too much white space on the
+   top right side which looks weird because of the recommended." Nothing is
+   right-aligned in this block now, so there is no column to look empty. */
+.opt-text { flex: 0 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .opt-text strong { color: var(--text); }
 
 /* A LINK IN AN OPTION IS THE SAME BLUE AS EVERY OTHER LINK IN THE APP.Nothing
@@ -5176,50 +5193,22 @@ a.set-ghost { text-decoration: none; display: inline-block; }
 }
 
 /* ==========================================================================
-   THE NEW PROJECT CARD
-   ========================================================================== It
-   is the new-task card with one line instead of a page: same width, same type,
-   same footer sentence, same button, same sharp corner. NOTHING HERE INVENTS A
-   LOOK, and every value below is the one the approved drawing was measured at
-   (`scripts/shot-project.mjs`), tokens only, no literal colour and no new
-   typeface.
-*/
-.np-name {
-  width: 100%; box-sizing: border-box;
-  background: none; border: none; outline: none;
-  color: var(--text); font-family: inherit; font-size: 15px; line-height: 1.55;
-  padding: 18px 18px 16px; text-align: left;
-}
-.np-name::placeholder { color: var(--text-faint); }
+   THE NEW PROJECT CARD IS GONE (w-33e1c968f0, 2026-10-05)
+   ==========================================================================
+   It was the new-task card with one line instead of a page: a name typed, a
+   sentence with the folder in it as a dotted word, one button. Its CSS stood
+   here: .np-name, .np-sentence, .np-clauses, .np-word, .np-refused.
 
-/* The sentence under it, which is the whole of "Where's its code?". One line of
-   English, one clickable phrase in it, and the button on the right: the same
-   footer grammar the new-task card already taught the hand. */
-.np-sentence {
-  display: flex; align-items: center; gap: 14px;
-  padding: 9px 14px 10px 18px; border-top: 1px solid var(--line);
-  text-align: left;
-}
-/* The clause is a button so the folder can be chosen from the keyboard as well
-   as the mouse, but it must not LOOK like one: the dotted words inside it are
-   the affordance, exactly as in the new-task card's footer. */
-.np-clauses {
-  flex: 1; min-width: 0; font: inherit; font-size: 13px; line-height: 21px;
-  color: var(--text-faint); background: none; border: none; padding: 0;
-  text-align: left; cursor: pointer;
-}
-.np-clauses:focus-visible { outline: none; }
-.np-sentence .dock-send:disabled { opacity: 0.42; cursor: default; background: none; }
-/* Dotted, never a border: a border plus padding makes the box taller than the
-   words beside it and the baseline of the whole line breaks. That is the same
-   law the new-task card's `.compose-word` is written under. */
-.np-word {
-  display: inline-block; font: inherit; color: var(--text-dim);
-  text-decoration: underline dotted var(--line-strong);
-  text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: pointer;
-}
-.np-clauses:hover .np-word,
-.np-clauses:focus-visible .np-word { color: var(--text); text-decoration-color: var(--text-faint); }
+   The card proposed `<parent>/<name>` and created that folder on Make it,
+   which put an empty ~/dev/agentbox on a tester's Mac while their clone sat in
+   ~/agentbox. Three rounds of drawings for a clearer picker all read as
+   confusing, so making a project is the Mac's own folder window now and draws
+   nothing of ours at all. Deleted rather than left here greying over, because
+   dead rules with a long note above them read as a card somebody can bring
+   back. If one ever is wanted, it goes on `.modal.compose` like every other
+   card, which is what tests/skin-grounds.test.mjs still holds.
+*/
+
 
 /* The drawn ROW was visually unappealing, so there is no row. The
    heading the list already has gets a small +, which is where a hand looks and
@@ -5381,15 +5370,17 @@ a.set-ghost { text-decoration: none; display: inline-block; }
    is 41 away from it and carries the lake's blue. NO BLUR AND NO WASH ON TOP.
    Both are ways of half-showing what is behind, and the requirement is
    completely opaque. A blur on an opaque fill also costs a compositing layer for an effect
-   that cannot be seen. ONE RULE, TWO CARDS: NewProject renders `modal compose
-   np-card`, so the new-project card is covered by this selector and cannot
-   drift away from the new-task card it was drawn as. Do not narrow this
-   selector to `.compose:not(.np-card)` without redrawing both. A flat fill is
+   that cannot be seen. ONE RULE, EVERY CARD: anything drawn as a card here renders
+   `modal compose`, so it is covered by this selector and cannot drift away
+   from the new-task card they are all drawn as. Do not narrow this selector
+   per card without redrawing all of them. (The new-project card was the second
+   one here until w-33e1c968f0 deleted it; making a project is the Mac's own
+   folder window now and draws nothing.) A flat fill is
    also what makes the two agree for free: every earlier candidate that carried
    the photograph gave the 232px card and the 104px card two different pictures.
    THE PALETTE CAME NEXT, AND IT TAKES THE SAME TOKEN. Its own block is below.
    It renders `modal compose rules-card`, so it is covered by this selector for
-   the same reason np-card is, and it took this token rather than a second idea,
+   the same reason the rest are, and it took this token rather than a second idea,
    exactly as the paragraph below said it would have to. THE REST OF THE MODALS
    HAVE NOT MOVED. Settings and snooze were not in scope, and connect went
    out with the cloud cut. The block at the top of this section still says why
@@ -6278,12 +6269,10 @@ a.set-ghost { text-decoration: none; display: inline-block; }
    skimmed.
 */
 .fr-note.fr-refused { color: var(--text); }
-/* The New Project card's version of the same. Under the sentence there, since
-   that card's sentence is the control itself and cannot be replaced. */
-.np-refused {
-  margin: 0; padding: 0 18px 12px; font-size: 13px; line-height: 1.5;
-  color: var(--text); text-align: left;
-}
+/* The new project card had its own version of this line, under the sentence,
+   because that card's sentence was the control itself. The card went with
+   w-33e1c968f0 and the sentence goes to the toast now, so the rule went with
+   it. This one, the setup's, stays: the walk still has a screen to say it on. */
 /* --- THE FOLDER SCREEN, REBUILT (w-ec62ab6b38, 2026-09-28) ---------------
    The question as the heading, one line under it, then a list of the folders
    the user already runs agents in. The card is the intro pictures' glass, so the
@@ -7679,6 +7668,43 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
    not a screen in a walk.
 */
 .modal.ia-card { width: 560px; padding: 26px 30px 22px; }
+/* THE ONE TICKED LIST (w-db6f5e331e), as drawn in Option A: one line per
+   conversation, the tick, the name, and where it came from and when on the
+   right; one button under it. */
+.modal.ia-card.ia-one { width: 720px; }
+.ia-one .ia-line { margin: 0 0 14px; }
+.ia-lines { max-height: min(56vh, 520px); border-top: 1px solid var(--line); }
+.ia-agent.ia-line-row {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 11px 2px; border-bottom: 1px solid var(--line); --tick-line: 14px;
+}
+.ia-line-row .ia-box { margin-top: 0; }
+.ia-line-row .ia-agent-name {
+  flex: 1; min-width: 0; font-size: 14.5px; line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left;
+}
+.ia-line-meta { flex: none; font-size: 12px; color: var(--text-faint); white-space: nowrap; }
+.ia-foot.ia-foot-one { justify-content: flex-start; gap: 10px; padding-top: 18px; }
+/* As drawn: the press is the one filled thing on the card, on the left, and a
+   kept line wears the same fill in its tick. */
+.ia-foot-one .dock-send {
+  margin-left: 0; padding: 8px 16px; font-size: 14px; font-weight: 500;
+  background: var(--accent); border-color: var(--accent); color: var(--on-solid);
+}
+.ia-foot-one .dock-send:hover { background: var(--accent); border-color: var(--accent); filter: brightness(1.08); }
+.ia-foot-one .dock-send kbd {
+  color: color-mix(in srgb, var(--on-solid) 80%, transparent); background: none;
+  border-color: color-mix(in srgb, var(--on-solid) 35%, transparent);
+}
+.ia-foot-one .dock-send:disabled { background: none; border-color: var(--line-strong); color: var(--text-faint); filter: none; }
+.ia-line-row .ia-box.is-all { background: var(--accent); border-color: var(--accent); color: var(--on-solid); }
+.ia-not-now {
+  font: inherit; font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: none; color: var(--text-dim); cursor: pointer;
+}
+.ia-not-now:hover { background: var(--wash); color: var(--text); }
+.ia-not-now:disabled { opacity: 0.5; cursor: default; }
 .ia-head {
   margin: 0 0 8px; font-size: 21px; line-height: 1.24; font-weight: 500;
   letter-spacing: -0.01em; color: var(--text);
@@ -8433,7 +8459,8 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
    open, which is a browser tab. It is the same card the other modals are, so
    it takes the same tokens rather than a second idea: `--film-strong` for the
    rows and never `--control-face`, which is a white film and shows up as a
-   plain white slab on the light theme. The block at .np-card says the rest.
+   plain white slab on the light theme. The `:root[data-skin] .modal.compose`
+   block says the rest.
 */
 .fp-card {
   width: min(560px, 92vw);

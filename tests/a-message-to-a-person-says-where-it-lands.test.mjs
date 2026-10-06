@@ -15,10 +15,13 @@
 // goes. A message to a teammate is not a chat bubble, it becomes a thread in
 // their inbox, which is the one app-specific fact about it.
 //
-// Nothing else can truthfully go there. A message to a person carries no
-// project, priority, model or schedule: api.teamMessage(to, text) takes words
-// and people and nothing else, so a chip for any of them would draw a field
-// the send throws away.
+// THE NEW MESSAGE CARD HAS SINCE LEFT THIS RULE BEHIND (w-7ba439c883,
+// 2026-10-05), and it left it by satisfying it. A message now carries a level,
+// so that card's corner holds the priority chip; the corner is not bare, and
+// the sentence beside it was repeating the To field one line above. The reply
+// box has no level to carry — a level belongs to the message that OPENS a
+// conversation — so the line is still the whole of its corner, and that is the
+// half of this file that still pins something.
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -79,11 +82,14 @@ describe('the line that was removed', () => {
 });
 
 describe('the corner is filled, not emptied', () => {
-  it('the new message card draws the line on a message to a person', () => {
+  // The card's corner is filled by the priority chip now, and what pins that is
+  // tests/a-message-to-a-teammate-carries-the-level-you-picked. What this one
+  // still holds is that the corner never went empty on the way.
+  it('the new message card draws a control where the line was', () => {
     const src = read('renderer/src/threads/ThreadComposer.tsx');
-    // The person branch of the bottom bar, which holds only this and Send.
-    expect(src).toMatch(/landsIn\(/);
-    expect(src).toMatch(/tc-only/);
+    const from = src.indexOf('{person ? (');
+    const bar = src.slice(from, src.indexOf('\n        ) : (', from));
+    expect(bar).toMatch(/\{priorityChip\}/);
   });
 
   it('the reply box draws it on a conversation with a person', () => {

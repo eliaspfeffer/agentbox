@@ -48,6 +48,7 @@ import * as agents from './agents.mjs';
 import { findAgentFolders, readAgentFiles, readFolderAgents } from './agent-files.mjs';
 import { readSessionThreads } from './agent-sessions.mjs';
 import { readCodexThreads } from './codex-threads.mjs';
+import { markImported } from '../shared/agent-import.mjs';
 import { codexIdOf, importChoice, isCodexImportRow, isNotImportedRow } from '../shared/codex-import.mjs';
 import { checkProjectFolder } from '../shared/project-folder-check.mjs';
 import { openFreshUser } from './fresh-user.mjs';
@@ -659,7 +660,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   ipcMain.handle('zero:team-sync', teamCall(() => team.syncNow()));
   // A MESSAGE TO A PERSON (approved 2026-10-01: people get messages, never
   // tasks). main/team/index.mjs keeps it between the two of them.
-  ipcMain.handle('zero:team-message', teamCall(({ to, body }) => team.message(to, body)));
+  ipcMain.handle('zero:team-message', teamCall(({ to, body, priority }) => team.message(to, body, priority)));
   // AN EDIT TO A THREAD, MADE IN PLACE from its summary: the summary's lines,
   // who sees it, its priority and what it is linked to. Works with or without a
   // team, since every thread has a summary.
@@ -689,6 +690,22 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
       store.teamPatch(product, id, { assignee: to });
     } else throw new Error(`unknown route ${route}`);
     supervisor.wake();
+  }));
+
+  // PUT A REACTION ON ONE MESSAGE, OR TAKE YOURS BACK (w-560647d4db). Only in a
+  // conversation between people, because a chip is only ever drawn in one: the
+  // sync carries a reaction across in a message record and nowhere else
+  // (shared/team-rules.mjs), so one written anywhere else would sit on this Mac
+  // alone and look to its author like it had reached somebody.
+  ipcMain.handle('zero:team-react', teamCall(async ({ product, id, on, emoji, off }) => {
+    const me = teamMe();
+    if (!me) throw new Error('sign in first');
+    const row = store.readItem(product, id);
+    if (!row) throw new Error('that conversation is gone');
+    const here = store.listProducts().find((p) => p.slug === product);
+    if (!here?.team?.direct) throw new Error('reactions are for a conversation with a teammate');
+    store.react(product, id, { on, emoji, off });
+    await team.syncNow();
   }));
 
   ipcMain.handle('zero:compose', (_e, { product, title, body, kind, priority, runAt, start, labels, engine, model, effort, assignee, due, visibility, visibleTo }) => {
@@ -1033,7 +1050,11 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   ipcMain.handle('zero:agent-threads', () => {
     const threads = readAllThreads();
     lastThreads = threads;
-    return { threads };
+    // Each one already in the inbox says so, and the card leaves it out
+    // (w-db6f5e331e). The walk's folder suggestions still read all of them.
+    let items = [];
+    try { items = store.listItems(); } catch { items = []; }
+    return { threads: markImported(threads, items) };
   });
 
   // So this is `zero:import-agents` with the agent taken out of it. No ticks are
