@@ -30,6 +30,7 @@ import { activitySummary, keepActivityKeyLocal } from '../activity-summary';
 import { actWhen, actWords } from '../act-line';
 import { herTurnEnds, herTurnStarts } from '../her-turns';
 import { holdAtBottom } from '../thread-bottom';
+import { typedParts } from '../typed-message';
 import { clock, dayHeading } from '../thread-history';
 import { chatLayout } from '../team/chat-layout';
 import { ChatFold } from '../team/ChatFold';
@@ -409,9 +410,15 @@ export function Thread({ events, omitted = 0, onWhole, onOpenOrigin, onSendNow, 
                     message from a person — yours and a teammate's, which is
                     every `who: 'you'` event — is drawn as typed, line breaks
                     and all (`.msg-body.typed` in the stylesheet). The agent
-                    writes markdown on purpose and keeps it. */}
+                    writes markdown on purpose and keeps it.
+                    EXCEPT WHAT THE APP WROTE INTO IT: a picture or a file
+                    attached to the message is a markdown line the app added,
+                    and drawn as typed a pasted screenshot read as its own
+                    brackets (typed-message.ts). Those lines are drawn. */}
                 {e.who === 'you'
-                  ? <div className="msg-body typed">{e.text ?? ''}</div>
+                  ? <div className="msg-body typed">{typedParts(e.text ?? '').map((p, k, all) => ('embed' in p
+                    ? <div key={k} className="typed-embed">{md(p.embed)}</div>
+                    : all.length === 1 ? p.text : <span key={k}>{p.text}</span>))}</div>
                   : <div className="msg-body">{md(e.text ?? '')}</div>}
               </div>
             )}

@@ -4292,6 +4292,12 @@ img.app-mark { opacity: 1; border-radius: 0; }
    command is one long unbroken word to a browser, and without it a search
    command runs off the side of the column instead of wrapping. */
 .msg-body.typed { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A picture or file the app attached to a typed message is markdown, drawn as
+   one; its own spacing, not the typed breaks around it, sets it apart. */
+.msg-body.typed .typed-embed { white-space: normal; margin: 10px 0; }
+.msg-body.typed .typed-embed:first-child { margin-top: 0; }
+.msg-body.typed .typed-embed:last-child { margin-bottom: 0; }
+.msg-body.typed .typed-embed > p { margin: 0; }
 .msg.same { margin-top: -14px; }
 
 /* THE USER'S MESSAGES OPEN CHAPTERS (w-250047ba5f, 2026-09-26). The user's
