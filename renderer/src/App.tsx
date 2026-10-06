@@ -51,7 +51,7 @@ import { Snooze } from './components/Snooze';
 import { announcesUpdate, isUpdateRow } from './update-row';
 // Inbox zero is `IdlePage`.
 import { IdlePage } from './components/IdlePage';
-import { ago, itemOptions, offerIsLive, parseRepeat } from './format';
+import { ago, closesTheTask, itemOptions, offerIsLive, parseRepeat } from './format';
 import {
   hasDraft, restoreDraft, restoreFailedDraft, readComposeDraft, restoreComposeDraft, saveDraft, clearComposeDraft,
   type SentDraft, type ComposeDraft,
@@ -3572,6 +3572,9 @@ export default function App() {
     if (item.agent || isTroubleRow(item) || isUpdateRow(item)) return;
     const option = itemOptions(item).find((o) => o.n === n);
     if (!option) return;
+    // "Close this task" is done here, the way E does it, and never sent: as a
+    // reply it would reopen the row and start a run to close it (format.ts).
+    if (closesTheTask(option.text)) { await markDone(item); return; }
     // A PICK IS A REPLY, so it reopens a finished thread exactly as typing one
     // does (statusForReply). It did not, and nothing showed that: the answer
     // was written to the ledger, the toast said it had been sent, and the
@@ -3594,7 +3597,7 @@ export default function App() {
         await api.answer({ product: item.product, id: item.id, ...withdrawReply(item.status) });
       } });
     }, `Option ${option.n} → ${item.productName}`, undefined, undefined, { product: item.product, id: item.id }, undid);
-  }, [deferCommit, pushUndo]);
+  }, [deferCommit, pushUndo, markDone]);
 
   /* ------------------------ the task she just wrote ------------------------ */
   // THE TASK SHE JUST MADE IS WHAT Z TAKES BACK.
