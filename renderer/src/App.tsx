@@ -10,7 +10,8 @@ import { chromeIsUp, CHROME_HOLD, CHROME_REACH } from './full-screen-chrome';
 // views, Cmd+K is the palette, S snoozes, Z undoes. Everything derives from the snapshot; every action is one IPC call
 // followed by a refetch.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { cursorIndex, cursorMark, type CursorMark } from './cursor-follows';
 import { flushSync } from 'react-dom';
 import { readySkin, swapLook } from './look-switch';
 import type { AnswerMode, Approval, PermissionMode, Product, RepeatRule, RepeatShape, Snapshot, ThreadCard, ThreadStateWord, View, WorkItem } from './types';
@@ -2217,7 +2218,18 @@ export default function App() {
   const boardOrder = useMemo(() => (boardCols ? boardWalk(boardCols) : null), [boardCols]);
   const list = search !== null ? (hits ?? []).map((h) => h.item) : boardOrder ?? displayedBox;
 
-  const current: WorkItem | undefined = list[Math.min(selected, Math.max(0, list.length - 1))];
+  // THE PLACE FOLLOWS ITS THREAD when the list changes under a cursor nobody
+  // moved (./cursor-follows). Worked out here, in the render, so the board
+  // never sees one frame of the wrong card and scrolls to it.
+  const drawnAt = useRef<CursorMark | null>(null);
+  // Not while the keyboard is on a teammate's card: moving `selected` would
+  // take it off that card.
+  const cursor = cursorIndex({ list, selected, last: cardSel ? null : drawnAt.current });
+  const current: WorkItem | undefined = list[cursor];
+  useLayoutEffect(() => {
+    drawnAt.current = cursorMark(list, cursor);
+    if (cursor !== selected) setSelected(cursor);
+  });
   // WHAT J AND K WALK: every thread drawn, a teammate's included
   // (threads/walk-rules.ts). With nobody else picked it is `list` itself.
   const stops = useMemo(
