@@ -37,6 +37,16 @@ fast-forward writes no commit and so walked straight past the commit guards: on
 nowhere else. That folder follows the public main on its own:
 `git fetch origin && git merge --ff-only refs/remotes/origin/main`.
 
+## MAIN WAS REWRITTEN ON 2026-10-06
+
+The public `main` was rewritten from its first commit to take two real account
+ids out of a test, so every commit got a new id. A branch cut before that will
+not merge ("refusing to merge unrelated histories"). Never force that merge with
+`--allow-unrelated-histories`: it brings the ids back, and the public check
+refuses any push that carries the old history. Carry your own commits across
+instead, then ship as usual:
+`git fetch origin && git rebase --onto refs/remotes/origin/main $(git merge-base HEAD 99b8b0e5b04fbbc976003851ebdbb7bb58c2bf89)`
+
 ## NO WORKER EVER DRIVES THE USER'S OWN BROWSER
 
 Claude Code can attach a session to the browser a person is signed into with
