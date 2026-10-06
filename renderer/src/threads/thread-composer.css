@@ -129,6 +129,11 @@
 .tc-send > button:focus-visible { outline: 1px solid var(--text); outline-offset: 1px; }
 .tc-send > button:disabled { opacity: 0.45; cursor: default; }
 .tc-send kbd { font: 11px var(--mono); opacity: 0.75; }
+/* A MESSAGE'S BAR IS THE CHIP AND SEND (w-7ba439c883), with nothing between
+   them: the line that used to fill that gap is gone, so Send takes the space
+   itself rather than sitting against the chip. The task bar needs no such rule,
+   because its paperclip already carries one. */
+.tc-send.solo { margin-left: auto; }
 .tc-only { flex: 1; min-width: 0; font-size: 13px; color: var(--text-faint); }
 
 /* WHY SEND IS OFF (w-f8d123be62). It takes the corner the attach clip would

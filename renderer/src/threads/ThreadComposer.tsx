@@ -51,7 +51,7 @@ import { repeatPresets } from '../components/When';
 import { fitMenu } from '../keep-in-window';
 import {
   allModels, findPeople, harnessFields, laterHint, momentFromWords, mondayMorning, moreCount,
-  joinNames, landsIn, placeholderFor, projectsOffered, projectSwatch, recentModels, sameModel,
+  joinNames, placeholderFor, projectsOffered, projectSwatch, recentModels, sameModel,
   sharingFields, startingProject, startingVisibility, startingChosen, teammates, threadMessage, tomorrowMorning, chosenWords, VISIBILITY_ROWS,
   type Harness, type ModelPick, type Visibility,
 } from './composer-rules';
@@ -399,7 +399,21 @@ export function ThreadComposer({
     if (!canSend || !person) return;
     setSending(true);
     setError(null);
-    const res = await api.teamMessage(extra.length ? [person.id, ...also] : person.id, text.trim());
+    // THE LEVEL GOES WITH THE WORDS (w-7ba439c883): it decides where the
+    // message sits in the inbox it lands in. Only on the first message of a
+    // conversation, which is the main process's rule, not this card's.
+    //
+    // A LEVEL NOBODY PICKED IS NOT SENT, and the chip reads Medium either way.
+    // The two land in the same place, because an unsent level is composeItem's
+    // 0 and the inbox reads 0 as Medium. What it keeps is the other Mac's own
+    // reading of the message (main/message-priority.mjs): a level the sender
+    // chose is theirs and is left alone, and a message nobody ranked is still
+    // sorted there rather than arriving flat.
+    const res = await api.teamMessage(
+      extra.length ? [person.id, ...also] : person.id,
+      text.trim(),
+      prio ? priorityValueOf(prio) : undefined,
+    );
     if (!res.ok) {
       setError(`Not sent: ${res.error ?? 'the team cloud did not answer.'}`);
       setSending(false);
@@ -572,6 +586,20 @@ export function ThreadComposer({
         </button>
       ))}
     </div>
+  );
+
+  /* ONE CHIP, DRAWN IN BOTH BARS (w-7ba439c883). A task and a message both
+     carry a level now, so the trigger is written once here rather than twice in
+     the bars below: two copies of the same four words is how the composer and
+     the reply dock drifted apart the first time (components/Priority.tsx). */
+  const priorityChip = (
+    <span className="tc-anchor" ref={anchor('priority')}>
+      <button type="button" data-trigger className={`tc-chip ${open === 'priority' ? 'open' : ''}`} title="Priority"
+        aria-haspopup="listbox" aria-expanded={open === 'priority'} onClick={() => toggle('priority')} onKeyDown={triggerKeys('priority')}>
+        <PrioGlyph id={prioShown} />{priorityLabelOf(prioShown)}
+      </button>
+      {open === 'priority' && priorityMenu}
+    </span>
   );
 
   // WHO SEES IT: three rows, and Chosen people turns the menu into the same
@@ -777,13 +805,14 @@ export function ThreadComposer({
 
         {person ? (
           <div className="tc-bar">
-            {/* WHERE IT GOES, NOT WHO SEES IT (w-a8e752a9f2). "Only you and
-                Maya see this." sat directly under a To field reading Maya, so
-                it was the second place on the card saying the same thing. The
-                corner keeps a line rather than going bare, and that line now
-                says the thing the card does not: a message to a teammate
-                becomes a thread in their inbox. */}
-            <span className="tc-only">{landsIn(group.map((p) => firstName(p)))}</span>
+            {/* HOW URGENT IT IS, AND NOTHING ELSE (w-7ba439c883, approved
+                2026-10-05). The corner used to carry "Goes to Maya's inbox.",
+                which was put there because a bare corner reads as a control
+                that failed to draw; with the chip in it the corner is not bare,
+                and the sentence was saying what the To field one line above
+                already says. The chip is the task card's own, because a message
+                lands in a list sorted by the same four words. */}
+            {priorityChip}
             <span className="tc-send solo">
               <button type="button" className="tc-send-main" disabled={!canSend} onClick={() => void send()} title="Send · ⌘↵">
                 Send <kbd>⌘↵</kbd>
@@ -800,13 +829,7 @@ export function ThreadComposer({
               </button>
               {open === 'project' && projectMenu}
             </span>
-            <span className="tc-anchor" ref={anchor('priority')}>
-              <button type="button" data-trigger className={`tc-chip ${open === 'priority' ? 'open' : ''}`} title="Priority"
-                aria-haspopup="listbox" aria-expanded={open === 'priority'} onClick={() => toggle('priority')} onKeyDown={triggerKeys('priority')}>
-                <PrioGlyph id={prioShown} />{priorityLabelOf(prioShown)}
-              </button>
-              {open === 'priority' && priorityMenu}
-            </span>
+            {priorityChip}
             {team && (
               <span className="tc-anchor" ref={anchor('visibility')}>
                 <button type="button" data-trigger className={`tc-chip ${open === 'visibility' ? 'open' : ''}`} title="Who sees it"
