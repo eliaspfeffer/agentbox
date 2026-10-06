@@ -17,7 +17,7 @@ import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { TeamContext } from '../team/people';
 import {
   ALSO, ANCHOR, BOUNDS, BREATHE_AFTER_MS, COACHED, COPY, FLOOR, FLOOR_OF, TEAM_TAB_NAMES, TEXT_MAX, TEXT_MIN, teamTab,
-  HELD_EVENTS, LINE_H, SLAB_OF, TEXT_GAP, UNDER,
+  HELD_EVENTS, LINE_H, NOT_THE_APP, SLAB_OF, TEXT_GAP, UNDER,
   anyAgents, clearOf, finishCard, forgetAgentsWhileLookingAgain,
   forgetFoldersWhileLookingAgain, keepSecondRead, keyName, keyToken, padFor,
   practising, pressAtWrongRow, pressCounts, readAgentsAgain, roomFor, strayClick,
@@ -972,15 +972,27 @@ function Ringed({
      anybody back to, so a swallowed click would be a click that did nothing
      with nothing to look at, which is the dead app this is trying not to be.
   */
+  // AND A LOOK-AROUND CARD HOLDS EVERY CLICK ON THE APP (2026-10-06). Its ring
+  // is something to look at, the list or the tabs, not something to press:
+  // a click on a thread inside the ringed list opened it, and the walk was
+  // left with no way back. Hers: "I clicked into a page prematurely and got
+  // stuck here". Only its own Next moves it on, so a click anywhere else
+  // nudges the card the way a wrong key does.
+  const lookOnly = useRef(false);
+  lookOnly.current = !!say.next;
   useEffect(() => {
     if (!hold) return undefined;
     const on = (e: Event) => {
       if (!drawn.current) return;
+      const el = e.target as Element | null;
       const live = [
         firstOf(selector),
         ...(also ?? []).flatMap((s) => [...document.querySelectorAll(s)]),
       ];
-      if (!strayClick(e.target, live)) return;
+      const stray = lookOnly.current
+        ? !!el && typeof el.closest === 'function' && !el.closest(NOT_THE_APP) && pressCounts(el)
+        : strayClick(e.target, live);
+      if (!stray) return;
       e.stopPropagation();
       e.stopImmediatePropagation();
       // ONE PRESS OF THE MOUSE IS ONE ANSWER. All five events are the same

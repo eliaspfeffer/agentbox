@@ -654,6 +654,11 @@ export class Supervisor {
     return signInFiles({ folder: key === 'default' ? null : key, home });
   }
 
+  /** Whether one Codex login has a sign-in on disk at all. Only the file's time is read. */
+  _codexSignedIn(profile) {
+    return signInStamp(this._signInFilesFor(`codex:${profile}`)) > 0;
+  }
+
   // Whether some OTHER login on this account's engine could run once her hand
   // has lifted what time alone would lift, i.e. one not waiting on a person.
   _anotherAccountCanRun(account) {
@@ -3004,7 +3009,11 @@ export class Supervisor {
     // every account resting, and a pick of `undefined` there would hand a spawn
     // a CLAUDE_CONFIG_DIR of undefined rather than her default login.
     const live = this._liveProfilesFor(which);
-    const pool = live.length ? live : ['default'];
+    // A CODEX ACCOUNT STILL BEING ADDED IS NOT WHERE WORK GOES. Add account
+    // lists the new home before its sign-in finishes, and the round-robin
+    // handed it the very first thread while the signed-in one sat idle.
+    const signedIn = which === 'codex' ? live.filter((p) => this._codexSignedIn(p)) : live;
+    const pool = signedIn.length ? signedIn : live.length ? live : ['default'];
     this._rr = this._rr ?? {};
     this._rr[which] = ((this._rr[which] ?? 0) + 1) % pool.length;
     return pool[this._rr[which]];
@@ -3555,6 +3564,20 @@ export class Supervisor {
     return !!this._firstRunUntil && now < this._firstRunUntil;
   }
 
+  /**
+   * A THREAD THEY SENT THEMSELVES ENDS THE HOLD. The walk's own thread carries
+   * FIRST_RUN_LABEL and is answered by the app, so the hold has nothing left
+   * to protect once a real one arrives. Without this, a thread sent while the
+   * walk was still up, or left half finished, read "Queued" for up to twenty
+   * minutes with nothing running anywhere.
+   */
+  sentByThem(labels = []) {
+    if (!this.firstRunHolding()) return;
+    if ((labels ?? []).includes(FIRST_RUN_LABEL)) return;
+    this._firstRunUntil = 0;
+    this.onChange?.();
+  }
+
   /* `pauseProduct` stopped one project and left the rest of the fleet running.
      It is gone (w-d19d6d387c): "paused" did not say whether it stopped the
      session, nobody knew the feature existed, and nothing had ever used it.
@@ -3614,6 +3637,11 @@ export class Supervisor {
       const me = process.env.AGENTBOX_PERSON_ID;
       queued = this.store.listItems(nowTs)
         .filter((i) => mayRunHere(i, productBySlug.get(i.product), me))
+        // NOTHING RUNS IN THE PRACTICE PROJECT, so nothing there is waiting
+        // its turn. The tick skips these (`noWorkHere`) and `spawnWorker`
+        // refuses them; this list did neither, so a thread sent there read
+        // "Queued. An agent starts on it as soon as one is free" for ever.
+        .filter((i) => productBySlug.get(i.product)?.practice !== true)
         .filter((i) => !this.sessions.has(i.id) && i.status === 'open'
           && this.store.isDue(i, nowTs))
         // The walk's own example task is NOT queued: nothing is going to spawn

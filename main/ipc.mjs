@@ -743,6 +743,8 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
       // fields cannot be corrected separately.
       model: supervisor.modelOffered(engine, model),
     });
+    // A real thread ends the walk's hold on agents (`Supervisor#sentByThem`).
+    supervisor.sentByThem(labels);
     // AND LOOK AT IT NOW. Composing used to write the line and stop, so the
     // task sat in the store until the next fifteen second tick: measured
     // 2026-08-24, median 7.0 seconds and up to 15.0 before the spawn was even

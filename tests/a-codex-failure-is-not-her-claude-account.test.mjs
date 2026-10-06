@@ -30,7 +30,7 @@
 // keeps its own books, and its books are not her Claude account's.
 
 import { describe, it, expect, afterAll } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Supervisor } from '../main/supervisor.mjs';
@@ -92,11 +92,19 @@ describe('a codex session runs on a codex home, never a claude one', () => {
 
   // Not needed yet — she has one Codex login — and read here so that a second
   // one is a config key rather than a change to the method.
+  // Both signed in: a login still being added is skipped until its sign-in
+  // lands (tests/a-thread-that-says-queued-is-one-an-agent-will-start).
   it('would use a second codex login if she ever had one', () => {
-    const s = bare({ codexProfiles: ['default', '/Users/her/.codex-second'] });
+    const first = mkdtempSync(join(tmpdir(), 'codex-first-'));
+    const second = mkdtempSync(join(tmpdir(), 'codex-second-'));
+    writeFileSync(join(first, 'auth.json'), '{}');
+    writeFileSync(join(second, 'auth.json'), '{}');
+    const s = bare({ codexHome: first, codexProfiles: ['default', second] });
     const picked = new Set();
     for (let i = 0; i < 10; i += 1) picked.add(s._pickProfile('codex'));
-    expect(picked).toEqual(new Set(['default', '/Users/her/.codex-second']));
+    expect(picked).toEqual(new Set(['default', second]));
+    rmSync(first, { recursive: true, force: true });
+    rmSync(second, { recursive: true, force: true });
   });
 
   // A quarantined Codex login leaves the Codex rotation, exactly as a
