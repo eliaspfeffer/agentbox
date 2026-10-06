@@ -11,6 +11,8 @@
 // moment is tested rather than eyeballed. The screens are in
 // components/PlanSetup.tsx.
 
+import { NAME } from '../../shared/product-name.mjs';
+
 export type Engine = 'claude' | 'codex';
 export type Plan = 'claude' | 'codex' | 'both';
 export type Phase = 'idle' | 'checking' | 'installing' | 'signing-in' | 'ready' | 'failed';
@@ -27,7 +29,7 @@ export interface EngineSetupState {
 
 export const COPY = {
   planHead: 'Which AI plan do you pay for?',
-  planLede: 'Your agents run on your own plan. Pick it and Agentbox sets everything up.',
+  planLede: `Your agents run on your own plan. Pick it and ${NAME} sets everything up.`,
   claude: 'Claude',
   claudePlans: 'Pro, Max or a team plan',
   chatgpt: 'ChatGPT',
@@ -37,7 +39,7 @@ export const COPY = {
   notSure: 'I am not sure, check this Mac for me',
   checking: 'Checking this Mac…',
   nothingHere: 'Nothing is set up on this Mac yet. Pick the plan you pay for above.',
-  privacy: "You sign in on Claude's or OpenAI's own page. Agentbox never sees your password.",
+  privacy: `You sign in on Claude's or OpenAI's own page. ${NAME} never sees your password.`,
 
   setupHead: (name: string) => `Setting up ${name}.`,
   setupLedeWait: 'One step needs you: approve the sign-in in your browser.',

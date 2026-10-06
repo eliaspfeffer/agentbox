@@ -359,14 +359,18 @@ async function createWindow() {
   // line this Mac writes says who wrote it and shared projects stay in sync.
   // Its session file sits beside the store, encrypted with the Mac's own
   // keychain-backed key, so each store root is its own signed-in person.
+  // THE KEYCHAIN IS ONLY ASKED WHEN THERE IS A TEAM (2026-10-06): asking it at
+  // every launch put a "Agentbox Safe Storage" password prompt in front of the
+  // single-person app, which has no sign-in to keep
+  // (tests/the-installed-app-is-the-single-person-app.test.mjs).
   const cloudConfig = loadCloudConfig(appDir, { packaged: app.isPackaged });
-  const encrypt = safeStorage.isEncryptionAvailable() ? (text) => safeStorage.encryptString(text) : null;
-  const decrypt = safeStorage.isEncryptionAvailable() ? (buf) => safeStorage.decryptString(buf) : null;
   const team = cloudConfig ? createTeamService({
     session: supabaseSession({
       cloudConfig,
       sessionFile: path.join(config.storeRoot, '.team-session'),
-      encrypt, decrypt,
+      ...(safeStorage.isEncryptionAvailable()
+        ? { encrypt: (text) => safeStorage.encryptString(text), decrypt: (buf) => safeStorage.decryptString(buf) }
+        : { encrypt: null, decrypt: null }),
       packaged: app.isPackaged,
       openExternal: (url) => shell.openExternal(url),
     }),

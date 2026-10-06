@@ -3203,6 +3203,15 @@ export class Supervisor {
    * used when nobody has said, which is also the number it already gets on
    * every Mac whose Claude plan is Max or unreadable.
    */
+  /**
+   * THE MACHINE AUTOMATIC SIZES FOR. Empty means this one: `autoAgents` reads
+   *  the memory and the cores itself. A test names a machine here, so what it
+   *  proves does not change with the computer the suite runs on (GitHub's
+   *  runner came out at one agent and turned three claims red, 2026-10-05). */
+  _machine() {
+    return {};
+  }
+
   _slotsPerAccount(engine = DEFAULT_ENGINE) {
     const planSpokeForClaude = engineOf(engine) !== DEFAULT_ENGINE && !!this.config.planSlotsFrom;
     // AUTOMATIC ASKS THE MACHINE (w-e5225b62ba), and the whole of the change is
@@ -3221,6 +3230,7 @@ export class Supervisor {
     // not about this Mac, so Automatic may only ever come out at or under it.
     if (this.config.agentsAuto && !planSpokeForClaude) {
       const total = autoAgents({
+        ...this._machine(),
         gated: !!this.config.memoryGate,
         nudge: this.config.agentsNudge,
       });

@@ -31,18 +31,37 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const made = [];
 afterEach(() => { for (const s of made.splice(0)) s.stopMemoryGate?.(); });
 
+// THE MACHINE IS PINNED, NOT READ (2026-10-05, w-9f6975906c). These read the
+// computer the suite ran on, so they passed on a 16 GB, 10 core Mac (4 agents,
+// 6 with the memory check) and went red on GitHub's runner, which came out at 1
+// in every case: "expected 1 to be greater than 1", "expected 1 to be 2",
+// "expected 1 to be +0" (run 37404391585). One agent cannot carry more, split
+// or come down a step, so the three claims were untestable there. Every
+// supervisor here is told it is that same 16 GB, 10 core Mac.
+const MAC = { memBytes: 16 * 1024 ** 3, cores: 10 };
+
 /** A supervisor with `accounts` Claude logins and the config under test. */
-function sup(config = {}, accounts = 1) {
+function sup(config = {}, accounts = 1, machine = MAC) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-agents-'));
   const store = { listItems: () => [], listProducts: () => [], isDue: () => true, readItem: () => null };
   const s = new Supervisor({ storeRoot: tmp, home: tmp, ...config }, store, root, tmp, tmp);
   s._liveProfilesFor = () => Array.from({ length: accounts }, (_, i) => (i ? `p${i}` : 'default'));
   s.engineChoices = () => [{ id: 'claude' }];
+  s._machine = () => machine;
   made.push(s);
   return s;
 }
 
-const here = (gated, nudge = 0) => autoAgents({ gated, nudge });
+const here = (gated, nudge = 0) => autoAgents({ ...MAC, gated, nudge });
+
+describe('the machine Automatic asks about', () => {
+  it('is the one the supervisor is told about, so the answer does not depend on where it runs', () => {
+    const tiny = sup({ agentsAuto: true, memoryGate: true }, 1, { memBytes: 7 * 1024 ** 3, cores: 2 });
+    const mac = sup({ agentsAuto: true, memoryGate: true }, 1, MAC);
+    expect(tiny._slotsPerAccount('claude')).toBe(1);
+    expect(mac._slotsPerAccount('claude')).toBe(6);
+  });
+});
 
 describe('with Automatic on', () => {
   it('asks the machine, not the config', () => {
