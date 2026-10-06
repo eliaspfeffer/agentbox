@@ -37,44 +37,50 @@ export function ThreadsMade({ rows, onOpen, onApprove, label }: {
   label?: string;
 }) {
   if (!rows.length) return null;
-  // THE STATE WORDS STAY IN ONE COLUMN. Photographed with four filed threads,
-  // two of them approvable: the two rows carrying a button pushed their
-  // "NEEDS YOU" 104px left of the two that did not, and the straight right-hand
-  // edge is most of what makes this list read as a table. So where ANY row has
-  // a press, every row keeps the room for one. A list with no press anywhere
-  // reserves nothing and is drawn exactly as it was before.
+  // THE PRESS IS THE STATE WORD, NOT A SECOND THING BESIDE IT (2026-10-05).
   //
-  // The spacer is the button itself, hidden, rather than a width written down
-  // twice: a number copied into the CSS would go stale the first time the word
-  // on the button or its padding changed, and the symptom would be a column
-  // one pixel out that nobody would think to look for.
-  const anyApprove = !!onApprove && rows.some((r) => r.approve);
+  // It first shipped as a button to the right of the word, which meant every
+  // row without one had to hold the room for one so the column stayed straight,
+  // and the words ended 104px short of the right-hand edge: "look very
+  // unattractive. was more thinking in the place of needs you etc... Right now
+  // this button looks a little weird because of how much space there is."
+  //
+  // So a row waiting on you says APPROVE where it would have said NEEDS YOU.
+  // Nothing is reserved, nothing is said twice, and every row — word or press —
+  // ends at the same right-hand edge. The press wears the app's own square
+  // capitals in the accent, chosen off four drawings.
   return (
     <div className="made">
       {label && <div className="made-label">{label}</div>}
       <div className="made-list">
-        {rows.map((r) => (
-          <div className="made-row" key={r.id}>
-            <button type="button" className="made-open" onClick={() => onOpen(r.id)}>
-              <span className="made-title">{r.title}</span>
-              <span className={`made-state ${r.state ?? ''}`}>{stateWord(r.state)}</span>
-            </button>
-            {/* NAMED WITH THE THREAD IT WOULD START. Several rows in a list each
-                say "Approve", so the bare word tells a screen reader, and a
-                hovering cursor, nothing about which proposal it is. */}
-            {onApprove && r.approve ? (
-              <button
-                type="button"
-                className="made-approve"
-                aria-label={`Approve: ${r.title}`}
-                title={`Approve: ${r.title}`}
-                onClick={() => onApprove(r.id)}
-              >
-                Approve
+        {rows.map((r) => {
+          const press = !!onApprove && !!r.approve;
+          return (
+            <div className="made-row" key={r.id}>
+              {/* The word stays INSIDE the press that opens the thread, so on
+                  every row that carries no Approve the whole width of the row
+                  is still the way in. */}
+              <button type="button" className="made-open" onClick={() => onOpen(r.id)}>
+                <span className="made-title">{r.title}</span>
+                {!press && <span className={`made-state ${r.state ?? ''}`}>{stateWord(r.state)}</span>}
               </button>
-            ) : anyApprove && <span className="made-approve made-approve-room" aria-hidden="true">Approve</span>}
-          </div>
-        ))}
+              {/* NAMED WITH THE THREAD IT WOULD START. Several rows in a list
+                  each say "Approve", so the bare word tells a screen reader, and
+                  a hovering cursor, nothing about which proposal it is. */}
+              {press && (
+                <button
+                  type="button"
+                  className="made-approve"
+                  aria-label={`Approve: ${r.title}`}
+                  title={`Approve: ${r.title}`}
+                  onClick={() => onApprove!(r.id)}
+                >
+                  Approve
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
