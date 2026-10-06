@@ -1978,15 +1978,18 @@ export default function App() {
   // with a card reading "Press Tab or click All for the next one" and then
   // the opening card again on Needs you. The press that leaves the last real
   // tab ends the tour, wherever it lands.
+  //
+  // AND IN PROGRESS IS THE ONLY STOP SINCE ROUND TWO (2026-10-06). The look
+  // around names every tab before the first thread, so the tour now goes to
+  // the one place with a payoff, the agent she answered still working, and
+  // the press that leaves it ends the beat. Every persona tester and Codex
+  // named the five presses of Tab as the longest stretch of the walk.
   useEffect(() => {
     if (run?.step !== 'where') { toured.current = new Set(); return; }
-    if (view !== 'inbox' && view !== 'all') { toured.current.add(view); return; }
-    // EVERY TAB THE APP IS DRAWING, not a list of two written down here. With a
-    // row snoozed there are three to see, and the third is where the row she
-    // put off went, which is the same lesson as the other two.
-    if (tabOrder.some((v) => v !== 'inbox' && v !== 'all' && !toured.current.has(v))) return;
+    if (view === 'progress') { toured.current.add(view); return; }
+    if (!toured.current.has('progress')) return;
     setRun((r) => (r ? stepTo(r, 'board') : r));
-  }, [view, run?.step, tabOrder]);
+  }, [view, run?.step]);
 
 
   /* --------------------------------- search -------------------------------- */

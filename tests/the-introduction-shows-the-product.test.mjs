@@ -202,8 +202,10 @@ describe('the walk teaches the goal', () => {
     const listed = coach('unblock', 0);
     expect(listed.key).toBe('↵');
     const warns = `${listed.quiet}`.toLowerCase();
-    expect(warns).toContain('stopped');
-    expect(warns).toContain('stopped for good');
+    // Without the alarm since 2026-10-06 ("stopped for good" read as broken to
+    // four persona testers); the danger of marking it done is still the line.
+    expect(warns).toContain('waiting on your answer');
+    expect(warns).toContain('leaves it stuck');
     expect(listed.why).toBeUndefined();
     const opened = coach('unblock', 0, { opened: true });
     expect(opened.key).toBe('1');

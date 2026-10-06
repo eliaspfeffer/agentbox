@@ -1038,7 +1038,9 @@ function Ringed({
             top: geo.ring.y + geo.ring.h / 2,
             maxWidth: besideRing
               ? Math.max(240, window.innerWidth - (geo.ring.x + geo.ring.w + 26) - 40)
-              : Math.max(240, window.innerWidth - besideLeft(geo, besideOf) - 200),
+              // No wider than an ordinary card (2026-10-06): beside the tab
+              // strip it ran on across the header and over Search.
+              : Math.max(240, Math.min(TEXT_MAX + 60, window.innerWidth - besideLeft(geo, besideOf) - 200)),
           }}
           role="status"
         ><Card say={say} beat={beat} pointed={pointed} knock={knock} onNext={onNext} /></p>
@@ -2126,7 +2128,7 @@ export function Onboarding({
     // beside one of its tabs sits on the tabs after it, which is the "hints
     // covered the tabs" a persona test reported, so there the card goes under
     // the strip, and it names the tab as well as the key (2026-10-01).
-    const teamStrip = (run.step === 'where' || run.step === 'tabs') && typeof document !== 'undefined'
+    const teamStrip = run.step === 'where' && typeof document !== 'undefined'
       && !!document.querySelector('.th-bar .tm-tabs');
     const say = coach(run.step, run.sentAt ? now - run.sentAt : 0, {
       opened, view, picking, palette, board, left: beat?.length, tabs, replies: run.replies,
@@ -2207,11 +2209,18 @@ export function Onboarding({
         // cover: the overlap the rig prints as `overDock` is 0 by construction.
         // AND THE LOOK AROUND'S TABS CARD, for the tour's reason: under the
         // strip it printed over the first three thread titles (2026-10-06).
-        beside={((run.step === 'where' || run.step === 'tabs') && !teamStrip) || (run.step === 'command' && !!palette)}
-        besideRing={run.step === 'command' && !!palette}
+        // Beside the team strip too on the look around: its ring is the whole
+        // strip, so there is no later tab for the card to land on, only the
+        // empty space to the right of All.
+        beside={(run.step === 'where' && !teamStrip) || run.step === 'tabs' || (run.step === 'command' && !!palette) || run.step === 'answer'}
+        // AND THE ANSWER BEAT STANDS OFF THE REPLY BOX TO ITS RIGHT
+        // (2026-10-06). Above the box it covered the agent's answer, the newest
+        // thing in the thread and the one thing she is there to read: all four
+        // persona testers and Codex named it, on the shorter summary especially.
+        besideRing={(run.step === 'command' && !!palette) || run.step === 'answer'}
         // The tour's tabs are the sidebar's rows now, so the card stands off
         // the sidebar's right edge and holds one x for every press.
-        besideOf={run.step === 'where' || run.step === 'tabs' ? '.workspace-navigation, .tabs' : undefined}
+        besideOf={run.step === 'tabs' ? '.th-bar .tm-tabs, .workspace-navigation, .tabs' : run.step === 'where' ? '.workspace-navigation, .tabs' : undefined}
         boundsSel={BOUNDS[run.step]}
         // AND THE CARD GOES UNDER THE WHOLE PICKER, NOT UNDER THE LIST INSIDE
         // IT. The ring is on the options, which is what the press is about, but

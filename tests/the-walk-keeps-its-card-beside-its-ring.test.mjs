@@ -152,14 +152,19 @@ describe('the ⌘K beat', () => {
     // The strip rule would drop the card on top of the commands: it covered the
     // search field and the first row of the list it was talking about.
     const src = read('renderer/src/components/Onboarding.tsx');
-    expect(src).toContain("besideRing={run.step === 'command' && !!palette}");
+    expect(src).toContain("besideRing={(run.step === 'command' && !!palette) || run.step === 'answer'}");
     // `besideLeft` takes the bar to clear as an argument since 2026-08-28, so
     // the beat that teaches how a task ends can stand off its own buttons. The
     // palette branch is unchanged and this still fails if it is taken away.
     expect(src).toContain('left: besideRing ? Math.round(geo.ring.x + geo.ring.w + 26) : besideLeft(geo, besideOf),');
   });
 
-  it('puts the ending beat above its ring instead, and clears it by measuring', () => {
+  // AND SINCE 2026-10-06 THE BEAT THAT ENDS A THREAD STANDS TO THE RIGHT OF
+  // THE REPLY BOX, NOT ABOVE IT. Above it, the card covered the agent's answer,
+  // the newest message in the thread and the one thing she is there to read;
+  // all four persona testers and Codex named it on the shorter summary. To the
+  // right it sits over the summary panel's last rows instead.
+  it('stands the beat that ends a thread beside the reply box, clear of the answer', () => {
     // IT STOOD BESIDE `.focus-actions button` FROM 2026-08-28 TO 2026-09-01,
     // and both halves of that rule are gone. The buttons went first, when she
     // had them taken out of the reading pane on 2026-08-27, and the beat's own
@@ -174,8 +179,7 @@ describe('the ⌘K beat', () => {
     // card beside one tab sat on the tabs after it (2026-10-01). And the look
     // around's tabs card stands beside the same strip (2026-10-06): under it,
     // it printed over the first three thread titles.
-    expect(src).toContain("beside={((run.step === 'where' || run.step === 'tabs') && !teamStrip) || (run.step === 'command' && !!palette)}");
-    expect(src).not.toContain("run.step === 'answer' ||");
+    expect(src).toContain("beside={(run.step === 'where' && !teamStrip) || run.step === 'tabs' || (run.step === 'command' && !!palette) || run.step === 'answer'}");
     expect(src).not.toContain('.focus-actions button');
     expect(src).toContain('const all = [...document.querySelectorAll(sel)];');
   });
@@ -235,6 +239,6 @@ describe('the tab strip', () => {
     expect(src).toContain('[...(teamTab(goingTo) ? [teamTab(goingTo) as string] : []), `.workspace-navigation [data-tab="${goingTo}"]`, `.tabs .tab[data-tab="${goingTo}"]`, ...ANCHOR.where ?? []]');
     expect(src).toContain("const goingTo = run.step === 'where' ? nextTab(tabs, view) : null;");
     // And the card stands off the sidebar's right edge on that beat.
-    expect(src).toContain("besideOf={run.step === 'where' || run.step === 'tabs' ? '.workspace-navigation, .tabs' : undefined}");
+    expect(src).toContain("besideOf={run.step === 'tabs' ? '.th-bar .tm-tabs, .workspace-navigation, .tabs' : run.step === 'where' ? '.workspace-navigation, .tabs' : undefined}");
   });
 });

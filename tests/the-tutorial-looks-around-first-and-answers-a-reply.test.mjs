@@ -118,10 +118,10 @@ describe('4. a reply on her first thread is answered', () => {
   it('tells her what to reply with, and that closing it is the other way', () => {
     const first = coach('answer', 0);
     expect(first.quiet).toContain('shorter');
-    expect(loud(first)).toBe('Click the reply box to ask for that, or press E to close it.');
-    // And once the change has come back, closing is the one thing left.
+    expect(loud(first)).toBe('Click the reply box to ask for that, or press E to mark it done.');
+    // And once the change has come back, marking it done is the one thing left.
     const after = coach('answer', 0, { replies: 1 });
-    expect(loud(after)).toBe('Press E to close it.');
+    expect(loud(after)).toBe('Press E to mark it done.');
     expect(coach('open', 0, { replies: 1 }).quiet).toContain('made the change');
     // The offer and the answer to it are the two practice strings.
     expect(PRACTICE_ANSWER).toContain('shorter');
@@ -215,8 +215,16 @@ describe('6. the board and the tab tour end where they should', () => {
     expect(app).toMatch(/if \(!boardSeen\.current\) return;/);
   });
 
-  it('does not make All a stop on the tab tour', () => {
-    expect(app).toMatch(/if \(view !== 'inbox' && view !== 'all'\) \{ toured\.current\.add\(view\); return; \}/);
-    expect(loud(coach('where', 0, { view: 'done', tabs: ['inbox', 'progress', 'snoozed', 'done', 'all'] }))).toBe('Press ⇥ to go on.');
+  // ROUND TWO: the look around names all four tabs before the first thread, so
+  // the tour after inbox zero is one stop, In progress, where the agent she
+  // answered is working. Every persona tester and Codex named the five presses
+  // of Tab as the longest stretch of the walk.
+  it('makes In progress the tab tour\'s one stop, and never All', () => {
+    expect(app).toMatch(/if \(view === 'progress'\) \{ toured\.current\.add\(view\); return; \}\s*\n\s*if \(!toured\.current\.has\('progress'\)\) return;/);
+    expect(loud(coach('where', 0, { view: 'progress', tabs: ['inbox', 'progress', 'snoozed', 'done', 'all'] }))).toBe('Press ⇥ or click another tab to go on.');
+    // Still the payoff on that stop: the agent she answered, working.
+    expect(coach('where', 0, { view: 'progress' }).quiet).toBe('The agent you answered is here, working without you.');
+    // And the look around is where Later and Done are said now.
+    expect(coach('tabs', 0).quiet).toMatch(/Later[\s\S]*Done/);
   });
 });

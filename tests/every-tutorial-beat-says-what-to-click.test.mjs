@@ -176,7 +176,8 @@ describe('every practice beat names something to click', () => {
   // and a regex for the absence of "click" would pass on a card that had lost
   // its key as well.
   it('leaves the two row beats on the key alone, and says so plainly', () => {
-    expect(loud(coach('clear', 0, { left: 2 }))).toBe('Press E to close it.');
+    // "Mark it done" since 2026-10-06, the word on the row's own chip.
+    expect(loud(coach('clear', 0, { left: 2 }))).toBe('Press E to mark it done.');
     expect(loud(coach('snooze', 0))).toBe('Press L to deal with it later.');
   });
 });

@@ -42,8 +42,14 @@ describe('1. the ordinary walk says exactly what it said before', () => {
     expect(tail('snoozed', strip)).toBe(' for the agent you answered.');
   });
 
-  it('sends In progress on to everything she closed', () => {
-    expect(tail('progress', strip)).toBe(' for everything you closed.');
+  // IN PROGRESS IS THE LAST STOP SINCE 2026-10-06, so it names no next tab:
+  // the look around before the first thread names all four, and the five
+  // presses of Tab here were the longest stretch of the walk to every persona
+  // tester and to Codex. Any tab ends the beat from here.
+  it('ends the tour on In progress, whatever the strip', () => {
+    for (const tabs of [strip, ['inbox', 'progress', 'done'], ['inbox', 'done', 'progress']]) {
+      expect(tail('progress', tabs)).toBe(' or click another tab to go on.');
+    }
   });
 
   it('sends Closed back to the inbox, and only that hop says come back', () => {
@@ -63,7 +69,6 @@ describe('2. and with no Scheduled tab it still says what is really next', () =>
 
   it('does not promise the one she put off when there is nowhere to put it', () => {
     expect(tail('inbox', strip)).toBe(' to see where it all went.');
-    expect(tail('progress', strip)).toBe(' for everything you closed.');
     expect(tail('done', strip)).toBe(' to come back.');
   });
 });
@@ -72,12 +77,11 @@ describe('3. the sentence is chosen by destination, not by position', () => {
   it('says come back from whichever tab is last, not from Closed', () => {
     // A strip that ends on In progress. The old copy had "once more to come
     // back" welded to the Closed card, so this hop said the wrong thing.
-    expect(tail('progress', ['inbox', 'done', 'progress'])).toBe(' to come back.');
     expect(tail('done', ['inbox', 'done', 'progress'])).toBe(' for the agent you answered.');
   });
 
   it('names Scheduled when Scheduled is what comes next', () => {
-    expect(tail('progress', ['inbox', 'progress', 'snoozed', 'done']))
+    expect(tail('done', ['inbox', 'done', 'snoozed', 'progress']))
       .toBe(' for the one you put off.');
   });
 

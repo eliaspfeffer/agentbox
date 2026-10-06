@@ -107,7 +107,10 @@ describe('3. a coaching card is two lines, everywhere in the walk', () => {
     // now the sentence describing the row, so it is read before the key rather
     // than after it.
     const listed = coach('unblock', 0);
-    expect(listed.quiet.toLowerCase()).toContain('stopped for good');
+    // Said without the alarm since 2026-10-06: "stopped for good" read to all
+    // four persona testers as something having broken. The danger is the same.
+    expect(listed.quiet.toLowerCase()).toContain('waiting on your answer');
+    expect(listed.quiet.toLowerCase()).toContain('marking it done leaves it stuck');
     expect(listed.key).toBe('↵');
   });
 

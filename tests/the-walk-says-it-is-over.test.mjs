@@ -128,7 +128,8 @@ describe('the three on beat eight say they are examples before they are opened',
     // whichever one the list drew first, and nothing anywhere saying which two
     // it meant.So it names ONE row, the way the two beats after it always have.
     const say = coach('clear', 0, { left: 2 });
-    expect(say.quiet).toBe('This one is finished. Z brings back anything you close.');
+    // "mark done" since 2026-10-06: the row's chip and the tab both say Done.
+    expect(say.quiet).toBe('This one is finished. Z brings back anything you mark done.');
     expect(say.key).toBe('E');
     expect(say.caps).toBe(2);
     expect(`${say.quiet} ${say.lead}`).not.toMatch(/repl/i);

@@ -1508,9 +1508,13 @@ export function coach(
     case 'tour':
       return say('This is your inbox. Each row is a thread, a job you gave an agent.',
         'Threads come back here when they are done or need you.', '↵', '', { next: true });
+    // AND ALL FOUR TABS ARE NAMED HERE SINCE THE SECOND ROUND (2026-10-06):
+    // the tab tour after inbox zero went down to one press, so this is where
+    // Later and Done are said. "In progress is agents at work" read as broken
+    // grammar to a persona tester and is gone.
     case 'tabs':
-      return say('These tabs sort your threads.',
-        'Needs you is waiting on you. In progress is agents at work.', '↵', '', { next: true });
+      return say('Later is what you put off, and Done is what you finished.',
+        'Needs you is what waits on you. In progress is what agents are doing.', '↵', '', { next: true });
     case 'make':
       // "Thread", not task, the word since w-ec62ab6b38 (2026-09-28).
       // AND IT NAMES THE BUTTON AS WELL AS THE KEY (2026-10-01). Somebody who
@@ -1518,7 +1522,10 @@ export function coach(
       // button is on the screen with those words on it.
       // AND THE QUIET LINE MOVED ON (2026-10-06): what a thread is was said
       // two cards earlier, on the look around.
-      return say('Now write one of your own.', 'Press ', 'N', ' or click New thread.');
+      // AND IT DOES NOT SAY "WRITE" (round two): the card opens with the words
+      // already in it, and four persona testers and Codex all tripped on being
+      // told to write something that was written for them.
+      return say('Now send one of your own. This first one is written for you.', 'Press ', 'N', ' or click New thread.');
     /* * AND THE GREY LINE IS GONE FROM THIS BEAT.
     */
     /* * WHO THE THREAD IS FOR, which is the card's first line and was the
@@ -1561,6 +1568,9 @@ export function coach(
       return sinceSent >= SLOW_AFTER_MS
         ? say('Your agent is running.',
           'Still reading. A bigger project takes longer than this one, and the answer will be here when it comes.')
+        // HERS, WORD FOR WORD (tests/the-first-task-is-not-an-agent). Two persona
+        // testers read "a few seconds" as a promise about real work in round two
+        // (2026-10-06); that is noted for her and the sentence is not touched.
         : say('Your agent is running.', 'It comes back in a few seconds.');
     /* * THREE "IT"S AND NOT ONE NOUN.
     */
@@ -1599,8 +1609,11 @@ export function coach(
     // thread is finished and closing it is the one move left.
     case 'answer':
       return ctx.replies
-        ? say('It is shorter now, so this one is finished.', 'Press ', 'E', ' to close it.')
-        : say('Your agent finished, and offers to make it shorter.', 'Click the reply box to ask for that, or press ', 'E', ' to close it.');
+        // "MARK IT DONE", NOT "CLOSE IT" (round two): the row's chip says Done,
+        // the tab says Done and the card said close, three words for one key
+        // to every persona tester. Done is the app's word (./done-word.ts).
+        ? say('It is shorter now, so this one is finished.', 'Press ', 'E', ' to mark it done.')
+        : say('Your agent finished, and offers to make it shorter.', 'Click the reply box to ask for that, or press ', 'E', ' to mark it done.');
     // THE THREE ARE EXAMPLES AND THE CARD HAS TO SAY SO.
     //
     // The old line was 'Three of these are waiting on you.' over 'Clear them.
@@ -1651,7 +1664,7 @@ export function coach(
       return say(
         ctx.left === 1
           ? 'This one is finished too.'
-          : 'This one is finished. Z brings back anything you close.',
+          : 'This one is finished. Z brings back anything you mark done.',
         // AND THIS BEAT NAMES NO CLICK, WHICH IS THE ONE PLACE THE ROUND OF
         // 2026-10-01 COULD NOT GO. Every other beat now says what to click as
         // well as what to press, because every other beat rings something the
@@ -1673,7 +1686,8 @@ export function coach(
         // and Mark done is a row in the three-dot menu inside an opened thread
         // (threads/ThreadMenu.tsx). Until the app grows one, the honest card is
         // the key alone. Same for `snooze` below.
-        'Press ', 'E', ' to close it.',
+        // "Mark it done" since round two, the word on the row's own chip.
+        'Press ', 'E', ' to mark it done.',
         { caps: 2 },
       );
     /* * ---------------------------------------------------------------------
@@ -1737,8 +1751,11 @@ export function coach(
         ? say(
           // AND THE STRIP IS THE CLICK (2026-10-01). The ring is round the
           // strip of options, so the first of them is already clickable.
-          'Your agent gave you three answers to pick from.',
-          'Press ', '1', ' or click the first answer to send it.',
+          // AND IT SAYS WHERE THE ANSWER GOES (round two, 2026-10-06). "Send
+          // it" read to two persona testers as emailing their team; the
+          // answer goes to the agent and nowhere else.
+          'Pick one and the agent carries on with it. Nothing goes to anyone else.',
+          'Press ', '1', ' or click the first answer.',
         )
         /*
          * AND THE WARNING IS IN THE QUIET LINE.
@@ -1754,8 +1771,14 @@ export function coach(
         // LOST HERE. That warning has nowhere else to live now the third line
         // is gone, and tests/the-coaching-card-is-two-lines asserts "stopped
         // for good" is on this card.
+        // AND THE DANGER IS SAID WITHOUT THE ALARM (round two, 2026-10-06).
+        // "An agent is stopped here. Closing it leaves it stopped for good."
+        // read to all four persona testers as something having broken, and
+        // "for good" sat badly beside the card that had just said Z brings
+        // back anything you close. The danger is the same: done on this row
+        // leaves the agent waiting forever.
         : say(
-          'An agent is stopped here. Closing it leaves it stopped for good.',
+          'This agent is waiting on your answer, and marking it done leaves it stuck.',
           'Press ', '↵', ' or click the row to open it.',
         );
     // AND CLEARING THEM GOES STRAIGHT ON TO ⌘K. The finish card says the same
@@ -1851,10 +1874,16 @@ export function coach(
          running with an empty inbox behind it. The quiet line names the thing
          she is looking at and the screen makes the point better than the
          sentence did; five words carry what the sentence added. */
+      // AND IT IS THE LAST STOP SINCE ROUND TWO (2026-10-06). The look around
+      // names all four tabs before the first thread, so walking Later and Done
+      // again here was the same lesson twice: every persona tester and Codex
+      // called the five presses of Tab the longest stretch of the walk. One
+      // press, to the payoff, and the next press goes on.
       if (ctx.view === 'progress') {
         return say(
           'The agent you answered is here, working without you.',
-          'Press ', cap, sends,
+          // Any tab ends the beat from here, so the click is any tab.
+          'Press ', cap, ' or click another tab to go on.',
           // AND THE THIRD LINE IS FOLDED IN RATHER THAN DROPPED.
         );
       }
@@ -1877,6 +1906,9 @@ export function coach(
       // told the goal, and the tutorial is the better place for it than the
       // intro. This is the moment she has just reached it, and the intro no
       // longer says it. The first sentence stays word for word in front of it.
+      // THE OPENING IS HERS, WORD FOR WORD (tests/the-walk-teaches-undo-snooze-
+      // and-notes). Three persona testers called "Great!" patronising in round
+      // two (2026-10-06); that is noted for her and the sentence is not touched.
       return say(
         'Great! Your inbox is now empty. That is inbox zero, and it is the goal.',
         'Press ', cap, `${or} to see where it all went.`,

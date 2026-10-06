@@ -187,7 +187,8 @@ describe('when the board beat ends', () => {
   it('is what the tour hands on to, rather than the palette', () => {
     // The tour's own effect used to step straight to `command`. If this goes
     // back the board beat is in every list above and still never drawn.
-    expect(app).toMatch(/!toured\.current\.has\(v\)\)\) return;\s*\n\s*setRun\(\(r\) => \(r \? stepTo\(r, 'board'\) : r\)\)/);
+    // The tour ends on leaving In progress since 2026-10-06.
+    expect(app).toMatch(/if \(!toured\.current\.has\('progress'\)\) return;\s*\n\s*setRun\(\(r\) => \(r \? stepTo\(r, 'board'\) : r\)\)/);
   });
 
   it('clears whatever is over the app and puts the walk on the inbox', () => {
