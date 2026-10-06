@@ -1,30 +1,23 @@
-// CODEX'S THREE MODES, TYPED, FOR THE SCREENS THAT DRAW THEM.
+// CODEX'S THREE MODES, FOR THE SCREENS THAT DRAW THEM.
 //
 // The list itself lives in `shared/codex-modes.mjs`, because main/ needs it too
-// and a second copy is how the picker and the run come to disagree. That file
-// is plain JavaScript and cannot carry a type, so this is the one place the
-// renderer states the shape, in the same spirit as `referenced-files.ts`.
+// and a second copy is how the picker and the run come to disagree.
 //
-// Nothing is redefined here. If a mode is added or renamed in the shared file
-// it appears in every picker without an edit; only the union in `types.ts`
-// would need to follow, and the test in
-// `tests/a-codex-mode-reaches-the-thread.test.mjs` fails loudly if the two
-// lists stop matching.
-import {
-  CODEX_DEFAULT_MODE as SHARED_DEFAULT,
-  CODEX_MODES as SHARED_MODES,
-  CODEX_MODE_ORDER as SHARED_ORDER,
+// THIS FILE USED TO BE WHERE THE RENDERER STATED THE SHAPE, because that .mjs
+// carried no type and the screen's imports of it came through as `any`. They
+// do not any more: `shared/codex-modes.d.mts` sits beside it and says what each
+// export is, which is what cleared four of the renderer's type errors
+// (w-a170ad72b8). So the shape is stated once, there, and the three casts that
+// used to stand here would now only be re-stating what the compiler already
+// knows.
+//
+// What is left is the name the screens import by. It stays because they import
+// by it and because `tests/the-permissions-copy-claims-only-what-it-governs`
+// reads that import line; nothing is redefined, so a mode added or renamed in
+// the shared file appears in every picker without an edit here.
+export {
+  CODEX_DEFAULT_MODE,
+  CODEX_MODES,
+  CODEX_MODE_ORDER,
+  type CodexMode,
 } from '../../shared/codex-modes.mjs';
-import type { CodexModeId } from './types';
-
-/** What one mode is: the label she reads and the sentence under the picker. */
-export interface CodexModeRow {
-  label: string;
-  what: string;
-  sandbox: string;
-  approvalPolicy: string;
-}
-
-export const CODEX_MODES = SHARED_MODES as Record<CodexModeId, CodexModeRow>;
-export const CODEX_MODE_ORDER = SHARED_ORDER as CodexModeId[];
-export const CODEX_DEFAULT_MODE = SHARED_DEFAULT as CodexModeId;

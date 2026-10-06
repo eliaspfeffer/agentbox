@@ -81,11 +81,13 @@ describe('the default fixture world is the Mac she has', () => {
     expect(fixtureSnapshot.engines.byItem).toEqual({});
   });
 
-  it('offers one coding agent in settings, and says nothing about Codex', () => {
+  // The Codex page is on every Mac since w-d5d632e503; on this one it says
+  // Codex is not here.
+  it('offers one coding agent in settings, and says Codex is not on this Mac', () => {
     const w = fixtureSettings.workspace;
     expect(w.engineChoices).toEqual([ENGINES[0]]);
     expect(w.engine).toBe('claude');
-    expect(w.codex).toBe(null);
+    expect(w.codex).toMatchObject({ found: false, certain: true });
     expect(w.codexModels).toEqual([]);
     expect(w.codexModelDefault).toBe(null);
   });
@@ -101,7 +103,7 @@ describe('the default fixture world is the Mac she has', () => {
     const api = await apiAt('?fixtures');
     const snap = await api.snapshot();
     expect(snap.engines.choices).toHaveLength(1);
-    expect((await api.settings()).workspace.codex).toBe(null);
+    expect((await api.settings()).workspace.codex.found).toBe(false);
   });
 
   // The boundary the other side of the parser: a word nothing recognises is not
@@ -109,7 +111,7 @@ describe('the default fixture world is the Mac she has', () => {
   it('is what an ?engines value nothing recognises gets', async () => {
     const api = await apiAt('?fixtures&engines=banana');
     expect((await api.snapshot()).engines.choices).toHaveLength(1);
-    expect((await api.settings()).workspace.codex).toBe(null);
+    expect((await api.settings()).workspace.codex.found).toBe(false);
   });
 });
 

@@ -192,6 +192,15 @@ export function capRuns(
 export function saidCount(events: AgentEventLike[]): number;
 export const TRAIL_OPENING: number;
 export const TRAIL_TURNS: number;
+// TOOL-CALL SCAFFOLDING THAT LEAKED INTO THE PROSE, cut off the end of it.
+// item-thread.ts has read this since it was written and it was simply missing
+// from this file, which is why the screen's typecheck could not see it.
+//
+// A string in and a string out, which is every typed caller. The .mjs also
+// hands anything that is not a string straight back, for the untyped callers
+// that pass it whatever a stored field held; a declaration saying so would
+// have to lie about the string case, so the guard stays a runtime one.
+export function unleaked(text: string): string;
 export function conversationWindow(
   turns: AgentTurnLike[],
   bounds?: { opening?: number; keep?: number },

@@ -289,7 +289,7 @@ describe('Check again really looks again', () => {
 
 /* ================== when it is drawn, and when it is not ================ */
 
-describe('the card is drawn only where somebody asked for Codex', () => {
+describe('the card is drawn on every Mac', () => {
   it('is on the payload once the opt-in is written', () => {
     const w = payload({ engineChoice: OPENED, codexBinConfigured: realFile() });
     expect(w.codex).toMatchObject({ found: true, certain: true });
@@ -305,54 +305,33 @@ describe('the card is drawn only where somebody asked for Codex', () => {
     expect(w.codex).toMatchObject({ found: false, certain: true, bin: '' });
   });
 
-  // THE CASE THAT MUST NOT MATCH, and it is every Mac today. No opt-in, so no
-  // card, whatever is on the disk -- including a Codex sitting right there.
-  it('says nothing at all on a Mac that has not opened the gate', () => {
+  // THIS USED TO BE THE CASE THAT MUST NOT MATCH: no opt-in, no card. The
+  // founder overruled it on 2026-10-06 (w-d5d632e503) after a tester who only
+  // uses Codex found no Codex page: it "should show up regardless". The page
+  // is there; the CHOICE still is not, because the gate is shut.
+  it('is on the payload on a Mac that has not opened the gate, offering no choice', () => {
     const w = payload({ codexBinConfigured: realFile() });
-    expect(w.codex).toBeNull();
+    expect(w.codex).toMatchObject({ found: true });
     expect(w.engineChoices).toHaveLength(1);
   });
 
-  // AND IT IS THE GATE THAT DECIDES, not the number of engines. Stated against
-  // the supervisor's own method so a later edit cannot quietly swap the rule
-  // for `engineChoices.length > 1` and leave this file green.
-  it('is decided by whether she opened the gate, and by nothing else', () => {
+  // AND THE GATE STILL DECIDES THE CHOICE, not the page.
+  it('still keeps the choice behind the gate', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-gate-'));
     const shut = new Supervisor({ storeRoot: dir, codexBin: '/nonexistent/codex' }, emptyStore, dir);
     const open = new Supervisor({ storeRoot: dir, engineChoice: OPENED }, emptyStore, dir);
     expect(shut.engineChoiceOpened()).toBe(false);
     expect(open.engineChoiceOpened()).toBe(true);
-    // The one with the gate open has no second engine, and still says yes.
+    expect(shut.engineChoices()).toHaveLength(1);
     expect(open.engineChoices()).toHaveLength(1);
-    // ONE QUESTION, ASKED IN ONE PLACE. What the card is BUILT from grew a
-    // second half on 2026-09-05 -- `trouble`, why nothing runs on an engine that
-    // IS here -- so this no longer matches one expression end to end. Whether
-    // there is a card at all is still this gate and nothing else, which is the
-    // claim, and the shape either side of it is pinned so a rewrite that
-    // reached for a different fact still has to come through here.
-    const src = read('main/settings.mjs');
-    expect(src).toContain('supervisor.engineChoiceOpened()');
-    expect(src).toContain('...codexState(config)');
-    // The gap grew again on 2026-09-21, when the payload learned to carry every
-    // Codex login rather than only the first. The gap after `codexState` grew
-    // again on 2026-09-18, when the card learned to say which Codex account
-    // this Mac is signed into. Whether there is a card AT ALL is still this
-    // gate and nothing else, which is the claim; what gets built behind it now
-    // has three parts instead of two.
-    expect(src).toMatch(/supervisor\.engineChoiceOpened\(\)[\s\S]{0,200}codexState\(config\)[\s\S]{0,800}: null;/);
+    expect(read('main/settings.mjs')).toContain('...codexState(config)');
   });
 
-  // The renderer obeys the same absence: no `w.codex`, no card, and no second
-  // way of deciding invented on this side of the bridge.
-  /*
-   * SAME CLAIM, NEW COMPONENT. `<CodexCli>` went with the connection cards on
-     2026-09-21 (w-dc88147919); each agent is one card now. Whether Codex is on
-     the page at all is still `w.codex` and nothing else, and the card still
-     reads main's fields rather than deriving its own. */
+  // The renderer reads main's fields rather than deriving its own.
   it('draws the card off that one field and derives nothing itself', () => {
-    // A page of its own since the redraw (w-ccadd13c46): in the menu, and
-    // drawn, only when `w.codex` is there.
-    expect(settings).toContain("(p.id !== 'codex' || !!w?.codex)");
+    // A page of its own since the redraw (w-ccadd13c46), in the menu on every
+    // Mac since w-d5d632e503.
+    expect(settings).not.toContain("(p.id !== 'codex' || !!w?.codex)");
     expect(settings).toContain("{model && w && pane === 'codex' && w.codex && enginePage('codex')}");
     expect(settings).toContain('found: !!w.codex?.found');
     expect(settings).toContain('certain: !!w.codex?.certain');

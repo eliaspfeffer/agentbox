@@ -2656,7 +2656,7 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
                 value={running}
                 options={claudeCode
                   ? MODE_ORDER.map((m) => ({ value: m, label: MODE_WORDS[m] }))
-                  : CODEX_MODE_ORDER.map((m: string) => ({ value: m, label: CODEX_MODES[m].label }))}
+                  : CODEX_MODE_ORDER.map((m) => ({ value: m, label: CODEX_MODES[m].label }))}
                 onChange={(v) => pickMode(v as PermissionMode | CodexModeId)}
               />
               {' Mode. '}

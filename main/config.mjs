@@ -232,6 +232,11 @@ export function loadConfig(appDir, { home = os.homedir() } = {}) {
   config.codexFound = codex.found;
   config.codexCertain = codex.certain !== false;
   config.codexFrom = codex.from;
+  // AND AN OLDER INSTALL WITH CODEX ON IT OPENS THE CHOICE TOO (w-d5d632e503).
+  // Only a Mac with no config file did, so a person who installed before
+  // that, or who added Codex later, never saw Codex anywhere. Written at the
+  // end, once `appDir` is on the config to save through.
+  const codexOpened = codexChoiceToOpen(config, codex.found);
   // HOW MANY AGENTS AT ONCE, WHEN NOBODY HAS SAID, IS THE PLAN AND THE MACHINE
   // TOGETHER. Somebody on a smaller plan gets several sessions started for them,
   // they all spend the same allowance, and what they see is agents that are slow
@@ -291,7 +296,25 @@ export function loadConfig(appDir, { home = os.homedir() } = {}) {
   // Where the file is, so anything that edits a setting can write it back
   // without being handed appDir a second time.
   config.appDir = appDir;
+  if (codexOpened) {
+    try {
+      saveConfig(config, { engineChoice: codexOpened });
+    } catch (err) {
+      console.warn(`zero: could not open the Codex choice in ${file}: ${err.message}`);
+    }
+  }
   return config;
+}
+
+/**
+ * THE MOMENT TO OPEN THE CODEX CHOICE AT, OR NULL. Now, when Codex is found
+ *  and the key was never written. NOW is what keeps a row marked `codex` in
+ *  August on Claude Code: it was written before this moment, so it is stale
+ *  (`engineChoiceOnRowIsStale`). A moment already written is kept, and
+ *  `"engineChoice": false` written by hand keeps the choice shut. */
+export function codexChoiceToOpen(config, codexFound) {
+  if (!codexFound || config.engineChoice != null) return null;
+  return new Date().toISOString();
 }
 
 export function configFile(appDir) {

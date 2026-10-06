@@ -68,6 +68,12 @@ describe('the home folder the renderer works with', () => {
       // the Codex connection card is drawn on. False here, as it is on every Mac
       // until somebody writes the moment into zero.config.json.
       engineChoiceOpened: () => false,
+      // The Codex page is on every Mac now (w-d5d632e503), so the payload
+      // asks about Codex's sign-ins and trouble too. None here.
+      config: {},
+      engineTrouble: () => null,
+      _codexHome: () => '/nonexistent-codex-home',
+      _codexProfiles: () => [],
     };
     const { workspace } = readSettings({
       config: {

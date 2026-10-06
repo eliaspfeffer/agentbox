@@ -29,7 +29,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ANCHOR, BEAT, COACHED, START, STEPS, advance, beatRows, coach, finishCard, readFirstRun,
-  replyAnswered, replyWritten, walkRows,
+  replyAnswered, replyWritten, skipStep, walkMayOpen, walkRows,
 } from '../renderer/src/onboarding.ts';
 import { PRACTICE_ANSWER, PRACTICE_REPLY, PRACTICE_REPLY_ANSWER, PRACTICE_SLUG } from '../shared/first-run-practice.mjs';
 import { answerSettled } from '../shared/answers.mjs';
@@ -236,6 +236,96 @@ describe('4c. R replies, and the reply is written in when the box opens', () => 
   it('lets E through as the second key rather than a wrong one', () => {
     const card = read('renderer/src/components/Onboarding.tsx');
     expect(card).toMatch(/if \(say\.alt && keyToken\(e\) === say\.alt\) return;/);
+  });
+});
+
+describe('4g. every card has a quiet Skip this step, and every skip moves on', () => {
+  // Hers, 2026-10-06: "make sure there's a way to bypass each step, for
+  // instance, a very subtle little button on each card that allows you to skip
+  // it, because we keep getting stuck here and losing those users." Driven in
+  // the built app: Skip clicked on every card from the look around to ⌘K went
+  // tour, tabs, make, clear, snooze, unblock, where, board, command and landed.
+  const run = {
+    ...START, practice: PRACTICE_SLUG, item: 'mine', examples: ['done-1', 'done-2', 'later', 'stuck'],
+  };
+  const rows = run.examples.map((id) => ({ id }));
+  const skip = (step) => skipStep({ ...run, step }, rows, 3, 2);
+
+  it('moves the look around and the tour beats to the next one', () => {
+    expect(skip('tour').step).toBe('tabs');
+    expect(skip('tabs').step).toBe('make');
+    expect(skip('where').step).toBe('board');
+    expect(skip('board').step).toBe('command');
+  });
+
+  it('takes her own thread off and goes to clearing, from any of its five beats', () => {
+    for (const step of ['make', 'task', 'working', 'open', 'answer']) {
+      const next = skip(step);
+      expect(next.step, step).toBe('clear');
+      expect(next.hidden, step).toEqual(['mine']);
+    }
+  });
+
+  it('hides the rows a row beat is about, so its own check moves it on', () => {
+    expect(skip('clear').hidden).toEqual(['done-1', 'done-2']);
+    expect(skip('snooze').hidden).toEqual(['later']);
+    expect(skip('unblock').hidden).toEqual(['stuck']);
+    // And the walk's lists stop drawing them.
+    expect(walkRows(rows, { ...skip('clear'), step: 'snooze' }).map((r) => r.id)).toEqual(['later', 'stuck']);
+    // THE CASE THAT MUST NOT MATCH: the last beat is the app's to end.
+    expect(skipStep({ ...run, step: 'command' }, rows, 3, 2)).toBeNull();
+  });
+
+  it('draws the button on the card and wires it to the app', () => {
+    const card = read('renderer/src/components/Onboarding.tsx');
+    expect(card).toMatch(/\{onSkip \? <button type="button" className="fr-skip-step" onClick=\{onSkip\}>Skip this step<\/button> : null\}/);
+    expect(card).toMatch(/onSkip=\{onSkipStep\}/);
+    expect(app).toMatch(/const next = skipStep\(r, inbox, WAITING_AT, LATER_AT\);/);
+    expect(app).toMatch(/if \(afterCommand\(r\) === 'end'\) \{ finishRun\(\[\], \{ practised: true \}\); return; \}\s*\n\s*setRun\(stepTo\(r, 'done'\)\);/);
+    const css = read('renderer/src/styles.css');
+    const rule = css.slice(css.indexOf('.fr-tether .fr-skip-step {'), css.indexOf('}', css.indexOf('.fr-tether .fr-skip-step {')));
+    expect(rule).toMatch(/pointer-events: auto/);
+    expect(rule).toMatch(/color: var\(--text-dim\)/);
+  });
+});
+
+describe('4f. a thread opened too early never leaves the walk stuck', () => {
+  // Hers, 2026-10-06, with a picture of "Write the agenda for the offsite."
+  // open under a card saying press Return to open her own: "I clicked into a
+  // page prematurely and got stuck here, and the return isn't doing anything.
+  // We want to prevent users from being able to get stuck." Driven in the
+  // built app after the fix: a click on an example during the look around opens
+  // nothing; a running thread clicked while hers runs is closed at once; and on
+  // the beat that opens hers, Return opens hers with the pointer on an example.
+  it('lets a thread be open only where the beat is about it', () => {
+    const run = (step) => ({ step, item: 'mine' });
+    expect(walkMayOpen(run('open'), 'mine', 'stuck')).toBe(true);
+    expect(walkMayOpen(run('answer'), 'mine', 'stuck')).toBe(true);
+    expect(walkMayOpen(run('unblock'), 'stuck', 'stuck')).toBe(true);
+    // THE CASES THAT MUST NOT MATCH.
+    expect(walkMayOpen(run('open'), 'example', 'stuck')).toBe(false);
+    expect(walkMayOpen(run('unblock'), 'mine', 'stuck')).toBe(false);
+    for (const step of ['tour', 'tabs', 'make', 'task', 'working', 'clear', 'snooze', 'where', 'board', 'command']) {
+      expect(walkMayOpen(run(step), 'mine', 'stuck'), step).toBe(false);
+    }
+    expect(app).toMatch(/if \(walkMayOpen\(run, focused\.id, waitingId\(run, WAITING_AT\)\)\) return;\s*\n\s*setFocused\(null\);/);
+  });
+
+  // AND THE SAME FOR E AND L ON THE ROW BEATS, hers, 2026-10-06, with the ring
+  // on the contact list and the pointer on the budget row: "It got stuck here
+  // even though I'm hitting E". Driven after the fix: E closed the ringed row
+  // twice with the pointer resting on the budget row, and E on the budget row's
+  // own beat was still refused.
+  it('aims the beat\'s key at the ringed row wherever the pointer is, unless it rests on another right row', () => {
+    expect(app).toMatch(/const walkAim = run\?\.step === 'open' && run\.item\s*\n\s*\? run\.item\s*\n\s*: walkBeat\.length \? \(hoveredId && walkBeat\.includes\(hoveredId\) \? hoveredId : walkBeat\[0\]\) : null;/);
+    expect(app).toMatch(/const walkOwn = walkAim \? list\.find\(\(i\) => i\.id === walkAim\) : undefined;/);
+    expect(app).toMatch(/const pointed: WorkItem \| undefined = walkOwn\s*\n\s*\?\? \(hoveredId/);
+  });
+
+  it('holds every click on the app while a look-around card is up, and nudges its Next', () => {
+    const card = read('renderer/src/components/Onboarding.tsx');
+    expect(card).toMatch(/lookOnly\.current = !!say\.next;/);
+    expect(card).toMatch(/const stray = lookOnly\.current\s*\n\s*\? !!el && typeof el\.closest === 'function' && !el\.closest\(NOT_THE_APP\) && pressCounts\(el\)\s*\n\s*: strayClick\(e\.target, live\);/);
   });
 });
 
