@@ -661,13 +661,11 @@ const CLAUDE = {
 // (a tester, 2026-09-05), asked after he ran the app with Codex
 // selected and found that Settings said nothing about Codex at all.
 //
-// WHEN IT IS DRAWN, WHICH IS THE JUDGEMENT AND NOT A SYMMETRY. Codex is
-// OPTIONAL, so an always-present Codex page is furniture for everybody who
-// never uses it. It is drawn when this Mac has ASKED for Codex, and the asking
-// is the opt-in moment in zero.config.json somebody writes by hand. `w.codex`
-// on the settings payload is the whole rule, answered by
-// `Supervisor#engineChoiceOpened` in the one file allowed to read the opt-in,
-// so the screen and the routing cannot come apart. Absent means silence.
+// WHEN IT IS DRAWN: ON EVERY MAC (w-d5d632e503). It used to wait for an
+// opt-in written into zero.config.json, and a tester who only uses Codex
+// looked for it in Settings and found nothing, with no way to tell "not
+// installed" from "not offered". Not found, the page says so and links the
+// install.
 //
 // THE WORDS ARE THE ONES ABOVE, WITH CODEX AS THE SUBJECT. One difference, and
 // it is the sentence that would otherwise be false: being connected does not
@@ -977,7 +975,7 @@ function NavIcon({ id }: { id: SettingsPageId }) {
 
 /** The page an old link or a ⌘K row names, read the way it always was: every
  *  name the screen has ever used still opens the page its content went to. */
-function paneFrom(want: string, has: { team: boolean; codex: boolean }): Pane {
+function paneFrom(want: string, has: { team: boolean }): Pane {
   if (want.startsWith('project:')) return { project: want.slice('project:'.length) };
   if (want === 'themes') return 'appearance';
   if (want === 'priority') return 'projects';
@@ -986,7 +984,6 @@ function paneFrom(want: string, has: { team: boolean; codex: boolean }): Pane {
   if (want === 'accounts') return 'claude';
   if (want === 'agents') return 'running';
   if (want === 'team') return has.team ? 'team' : 'general';
-  if (want === 'codex') return has.codex ? 'codex' : 'claude';
   if (SETTINGS_PAGES.some((p) => p.id === want)) return want as SettingsPageId;
   return 'general';
 }
@@ -1041,9 +1038,7 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
   // the same question asked from inside the app, and it wins.
   const [pane, setPane] = useState<Pane>(() => paneFrom(
     startPane || new URLSearchParams(location.search).get('settings') || '',
-    // Codex is only known once the settings are read; a link to it lands on
-    // its page and falls back below if this Mac turns out not to have it.
-    { team: !!teamPane, codex: true },
+    { team: !!teamPane },
   ));
   // WHICH PAGE IS UP, for the window around this screen.
   useEffect(() => {
@@ -1125,10 +1120,6 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
   }, [pane, model, current]);
 
   const w = model?.workspace;
-  // A link to Codex on a Mac that has not opened the gate lands on Claude Code.
-  useEffect(() => {
-    if (pane === 'codex' && w && !w.codex) setPane('claude');
-  }, [pane, w]);
 
   /*
    * WHETHER THIS MAC REALLY HAS TWO CODING AGENTS, and it is main's answer
@@ -1139,9 +1130,9 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
   const engineRows = w?.engineChoices ?? [];
   const twoEngines = engineRows.length > 1;
 
-  /** The pages this Mac has. Codex only once the opt-in is written; Team only
-   *  on a build with a team cloud. */
-  const pages = SETTINGS_PAGES.filter((p) => (p.id !== 'codex' || !!w?.codex) && (p.id !== 'team' || !!teamPane));
+  /** The pages this Mac has. Codex on every Mac (w-d5d632e503); Team only on
+   *  a build with a team cloud. */
+  const pages = SETTINGS_PAGES.filter((p) => p.id !== 'team' || !!teamPane);
   const hits = useMemo(
     () => searchSettings(query, { pages: pages.map((p) => p.id), projects }),
     [query, pages.length, projects],

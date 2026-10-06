@@ -96,7 +96,7 @@ describe('Settings has the Team pane, and the shared screen holds no team code',
     // The menu lives in settings-search.ts since the redraw (w-ccadd13c46);
     // the screen leaves Team out when no pane was handed in.
     expect(read('renderer/src/settings-search.ts')).toContain("{ id: 'team', label: 'Team', group: 'Workspace' }");
-    expect(settings).toContain("(p.id !== 'team' || !!teamPane)");
+    expect(settings).toContain("p.id !== 'team' || !!teamPane");
   });
 
   it("answers ?settings=team and the sidebar's shortcut with the Team pane", () => {

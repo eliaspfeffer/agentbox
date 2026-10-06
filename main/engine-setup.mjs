@@ -80,7 +80,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * the app runs on what was just installed). `spawn` and `wait` are seams for
  * the tests; nothing in the app passes them.
  */
-export function createEngineSetup({ find, spawn = realSpawn, wait = sleep, env = process.env, poll = POLL } = {}) {
+export function createEngineSetup({ find, spawn = realSpawn, wait = sleep, env = process.env, poll = POLL, onSignIn = () => {} } = {}) {
   const runEnv = terminalEnv(env);
   const jobs = new Map();
 
@@ -92,7 +92,12 @@ export function createEngineSetup({ find, spawn = realSpawn, wait = sleep, env =
   async function signedIn(j, bin) {
     const { file, args } = statusCommand(j.engine, bin);
     const p = spawn(file, args, { env: runEnv });
-    const code = await Promise.race([p.exit, wait(STATUS_TIMEOUT).then(() => { p.kill(); return 1; })]);
+    const TIMED_OUT = Symbol('no answer');
+    const code = await Promise.race([p.exit, wait(STATUS_TIMEOUT).then(() => { p.kill(); return TIMED_OUT; })]);
+    // TOLD TO THE APP, which routes on it (w-d5d632e503): a Claude Code that
+    // is signed out beside a Codex that is signed in is a Mac that runs on
+    // Codex. Only a real yes or no; a check that never answered says nothing.
+    if (code === 0 || code === 1) onSignIn(j.engine, code === 0);
     return code === 0;
   }
 
@@ -178,6 +183,11 @@ export function createEngineSetup({ find, spawn = realSpawn, wait = sleep, env =
       const hit = find(engine);
       if (!hit?.found) return { engine, found: false, signedIn: false };
       return { engine, found: true, signedIn: await signedIn({ engine }, hit.path) };
+    },
+    /** The same question against a path already found, so asking it at
+     *  launch does not search the Mac again. */
+    signedInNow(engine, bin) {
+      return signedIn({ engine }, bin);
     },
   };
 }

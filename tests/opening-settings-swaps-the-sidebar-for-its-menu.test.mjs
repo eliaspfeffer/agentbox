@@ -71,7 +71,9 @@ describe('old links', () => {
     ['priority', "if (want === 'priority') return 'projects';"],
     ['accounts', "if (want === 'accounts') return 'claude';"],
     ['agents', "if (want === 'agents') return 'running';"],
-    ['codex on a Mac without it', "if (want === 'codex') return has.codex ? 'codex' : 'claude';"],
+    // Codex is a page on every Mac (w-d5d632e503), so its link opens it by the
+    // same rule as every other page.
+    ['codex', 'if (SETTINGS_PAGES.some((p) => p.id === want)) return want as SettingsPageId;'],
   ])('%s', (_name, line) => {
     expect(settings).toContain(line);
   });

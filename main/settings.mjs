@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { saveConfig } from './config.mjs';
+import { codexChoiceToOpen, saveConfig } from './config.mjs';
 import { resolveClaudeBin, forgetClaudeBin, INSTALL_URL } from './claude-bin.mjs';
 import { AGENT_MODES } from '../shared/agents.mjs';
 import { analyticsKey, diagnosticsOn } from './analytics.mjs';
@@ -341,6 +341,10 @@ export function recheckCodex(config) {
   forgetCodexBin();
   const state = codexState(config);
   config.codexBin = state.found ? state.bin : null;
+  // Found while the app is open, by this button or the plan setup: the choice
+  // opens now, as it would have at the next launch (main/config.mjs).
+  const opened = codexChoiceToOpen(config, state.found);
+  if (opened && config.appDir) saveConfig(config, { engineChoice: opened });
   return state;
 }
 
@@ -616,21 +620,24 @@ function engineSettings(supervisor, config) {
   // main/codex-account.mjs holds the measurement. Null when nobody is signed
   // in, and the card then reads exactly as it always did.
   // A Mac that runs on Codex alone has asked about it by having nothing else.
+  //
+  // AND THE PAGE IS DRAWN ON EVERY MAC NOW (w-d5d632e503). A tester who only
+  // uses Codex looked for it in Settings, found nothing, and had no way to
+  // tell "not installed" from "not offered". Not found, the page says so and
+  // links the install, which is the question that person had.
   const codexIsHome = engine === 'codex';
-  const codex = supervisor.engineChoiceOpened() || codexIsHome
-    ? {
-      ...codexState(config),
-      trouble: engineTroubleFor(supervisor, 'codex'),
-      account: codexAccount(supervisor._codexHome()),
-      // EVERY CODEX LOGIN ON THE MAC, NOT JUST THE FIRST. The supervisor has
-      // run one app-server per CODEX_HOME since a second login became real;
-      // what never existed was a screen that could see them. One entry per
-      // `codexProfiles` word, resolved through the supervisor's own mapping so
-      // the card and the fleet cannot disagree about which folder a name
-      // means.
-      accounts: codexAccountRows(supervisor),
-    }
-    : null;
+  const codex = {
+    ...codexState(config),
+    trouble: engineTroubleFor(supervisor, 'codex'),
+    account: codexAccount(supervisor._codexHome()),
+    // EVERY CODEX LOGIN ON THE MAC, NOT JUST THE FIRST. The supervisor has
+    // run one app-server per CODEX_HOME since a second login became real;
+    // what never existed was a screen that could see them. One entry per
+    // `codexProfiles` word, resolved through the supervisor's own mapping so
+    // the card and the fleet cannot disagree about which folder a name
+    // means.
+    accounts: codexAccountRows(supervisor),
+  };
   if (choices.length < 2 && !codexIsHome) {
     return { engine, engineChoices: choices, codex, codexModels: [], codexModelDefault: null, codexModel: null };
   }
