@@ -140,6 +140,15 @@ function defaultReaddir(dir) {
   try { return fs.readdirSync(dir); } catch { return []; }
 }
 
+// THE COPY THE CHATGPT APP CARRIES INSIDE ITSELF. Somebody who has only ever
+// used Codex in the ChatGPT app has this and nothing else (w-9f6975906c,
+// measured 2026-10-05: codex-cli 0.158.0-alpha.2, sharing the CLI's sign-in).
+// Searched LAST, after the shell, because it moves with the app's releases.
+export function appCopyPaths(home = os.homedir()) {
+  const inside = 'ChatGPT.app/Contents/Resources/codex-cli/bin/codex';
+  return [path.join('/Applications', inside), path.join(home, 'Applications', inside)];
+}
+
 // WHAT CODEX LEAVES BEHIND. None of these is a binary and none is ever spawned.
 // They exist only to stop the app claiming an absence it has not established.
 //
@@ -213,6 +222,10 @@ export function findCodexBin({
 
   const fromShell = shellSaid(shellLookup());
   if (fromShell.path) return { path: fromShell.path, found: true, certain: true, from: 'shell', searched, evidence: null };
+
+  for (const candidate of appCopyPaths(home)) {
+    if (exists(candidate)) return { path: candidate, found: true, certain: true, from: 'app', searched, evidence: null };
+  }
 
   // NOT FOUND, AND WHETHER THAT IS KNOWN. Every cheap path missed and every
   // shell we could reach missed, so the last question is whether this Mac shows
