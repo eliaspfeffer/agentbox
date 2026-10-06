@@ -93,9 +93,28 @@ const A_TEAMMATE_MAY_SET = ['problem', 'progress', 'solution', 'blockedBy', 'blo
 // The status rides too: a new message reopens a conversation put away, and a
 // message record never starts an agent (mayRunHere).
 const IN_A_MESSAGE_ALSO = ['title', 'body', 'answer', 'people', 'status'];
+// AND THE LEVEL THE SENDER PICKED, ON THE OPENING LINE ALONE (w-7ba439c883).
+// A message now carries how urgent its sender thought it was, and that number
+// decides where it sits in the inbox it lands in, so it has to survive the
+// pull. It may not become a way to re-rank a row afterwards, though: the level
+// rides the line that MAKES the row and no other.
+//
+// `kind` is how that line is known. Only a row's first line sets it, and a
+// teammate may not set it here at all, so it is a marker rather than a field:
+// it is read, then dropped with everything else that is not allowed.
+//
+// WHAT THIS DOES NOT STOP, said plainly: a teammate who forges a line carrying
+// a kind can still re-rank the one conversation the two of you share. They can
+// already rewrite that row's title, body, answer and status (above), so this
+// opens no row that was closed to them, and nothing outside a conversation is
+// reachable either way.
+const WHEN_A_MESSAGE_OPENS = ['priority'];
+const opensARow = (patch) => 'kind' in patch;
 export function whatATeammateMaySet(line, { direct = false } = {}) {
   if (!line || typeof line !== 'object' || !line.patch || typeof line.patch !== 'object') return null;
-  const allowed = direct ? [...A_TEAMMATE_MAY_SET, ...IN_A_MESSAGE_ALSO] : A_TEAMMATE_MAY_SET;
+  const allowed = direct
+    ? [...A_TEAMMATE_MAY_SET, ...IN_A_MESSAGE_ALSO, ...(opensARow(line.patch) ? WHEN_A_MESSAGE_OPENS : [])]
+    : A_TEAMMATE_MAY_SET;
   const kept = {};
   for (const field of allowed) if (field in line.patch) kept[field] = line.patch[field];
   const patch = pickFields(kept);

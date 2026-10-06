@@ -366,7 +366,14 @@ export function createTeamService({
       return convo ? { product: product.slug, id: convo.id } : null;
     },
 
-    async message(toIn, body) {
+    /**
+     * `priority` is the level the sender picked on the card, and it counts on
+     * the FIRST message only (w-7ba439c883): the conversation's place in the
+     * other person's inbox was settled when it opened, and a reply three days
+     * later is not a chance to lift it. Nothing picked means nothing sent, so
+     * the row keeps composeItem's 0, which the inbox reads as Medium.
+     */
+    async message(toIn, body, priority) {
       if (!backend || !state.team || !state.me) throw new Error('start or join a team first');
       const me = state.me.id;
       // One person or a few: the same conversation for the same people.
@@ -416,7 +423,8 @@ export function createTeamService({
         await syncNow();
         return store.readItem(product.slug, convo.id);
       }
-      const item = store.composeItem(product.slug, { title, body: text, assignee: others[0], people: [me, ...others] });
+      const level = Number.isFinite(priority) && priority > 0 ? Math.trunc(priority) : 0;
+      const item = store.composeItem(product.slug, { title, body: text, priority: level, assignee: others[0], people: [me, ...others] });
       onChange();
       await syncNow();
       return item;
