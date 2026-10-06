@@ -187,11 +187,12 @@ describe('a Mac with no agent files is offered nothing at all', () => {
     expect(logic).not.toMatch(/straightIn:/);
     expect(logic).not.toMatch(/straightIn: boolean/);
     const card = read('renderer/src/components/ImportAgents.tsx');
-    expect(card).toMatch(/read && !some \? CARD\.headNone : CARD\.head/);
-    // The walk's own "these are the agents already on this Mac" is not said
-    // over an empty card, because there are none and it would be the same
-    // contradiction in a smaller typeface.
-    expect(card).toMatch(/walk && screen === 'door' && some && <p className="ia-offer">/);
+    // The one-list card since w-db6f5e331e: the empty answer, or the list's head.
+    expect(card).toMatch(/read && !some \? \(alreadyIn > 0 \? CARD\.headAllIn : CARD\.headNone\) : LIST\.head/);
+    // The line over the list is not said over an empty card, because there is
+    // nothing under it and it would be the same contradiction in a smaller
+    // typeface.
+    expect(card).toMatch(/read && some && <p className="ia-line">/);
     // And the key the walk teaches still does something on it.
     expect(card).toMatch(/if \(walk && !some\) \{ walk\.onSkip\(\); return; \}/);
   });
@@ -325,7 +326,10 @@ describe('the coaching card promises no dead key either', () => {
 
   it('still handles plain Enter on the welcome, which draws it', () => {
     expect(walk).toContain("if (run.step !== 'welcome') return;");
-    expect(walk).toMatch(/e\.key === 'Enter'[\s\S]{0,60}onEvent\(\{ t: 'start' \}\)/);
+    // Enter goes through `begin`, which asks the plan on a Mac with nothing set
+    // up (w-9f6975906c) and otherwise starts the walk, so it always moves.
+    expect(walk).toMatch(/e\.key === 'Enter'[\s\S]{0,60}begin\(\)/);
+    expect(walk).toMatch(/const begin = async \(\) => \{[\s\S]{0,120}onStep\('plan'\)[\s\S]{0,40}else onEvent\(\{ t: 'start' \}\)/);
   });
 });
 

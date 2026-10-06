@@ -18,6 +18,7 @@
 // (tests/the-schedule-box-reads-what-people-actually-type.test.mjs).
 //
 // The defaults, so nobody re-derives them:
+// - A unit alone is a count of one: "week" is a week, "hour" an hour.
 // - A day with no hour lands at 8am, the hour every preset row already uses.
 // - morning 8am, afternoon 2pm, evening and tonight 6pm, night 8pm, end of
 //   day 5pm, end of week Friday 5pm.
@@ -84,7 +85,10 @@ function normalise(raw: string): string[] {
     .replace(/\bfrom now\b/g, '')
     .replace(/\b(?:a )?couple(?: of)?\b/g, '2')
     .replace(/\b(?:a )?few\b/g, '3')
-    .replace(/\b(?:midday|lunch ?time|lunch)\b/g, 'noon');
+    .replace(/\b(?:midday|lunch ?time|lunch)\b/g, 'noon')
+    // A unit said alone is one of it: "week" is a week. The whole phrase only,
+    // so "this week" stays refused and "next week" stays the coming Monday.
+    .replace(/^(in )?(min|minute|hr|hour|day|wk|week|month|yr|year)$/, '$11 $2');
 
   // Numbers spelled the way they are said. Ordinals first, so "twenty first"
   // is the 21st rather than 20 and a stray "first".

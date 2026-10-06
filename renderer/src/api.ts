@@ -8,6 +8,7 @@ import type { AgentConversation, AnswerMode, DemoOpened, FolderListing, FreshUse
 import type { LedgerLine } from './thread-history';
 import type { AgentFile as AgentFileRow } from './onboarding';
 import type { AgentFolder, SessionThread } from './agent-import-card';
+import type { EngineSetupState } from './plan-setup';
 import { fixtureAgents, fixtureSnapshot, fixtureDashboards, fixtureRepeats, fixtureRuns, fixtureMock, fixtureMockDashboards, fixtureTraces, fixtureHistory, fixtureSettings, fixtureConversation, fixtureAgentFiles, fixtureSessionThreads } from './fixtures';
 import { fixtureEngineWorld, fixtureEngineSettings, fixtureSecondEngine } from './fixtures';
 import { fixtureFolders } from './fixtures';
@@ -447,7 +448,9 @@ export const api = {
   // keeps what it had; null clears it back to the engine's own choice.
   // `now` cuts the running agent's current step so this message is answered at
   // once instead of after it (main/claude-input.mjs `interrupt`).
-  async answer(p: { product: string; id: string; answer?: string; status?: string; priority?: number; permissionMode?: AnswerMode | null; model?: string | null; effort?: string | null; now?: boolean }): Promise<WorkItem | null> {
+  // `inReplyTo` is the uid of the message a reply in a thread answers
+  // (w-920461cbe6); main keeps it only in a conversation between people.
+  async answer(p: { product: string; id: string; answer?: string; status?: string; priority?: number; permissionMode?: AnswerMode | null; model?: string | null; effort?: string | null; now?: boolean; inReplyTo?: string }): Promise<WorkItem | null> {
     if (useFixtures) return null;
     return window.zero!.answer(p);
   },
@@ -486,8 +489,13 @@ export const api = {
   async teamSync(): Promise<TeamCallResult> { return teamCall(() => window.zero!.teamSync()); },
   // A task somebody gave you: to an agent (on your Mac), keep it, or hand it back.
   async teamRoute(p: { product: string; id: string; route: 'agent' | 'me' | 'back' }): Promise<TeamCallResult> { return teamCall(() => window.zero!.teamRoute(p)); },
-  // A MESSAGE TO A PERSON (people get messages, never tasks).
-  async teamMessage(to: string | string[], body: string): Promise<TeamCallResult> { return teamCall(() => window.zero!.teamMessage({ to, body })); },
+  // A chip put on or taken off one message. `on` is the uid of the ledger line
+  // the message was written as (w-560647d4db).
+  async teamReact(p: { product: string; id: string; on: string; emoji: string; off?: boolean }): Promise<TeamCallResult> { return teamCall(() => window.zero!.teamReact(p)); },
+  // A MESSAGE TO A PERSON (people get messages, never tasks), at the level the
+  // sender picked. The level counts on the first message of a conversation and
+  // is ignored after, which is the main process's rule (main/team/index.mjs).
+  async teamMessage(to: string | string[], body: string, priority?: number): Promise<TeamCallResult> { return teamCall(() => window.zero!.teamMessage({ to, body, priority })); },
   // An edit to a thread's summary, visibility or priority, made in place.
   async threadEdit(product: string, id: string, patch: ThreadEditPatch): Promise<{ ok: boolean; error?: string }> {
     if (useFixtures || !window.zero?.threadEdit) return { ok: true };
@@ -596,14 +604,14 @@ export const api = {
   // channel here means a main process older than this build, which is exactly
   // the case a ⌘R-kept page hits, and a row that appeared to work and opened
   // nothing would be the worst version of this.
-  async openFreshUser(withAgents = true): Promise<FreshUser> {
+  async openFreshUser(withAgents = true, withTools = true): Promise<FreshUser> {
     if (useFixtures) return { ok: false, error: 'Not in this preview.' };
     const zero = window.zero as Window['zero'];
     if (!zero?.openFreshUser) {
       return { ok: false, error: `This window is running an older ${NAME}. Quit it and open it again.` };
     }
     try {
-      return await zero.openFreshUser({ withAgents });
+      return await zero.openFreshUser({ withAgents, withTools });
     } catch (err) {
       return { ok: false, error: (err as Error)?.message ?? 'It could not be opened.' };
     }
@@ -806,6 +814,23 @@ export const api = {
       return { found: !!r.workspace?.found, certain: r.workspace?.certain === true };
     } catch {
       return { found: false, certain: false };
+    }
+  },
+
+  // SETTING UP THEIR PLAN FOR THEM (w-9f6975906c): install a coding agent and
+  // start its own sign-in. A page that cannot reach the main process answers
+  // READY, because a walk that asks a question it can do nothing about is a
+  // walk that traps somebody; the inbox's own checks still stand behind it.
+  async engineSetup(action: 'ready' | 'start' | 'status' | 'again' | 'cancel', engine: 'claude' | 'codex'): Promise<EngineSetupState> {
+    const assumeReady: EngineSetupState = { engine, phase: 'ready', error: null, log: '', found: true, signedIn: true };
+    const zero = window.zero as any;
+    if (!zero?.engineSetup) return assumeReady;
+    try {
+      const r = await zero.engineSetup({ action, engine });
+      if (!r?.ok) return { ...assumeReady, phase: 'failed', found: false, signedIn: false, error: r?.error ?? 'Setup could not start.' };
+      return { engine, phase: r.phase ?? 'idle', error: r.error ?? null, log: r.log ?? '', found: !!r.found, signedIn: !!r.signedIn };
+    } catch (e) {
+      return { ...assumeReady, phase: 'failed', found: false, signedIn: false, error: String((e as Error)?.message ?? e) };
     }
   },
 

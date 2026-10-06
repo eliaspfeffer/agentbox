@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { nameSlug } from '../../shared/product-name.mjs';
+import { runningAsAFreshUser } from '../../shared/fresh-user-home.mjs';
 import { supabaseBackend } from './supabase-backend.mjs';
 import { signInWithGoogle, cancelGoogleSignIn } from './sign-in.mjs';
 
@@ -50,7 +51,19 @@ export function teamConfigOnThisMac(home = os.homedir()) {
 // another team is never quietly moved onto this Mac's. AGENTBOX_TEAM_CONFIG
 // points at another file from a checkout only, and is first because that is
 // what the tests run on.
-export function loadCloudConfig(appDir, { packaged = isPackagedElectron(), home = os.homedir() } = {}) {
+//
+// AN INSTALLED BUILD IS ALWAYS THE SINGLE-PERSON APP (2026-10-06). The first
+// download from agentbox.ac opened on the team's sign-in page, because the Mac
+// it ran on kept a team key. The founder: "users are no longer using the
+// multiplayer version so this should never be visible." The team version still
+// runs from a checkout (npm run app). See
+// tests/the-installed-app-is-the-single-person-app.test.mjs.
+// AND SO IS ⌘K's NEW-USER WINDOW (w-9f6975906c, 2026-10-05). It runs from her
+// checkout, which holds a team key, so it opened on the same sign-in page:
+// "when i run this command i got the login screen again ... this was the
+// critical thing to fix". A new user is a new user of the single-person app.
+export function loadCloudConfig(appDir, { packaged = isPackagedElectron(), home = os.homedir(), env = process.env } = {}) {
+  if (packaged || runningAsAFreshUser(env)) return null;
   const tries = [
     !packaged && process.env.AGENTBOX_TEAM_CONFIG,
     path.join(appDir, 'cloud', 'team.config.json'),

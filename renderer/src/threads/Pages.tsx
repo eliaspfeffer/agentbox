@@ -19,6 +19,7 @@ import {
 } from './page-rules';
 import { messageLine, messagePriority, rowSharing, sharePatch } from './page-rules';
 import { facesOnButton, peopleWorthADot, togglePicked, whoseWord } from './people-rules';
+import { stopKey } from './walk-rules';
 import { shownToPeople } from '../../../shared/thread-cards.mjs';
 import { api } from '../api';
 import './pages.css';
@@ -269,8 +270,10 @@ function PeopleLine({ everyone, picked, me, onPick }: PeoplePick) {
  *  first row would, under the tabs, left aligned with the titles, so the page
  *  does not jump when a thread lands. The tabs stay: an empty Needs you is
  *  still the Inbox, and Running is one click away. */
-export function InboxClear({ running, scheduled, onView, onCompose }: {
+export function InboxClear({ running, scheduled, onView, onCompose, team = false }: {
   running: number; scheduled: number; onView: (v: TabView) => void; onCompose: () => void;
+  /** Signed into a team: only then does the quiet line offer a teammate (w-db6f5e331e). */
+  team?: boolean;
 }) {
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   return <div className="th-clear">
@@ -280,7 +283,7 @@ export function InboxClear({ running, scheduled, onView, onCompose }: {
         ? <><button type="button" className="th-clear-link" onClick={() => onView('progress')}>{plural(running, 'thread is running', 'threads are running')}</button>. Each one lands here when it needs you.</>
         : scheduled > 0
           ? <><button type="button" className="th-clear-link" onClick={() => onView('snoozed')}>{plural(scheduled, 'thread is scheduled', 'threads are scheduled')}</button>. Nothing else is open.</>
-          : 'Start a thread and an agent picks it up, or message a teammate.'}
+          : team ? 'Start a thread and an agent picks it up, or message a teammate.' : 'Start a thread and an agent picks it up.'}
     </p>
     <div className="th-clear-acts">
       <button type="button" className="th-new" onClick={onCompose}><PenIcon />New thread</button>
@@ -439,7 +442,9 @@ export function ThreadCells({ item, product, now, person, tab }: {
   // A CONVERSATION WITH A PERSON READS LIKE A MESSAGE, showing who it is
   // with: their face and name lead the row, then the
   // newest message, the way a chat list does. Every other row keeps its title.
-  const said = messageLine(item, product, team?.me ?? null);
+  // AND IT SAYS WHAT IS WAITING ON YOU when the chat has threads (w-920461cbe6),
+  // which is why it is handed your teammates' first names.
+  const said = messageLine(item, product, team?.me ?? null, (id) => firstName(team?.byId.get(id) ?? null));
   if (said) {
     return <RowCells live={liveIds.has(item.id)} title={<MessageTitle people={said.people} fromMe={said.fromMe} text={said.text} />} where="Message" person={person}
       priority={messagePriority(item)} updatedAt={when} now={now} action={action} />;
@@ -463,13 +468,15 @@ export function ThreadCells({ item, product, now, person, tab }: {
  *  it, the private ones included; with a teammate in view, those wear a lock
  *  and every card names its person. Whose threads is picked on the header's
  *  filters button (w-14bb56c833), so the columns start right under it. */
-export function InboxBoard({ items, products, display, now, onOpenItem, stateOf, cards = [], picked, onOpenCard, selected, columnOrder = DEFAULT_COLUMN_ORDER, onReorderColumns, projectOrder }: {
+export function InboxBoard({ items, products, display, now, onOpenItem, stateOf, cards = [], picked, onOpenCard, selected, selectedCard = null, columnOrder = DEFAULT_COLUMN_ORDER, onReorderColumns, projectOrder }: {
   items: WorkItem[]; products: Product[]; display: Display; now: number; onOpenItem: (item: WorkItem) => void;
   /** The column each thread sits in, by the Inbox tabs' rule (App.tsx). */
   stateOf?: (item: WorkItem) => ThreadStateWord | null;
   cards?: ThreadCard[]; picked?: string[]; onOpenCard?: (card: ThreadCard) => void;
   /** The thread the keyboard is on (App.tsx's `current`), drawn as selected. */
   selected?: WorkItem | null;
+  /** Or the teammate's card it is on, by `stopKey` (walk-rules.ts, w-fb16bcaeba). */
+  selectedCard?: string | null;
   /** The columns left to right, and where a dragged order goes to be kept. */
   columnOrder?: ThreadStateWord[]; onReorderColumns?: (order: ThreadStateWord[]) => void;
   /** Your running order of projects, which Sort by Priority reads first. */
@@ -495,8 +502,8 @@ export function InboxBoard({ items, products, display, now, onOpenItem, stateOf,
   // Held between renders, because J re-renders the board on every press and
   // the columns do not change when only the keyboard's card does.
   const columns = useMemo(
-    () => boardColumns({ items, products, display, now, stateOf, cards, picked, me, since, live: liveIds, order: shown, projectOrder }),
-    [items, products, display, now, stateOf, cards, picked, me, since, liveIds, shown, projectOrder],
+    () => boardColumns({ items, products, display, now, stateOf, cards, picked, me, since, live: liveIds, order: shown, projectOrder, nameOf: (id) => firstName(team?.byId.get(id) ?? null) }),
+    [items, products, display, now, stateOf, cards, picked, me, since, liveIds, shown, projectOrder, team],
   );
   // THE OTHER COLUMNS SLIDE TO THEIR NEW PLACES (2026-10-02): they used to
   // jump, which read as "weird ... when I'm moving things around". Measured
@@ -584,7 +591,9 @@ export function InboxBoard({ items, products, display, now, onOpenItem, stateOf,
     return () => window.removeEventListener('keydown', onKey, true);
   });
   const sharing = (it: WorkItem) => rowSharing(it, products.find((p) => p.slug === it.product), team ? { me, since } : null);
-  const isSelected = (it: WorkItem | null) => !!it && !!selected && it.id === selected.id && it.product === selected.product;
+  const isSelected = (e: BoardEntry) => (e.card
+    ? selectedCard === stopKey({ card: e.card })
+    : !selectedCard && !!e.item && !!selected && e.item.id === selected.id && e.item.product === selected.product);
   // The keyboard's card stays on the screen as J, K and the arrows move it,
   // and only when it moves, so a refresh never scrolls the board out from
   // under the pointer. Before the frame is drawn, not after: after, a card
@@ -601,7 +610,7 @@ export function InboxBoard({ items, products, display, now, onOpenItem, stateOf,
     const col = card.parentElement;
     const first = col?.querySelector('.th-card') === card;
     (first ? col?.querySelector('.th-col-h') ?? card : card).scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-  }, [selected?.id, selected?.product]);
+  }, [selected?.id, selected?.product, selectedCard]);
   return <div className="list hm-me">
     <div className={`th-board${dragging ? ' dragging' : ''}`} ref={boardRef}>
     {columns.map((col) => {
@@ -641,7 +650,7 @@ export function InboxBoard({ items, products, display, now, onOpenItem, stateOf,
         {/* A card says who can see it the way a row does: the lock on what
             only you can see, the people mark on what a few chosen people
             can, and nothing on what the whole team can, the default. */}
-        {rows.map((e) => <button type="button" key={e.key} className={`th-card${isSelected(e.item) ? ' selected' : ''}`} onClick={() => (e.item ? onOpenItem(e.item) : e.card && onOpenCard?.(e.card))}>
+        {rows.map((e) => <button type="button" key={e.key} className={`th-card${isSelected(e) ? ' selected' : ''}`} onClick={() => (e.item ? onOpenItem(e.item) : e.card && onOpenCard?.(e.card))}>
           <div className="t">{e.message
             ? <MessageTitle people={e.message.people} fromMe={e.message.fromMe} text={e.title ?? ''} />
             : <TitleThenMark title={e.title ?? ''} mark={

@@ -99,7 +99,7 @@ export function Palette({ products, supervisorPaused, itemCommands = [], batch =
   onTutorial: () => void;
   /** The agent import, off the walk and on a card of its own. */
   onImportAgents: () => void;
-  onFreshUser: (withAgents: boolean) => void;
+  onFreshUser: (withAgents: boolean, withTools?: boolean) => void;
   /**
    * The demo inbox: a second Agentbox on an invented studio's work, so a demo
    * does not have to be her own screen. */
@@ -317,11 +317,15 @@ export function Palette({ products, supervisorPaused, itemCommands = [], batch =
     //
     // "bring" and "across" stay in the keywords anyway, because they were the
     // label and somebody who saw it once should still find the row by it.
+    //
+    // IT NAMES CODEX TOO (w-db6f5e331e). The card behind it has read Codex
+    // conversations since w-ec62ab6b38, but a line that said only "Claude Code"
+    // told a person who uses only Codex that it was not for them.
     {
       id: 'import-agents',
-      label: 'Import your Claude Code agents',
-      hint: 'the ones already on this Mac · they land in your inbox',
-      keywords: 'import agents claude code subagents existing mine bring across add my',
+      label: 'Import agents from Claude Code or Codex',
+      hint: 'your last ten days on this Mac · they land in your inbox',
+      keywords: 'import agents claude code codex conversations threads sessions subagents existing mine bring across add my recent',
       run: onImportAgents,
     },
     /* * ------------------- THE TUTORIAL, WHICH IS NOT THE ONBOARDING ---------
@@ -455,7 +459,11 @@ export function Palette({ products, supervisorPaused, itemCommands = [], batch =
       id: 'fresh-user',
       label: `Open ${NAME} as a new user`,
       hint: 'nothing set up · yours keeps running',
-      keywords: 'new user fresh install stranger onboarding first run clean empty blank test website download nothing of mine agents claude code sessions',
+      keywords: 'new user fresh install stranger onboarding first run clean empty blank test website download nothing of mine agents claude code sessions setup plan codex chatgpt not installed',
+      // IT KEEPS HER CLAUDE CODE (w-9f6975906c). For one evening it hid it so
+      // the plan question showed, and she answered: "I do have a Claude plan so
+      // it incorrectly failed to detect it". A new user like her has it, and
+      // the plan question is the rare case.
       run: () => onFreshUser(false),
     },
     {

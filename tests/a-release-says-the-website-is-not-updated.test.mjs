@@ -31,9 +31,13 @@ const publish = read('scripts/publish-download.mjs');
 // a repo or filename that drifts from it uploads to somewhere nobody reads.
 describe('where the download actually comes from', () => {
   it('is the asset the publish script writes to', () => {
-    expect(publish).toContain("const REPO = 'Astral-Agent/astral-releases'");
-    expect(publish).toContain("const ASSET = 'Astral-arm64.dmg'");
-    expect(publish).toContain("const DOWNLOAD = 'https://astral.ac/download'");
+    // Both now come from scripts/lib/live-download.mjs (2026-10-05), the one
+    // place the public release repo and the download's file name are written.
+    expect(publish).toContain('const REPO = RELEASE_REPO');
+    expect(publish).toContain('const ASSET = DOWNLOAD_ASSET');
+    // The website moved to agentbox.ac on 2026-10-05; its /download redirect
+    // points at the same repo and asset as astral.ac's did.
+    expect(publish).toContain("const DOWNLOAD = 'https://agentbox.ac/download'");
   });
 });
 
@@ -68,7 +72,7 @@ describe('the end of a release', () => {
     expect(block).toContain('THE WEBSITE IS NOT UPDATED');
     // The sentence is printed outside the `if (serving)`, so a laptop off the
     // network still gets told the website did not change.
-    expect(block).toContain('astral.ac/download is handing out whatever was last uploaded');
+    expect(block).toContain('agentbox.ac/download is handing out whatever was last uploaded');
   });
 });
 
@@ -103,7 +107,7 @@ describe('publishing', () => {
   // A green upload log is not a published file (measured on this product more
   // than once), so the last step fetches the download and compares md5.
   it('proves it by downloading the file it just uploaded', () => {
-    expect(publish).toContain('https://astral.ac/download');
+    expect(publish).toContain('https://agentbox.ac/download');
     expect(publish).toContain('got !== mine');
   });
 

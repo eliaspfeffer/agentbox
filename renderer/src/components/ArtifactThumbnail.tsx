@@ -50,7 +50,7 @@ function ThumbnailContent({product, path}: {product:string; path:string}) {
     return () => observer.disconnect();
   }, []);
   return <div ref={host} className="artifact-thumbnail" data-kind={kind} aria-label="Artifact preview">
-    {excerpt !== null ? <pre>{excerpt}</pre> : url && !failed ? <iframe src={url} title={`Preview of ${path.split('/').pop()}`} sandbox="allow-same-origin" tabIndex={-1} loading="lazy" onError={() => setFailed(true)} onLoad={revealFrame} style={{opacity:frameReady ? 0.55 : 0,transform:`scale(${width / 1200})`}} /> : failed ? <span>Preview unavailable</span> : <PreviewLoading delayed />}
+    {excerpt !== null ? <pre>{excerpt}</pre> : url && !failed ? <iframe src={url} title={`Preview of ${path.split('/').pop()}`} sandbox="allow-same-origin" scrolling="no" tabIndex={-1} loading="lazy" onError={() => setFailed(true)} onLoad={revealFrame} style={{opacity:frameReady ? 0.55 : 0,transform:`scale(${width / 1200})`}} /> : failed ? <span>Preview unavailable</span> : <PreviewLoading delayed />}
     {url && !failed && <PreviewLoading ready={frameReady} delayed />}
   </div>;
 }

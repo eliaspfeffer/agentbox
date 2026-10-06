@@ -52,10 +52,14 @@ describe('both screens say why', () => {
     expect(walk).toMatch(/fr-note fr-refused/);
   });
 
-  it('the New Project card shows it under the sentence it is about', () => {
+  // THE CARD IS GONE (w-33e1c968f0, 2026-10-05), so the sentence has no card to
+  // sit on: New project is the Mac's own folder window and nothing of ours. The
+  // refusal still has to REACH somebody, which is the whole point of this file,
+  // so it goes up to the caller and is said in the toast.
+  it('making a project hands the refusal up rather than swallowing it', () => {
     const card = read('renderer/src/components/NewProject.tsx');
-    expect(card).toMatch(/if \(why\) \{ setRefused\(why\); return; \}/);
-    expect(card).toMatch(/np-refused/);
+    expect(card).toMatch(/if \(why\) \{ onRefused\?\.\(why\); onClose\(\); return; \}/);
+    expect(read('renderer/src/App.tsx')).toMatch(/onRefused=\{\(say\) => showToast\(say\)\}/);
   });
 
   it('neither of them is a panel, a colour or an icon', () => {
@@ -68,13 +72,22 @@ describe('both screens say why', () => {
   });
 });
 
-describe('nothing proposes a guarded folder any more', () => {
-  it('~/Desktop/dev is gone from the proposal', () => {
-    expect(read('renderer/src/project-folder.ts')).not.toMatch(/'~\/Desktop\/dev/);
+describe('nothing proposes a folder at all any more', () => {
+  // It used to propose `<parent>/<slug>` and make it; the parent was learned
+  // from the projects you had, and `~/dev` when you had none. That is what put
+  // an empty `~/dev/agentbox` on a tester's Mac. Now the folder is one picked
+  // in the Mac's window, so a guarded folder cannot be proposed because nothing
+  // is proposed (w-33e1c968f0).
+  it('~/Desktop/dev, and every other guess, is gone from the module', () => {
+    const module = read('renderer/src/project-folder.ts');
+    expect(module).not.toMatch(/'~\/Desktop\/dev/);
+    // The comment at the top still NAMES the function, because that is the
+    // record of what went wrong; what must not come back is the function.
+    expect(module).not.toMatch(/export function proposedFolder/);
   });
 
-  it('and the app hands the card a parent learned from her own projects', () => {
-    expect(read('renderer/src/App.tsx')).toMatch(/parent=\{proposeParent\(/);
+  it('and the app proposes no parent to anything', () => {
+    expect(read('renderer/src/App.tsx')).not.toMatch(/proposeParent/);
   });
 });
 

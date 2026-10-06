@@ -34,7 +34,8 @@ import { changedFile, commandWork, isBookkeeping, plainCommand, saidCount, short
 import { said, traceLines } from './terminal';
 import type { TraceSession } from './notes';
 import { threadEvents, withRuns, type LedgerLine, type ThreadEvent } from './thread-history';
-import type { AgentEvent, AgentWork } from './types';
+import type { AgentEvent, AgentTurn, AgentWork } from './types';
+import { liftReplies } from './team/chat-threads';
 import type { UndoMark } from './undo-marks';
 
 // `[Read] strategy/art-style.md` — how the supervisor writes a tool call into a
@@ -118,6 +119,11 @@ export interface ItemThread {
   // long Claude Code session is, by the same function, and the gap says its own
   // number where it bites.
   omitted: number;
+  // IN A CHAT, THE REPLIES IN EACH THREAD, by the uid of the message they
+  // answer, oldest first (w-920461cbe6). They are not in `events`: a thread is
+  // read in its panel beside the chat, and the message it hangs off carries one
+  // line saying how many there are. Empty everywhere else.
+  replies: Record<string, AgentTurn[]>;
 }
 
 /** One trace line that ran a tool, as the quiet line the thread draws. */
@@ -534,7 +540,7 @@ export function itemThread(
     if (event.message && event.words) {
       const isAnswer = event.who === 'agent' && (event.field === 'result' || event.field === 'note');
       placed.push({
-        node: { at: event.at, who: event.who === 'you' ? 'you' : 'it', text: event.words, ...(event.by ? { by: event.by } : {}) },
+        node: { at: event.at, who: event.who === 'you' ? 'you' : 'it', text: event.words, ...(event.by ? { by: event.by } : {}), ...(event.uid ? { uid: event.uid } : {}), ...(event.inReplyTo ? { inReplyTo: event.inReplyTo } : {}) },
         run: null,
         answer: isAnswer ? { at: event.at, text: event.words, field: event.field as 'result' | 'note' } : null,
       });
@@ -691,7 +697,13 @@ export function itemThread(
   // A CONVERSATION WITH A PERSON reads like a chat: the latest sixty messages,
   // and everything older behind the line at the top, never a first message
   // pinned above a gap.
-  const windowed = threadWindow(out, opts.chat ? { whole: !!opts.whole, opening: 0, keep: 60 } : { whole: !!opts.whole }) as { events: AgentEvent[]; omitted: number };
+  //
+  // AND A CHAT'S THREADS COME OUT FIRST (w-920461cbe6), so the sixty are sixty
+  // messages of the chat itself and the gap never counts a reply as an earlier
+  // message: the replies are read in the thread's panel, whole.
+  const lifted = opts.chat ? liftReplies(out) : { events: out, replies: {} };
+  const inThreads = saidCount(Object.values(lifted.replies).flat());
+  const windowed = threadWindow(lifted.events, opts.chat ? { whole: !!opts.whole, opening: 0, keep: 60 } : { whole: !!opts.whole }) as { events: AgentEvent[]; omitted: number };
   const shown = saidCount(windowed.events) + (outcome ? 1 : 0);
-  return { events: windowed.events, outcome, after, total: spoken, omitted: spoken - shown };
+  return { events: windowed.events, outcome, after, total: spoken, omitted: spoken - inThreads - shown, replies: lifted.replies };
 }

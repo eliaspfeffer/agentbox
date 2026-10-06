@@ -12,15 +12,33 @@
 // thirty minutes when "tomorrow" was typed, while the preview beside the box was
 // already saying it did not understand (2026-08-10). Refusing out loud is the
 // only honest third answer, and `enterMeans` is the one copy of that rule.
+//
+// The refusal is said QUIETLY, on the preview's own line. It used to be a
+// sentence in the alert orange under the box, and a typo then looked like the
+// app breaking (2026-10-05).
 
 import { useEffect, useRef, useState } from 'react';
 import { enterMeans } from '../format';
-import { Name } from '../../../shared/product-name.mjs';
 
 export interface PickerOption<T> {
   label: string;
   value: T;
   hint?: string;
+}
+
+// What the line beside the box says: the time it read, "not a time" while the
+// words are unreadable, and after a refused Enter the same words plus a hint.
+export function previewLine<T>(
+  text: string,
+  parsed: { value: T } | null,
+  refused: boolean,
+  previewOf: (value: T) => string,
+  hintWhenRefused: string,
+): { text: string; tone: 'ok' | 'unread' | 'refused' } | null {
+  if (!text.trim()) return null;
+  if (parsed) return { text: previewOf(parsed.value), tone: 'ok' };
+  if (refused) return { text: `not a time · ${hintWhenRefused}`, tone: 'refused' };
+  return { text: 'not a time', tone: 'unread' };
 }
 
 export function SchedulePicker<T>({
@@ -41,6 +59,7 @@ export function SchedulePicker<T>({
   const [refused, setRefused] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
   const parsed = parse(text);
+  const preview = previewLine(text, parsed, refused, previewOf, hintWhenRefused);
 
   useEffect(() => ref.current?.focus(), []);
 
@@ -76,17 +95,12 @@ export function SchedulePicker<T>({
               if (e.key === 'ArrowUp') { e.preventDefault(); setSelected((s) => Math.max(0, s - 1)); }
             }}
           />
-          {text && (
-            <span className={`snooze-preview ${parsed ? '' : 'invalid'}`}>
-              {parsed ? previewOf(parsed.value) : 'not a time'}
+          {preview && (
+            <span className={`snooze-preview ${preview.tone === 'ok' ? '' : preview.tone === 'refused' ? 'invalid refused' : 'invalid'}`}>
+              {preview.text}
             </span>
           )}
         </div>
-        {refused && (
-          <div className="snooze-refused">
-            {Name} did not understand "{text.trim()}", so nothing was set. {hintWhenRefused}
-          </div>
-        )}
         <div className="palette-list">
           {options.map((option, i) => (
             /* Hover follows the MOUSE MOVING, not the modal arriving. This

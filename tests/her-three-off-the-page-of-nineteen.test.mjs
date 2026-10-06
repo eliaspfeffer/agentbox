@@ -49,7 +49,8 @@ describe('2. nothing counts the walk on screen any more', () => {
     // What went is the drawing, not the beats. Renaming it is the whole of how
     // a later session is stopped from reading `DOT` and drawing one again.
     // Nineteen since 2026-10-01: who a thread is for, and the board, each became a beat of their own.
-    expect(N_BEATS).toBe(19);
+    // Sixteen since 2026-10-05 (w-9f6975906c): the three introduction slabs went.
+    expect(N_BEATS).toBe(16);
     expect(new Set(Object.values(BEAT)).size).toBe(N_BEATS);
     expect(onboarding).not.toMatch(/export const DOT\b/);
     expect(onboarding).toMatch(/export const BEAT: Record<Step, number>/);
@@ -96,8 +97,12 @@ describe('3. the way out is on the tutorial, and the harness looks at it', () =>
 
   it('is nowhere near the reply box, which is what the bottom corner belongs to', () => {
     const rule = css.slice(css.indexOf('.fr-out {'), css.indexOf('.fr-out:hover'));
-    expect(rule).not.toMatch(/bottom: \d+px/);
-    expect(rule).toMatch(/top: 0/);
+    // BOTTOM LEFT since 2026-10-05 (w-9f6975906c): at top: 0 it sat in the
+    // title bar band, where real clicks never land. The reply box is on the
+    // right, so the left corner keeps clear of it.
+    expect(rule).toMatch(/left: \d+px/);
+    expect(rule).not.toMatch(/right: \d+px/);
+    expect(rule).not.toMatch(/top: 0/);
   });
 
   it('cannot crowd the capsule at any window the app will open', () => {
@@ -108,7 +113,7 @@ describe('3. the way out is on the tutorial, and the harness looks at it', () =>
     const reserve = Number((pill.match(/max-width: min\(\d+px, calc\(100vw - (\d+)px\)\)/) || [])[1]);
     expect(reserve).toBe(260);
     const rule = css.slice(css.indexOf('.fr-out {'), css.indexOf('.fr-out:hover'));
-    const inset = Number((rule.match(/right: (\d+)px/) || [])[1]);
+    const inset = Number((rule.match(/left: (\d+)px/) || [])[1]);
     expect(reserve / 2).toBeGreaterThan(inset);
     // And the app never opens narrower than this, so the cap is always in force.
     expect(read('main/main.mjs')).toMatch(/minWidth: 980/);

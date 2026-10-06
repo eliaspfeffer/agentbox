@@ -8,4 +8,10 @@ export function heldByAPerson(item: Row): boolean;
 export function mayRunHere(item: Row, product: ProductLike, me: string | null): boolean;
 export function inMyInbox(item: Row, product: ProductLike, me: string | null): boolean;
 export function lastSpeaker(item: Row): string | null;
+export function iSpokeLast(item: Row, product: ProductLike, me: string | null): boolean;
 export function handedOnByReply(item: Row, product: ProductLike, me: string | null): string | null;
+/** One thread you are in where somebody spoke after you (w-920461cbe6). */
+export interface ThreadWaiting { uid: string; mine: boolean; fresh: number; people: string[]; text: string; last: string; lastBy: string }
+/** What in a conversation waits on you; null on a row from before threads. */
+export interface Waits { chat: number; threads: ThreadWaiting[] }
+export function whatWaits(item: Row & { talk?: unknown }, me: string | null): Waits | null;

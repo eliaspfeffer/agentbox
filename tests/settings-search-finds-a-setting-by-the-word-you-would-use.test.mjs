@@ -30,7 +30,10 @@ describe('settings search', () => {
   });
 
   it('finds a setting by its own name', () => {
-    expect(labels(searchSettings('agents at once', { pages: everyPage }))[0]).toBe('running: Agents at once');
+    // The row is "How many run at once" since w-e5225b62ba, and "agents" is one
+    // of its words, so the old phrase still has to find it: a renamed setting
+    // that stops answering to its old name is a setting nobody can find again.
+    expect(labels(searchSettings('agents at once', { pages: everyPage }))[0]).toBe('running: How many run at once');
     expect(labels(searchSettings('theme', { pages: everyPage }))[0]).toBe('appearance: Theme');
   });
 

@@ -155,10 +155,11 @@ describe('where it sits in the walk', () => {
   // the half of this that is hers.
   it('is on the finish card, which is the last dot', () => {
     // Nineteen since 2026-10-01: who a thread is for, and the board, each became a beat of their own.
-    expect(N_BEATS).toBe(19);
+    // Sixteen since 2026-10-05 (w-9f6975906c): the three introduction slabs went.
+    expect(N_BEATS).toBe(16);
     expect(BEAT.done).toBe(N_BEATS);
     expect(BEAT.landed).toBe(N_BEATS);
-    expect(BEAT.answer).toBe(12);
+    expect(BEAT.answer).toBe(9);
     // There is no beat of its own left for it to sit on.
     expect(BEAT.agents).toBeUndefined();
   });
@@ -224,9 +225,12 @@ describe('where it sits in the walk', () => {
     // when there are no agents on the Mac: a line reading "these are the
     // agents already on this Mac" over nothing is the contradiction this
     // whole file is about.
-    expect(ia.split('walk.line').length - 1).toBe(1);
-    expect(ia).toContain("{walk && screen === 'door' && some && <p className=\"ia-offer\">{walk.line}</p>}");
-    expect(ia.split('COPY.agentsRead').length - 1).toBe(1);
+    //
+    // CHANGED 2026-10-05 (w-db6f5e331e): the one-list card says one line over
+    // its list in the walk and in ⌘K alike, and only when there is a list.
+    expect(ia).toContain('{read && some && <p className="ia-line">{LIST.line}</p>}');
+    expect(ia.split('LIST.line').length - 1).toBe(1);
+    expect(ia).not.toContain('COPY.agentsRead');
   });
 });
 

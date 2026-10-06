@@ -141,6 +141,20 @@ export const WORK_ITEM_FIELDS = [
   //   blockedBy, blocks
   //               other threads' ids, the summary's Linked part
   'visibility', 'visibleTo', 'problem', 'progress', 'solution', 'blockedBy', 'blocks',
+  // A REACTION, AND IT IS THE ONE FIELD ON THIS LIST THAT IS A DELTA RATHER
+  // THAN A VALUE: `{ on, emoji }` to put one on, `{ on, emoji, off: true }` to
+  // take yours back, where `on` is the uid of the line the message was written
+  // as. Every other field here keeps the latest write and drops the rest, which
+  // for a reaction would mean your 👀 erasing the one a teammate put on the same
+  // message a second earlier. The fold accumulates these per person instead and
+  // reads them back as `reactions` (see foldWorkItems); nothing ever reads a
+  // bare `react` off an item.
+  'react',
+  // A REPLY IN A THREAD (w-920461cbe6): the uid of the message line it answers,
+  // written on the same line as the reply's own `answer`. Like `react` it is a
+  // mark on ONE line rather than a value the row holds, so the fold skips it;
+  // the chat reads it per line (renderer/src/thread-history.ts).
+  'inReplyTo',
 ];
 
 // THE SUMMARY IS SHARED BETWEEN THE PERSON AND THE AGENT. Everywhere else the
@@ -186,6 +200,9 @@ const MAX_SHORT = 200;
 // see. Four fields at this size still leave a line at half the append ceiling.
 export const MAX_TEXT_BYTES = 32 * 1024;
 const MAX_LABELS = 20;
+// How long one emoji may be, in code points. 👩🏽‍🚀 is five; eight leaves room
+// for the longest sequence anyone picks and refuses a sentence pasted in.
+const MAX_EMOJI = 8;
 const MAX_ID_CHARS = 64;
 // A single line longer than this is treated as torn or hostile and skipped
 // rather than parsed. Matches the ceiling records.mjs already uses.
@@ -409,6 +426,18 @@ function coerceField(field, value) {
       const people = [...new Set(value.map(shortId).filter(Boolean))].slice(0, MAX_LABELS);
       return people.length ? people : undefined;
     }
+    // WHICH MESSAGE AND WHICH EMOJI. `on` is a line uid, bounded like any other
+    // id; the emoji is counted in CHARACTERS rather than bytes, because a flag
+    // or a person with a skin tone is several code points joined and cutting one
+    // mid-sequence stores a glyph nobody chose.
+    case 'react': {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+      const on = shortId(value.on);
+      const emoji = typeof value.emoji === 'string' ? [...value.emoji.trim()].slice(0, MAX_EMOJI).join('') : '';
+      if (!on || !emoji) return undefined;
+      return value.off === true ? { on, emoji, off: true } : { on, emoji };
+    }
+    case 'inReplyTo': return shortId(value) ?? undefined;
     case 'visibility': return value === 'private' || value === 'team' || value === 'people' ? value : undefined;
     // An empty list is a real value: it is how the last chosen person comes
     // off a thread, and the thread then reaches nobody until she names one.
@@ -450,6 +479,22 @@ function coerceField(field, value) {
 //   2. skip an agent line fenced out by a newer epoch (the zombie writer)
 //   3. apply the claim, if this line carries one
 //   4. apply the patch field by field, founder outranking agent
+// THE CHIPS UNDER A MESSAGE, out of the presses the ledger holds. Message by
+// message, emoji by emoji, the people still on it — oldest press first, so the
+// chips do not reorder themselves under somebody's pointer as a teammate's
+// lines arrive. Returns null when every press has been taken back, which is
+// what leaves a row with no `reactions` at all.
+function rollUpReactions(presses) {
+  const live = [...presses.values()].filter((p) => !p.off).sort((a, b) => a.ts - b.ts);
+  if (!live.length) return null;
+  const out = {};
+  for (const press of live) {
+    const message = out[press.on] ?? (out[press.on] = {});
+    (message[press.emoji] ?? (message[press.emoji] = [])).push(press.who);
+  }
+  return out;
+}
+
 export function foldWorkItems(lines, now = Date.now()) {
   const items = new Map();
 
@@ -502,7 +547,38 @@ export function foldWorkItems(lines, now = Date.now()) {
     // are already in her ledger and will be there forever.
     const patch = line.heartbeat ? {} : line.patch;
 
+    // WHO SAID WHAT, AND WHERE, for a conversation between people
+    // (w-920461cbe6). Every person's message, kept in a list of its own because
+    // the fold below keeps only the newest answer, and a busy chat needs to know
+    // who spoke last in the chat itself and in each thread. Only a person's own
+    // words count (a line with a writer), and only rows with people on them keep
+    // the result (see the end of the fold).
+    const words = typeof patch.answer === 'string' && patch.answer !== WITHDRAWN ? patch.answer
+      : typeof patch.body === 'string' ? patch.body : null;
+    if (line.by && words && words.trim()) {
+      (item.said ??= []).push({ uid: line.uid ?? null, by: line.by, ts: line.ts, text: words.trim().slice(0, TALK_TEXT), inReplyTo: patch.inReplyTo ?? null, body: typeof patch.answer !== 'string' });
+    }
+
     for (const [field, value] of Object.entries(patch)) {
+      // A REACTION IS ACCUMULATED, NOT HELD. Every other field below keeps one
+      // value and the newest writer owns it; a reaction belongs to the person
+      // who pressed it, so two people on one message have to survive each other.
+      // The key is the message, the emoji and the person, and within that one
+      // key the newest press wins — by its own timestamp, because a page pulled
+      // from the cloud is not promised in the order anybody pressed anything.
+      if (field === 'react') {
+        if (!item.reacts) item.reacts = new Map();
+        const who = line.by || 'you';
+        const key = `${value.on}\u0000${value.emoji}\u0000${who}`;
+        const was = item.reacts.get(key);
+        if (!was || line.ts >= was.ts) {
+          item.reacts.set(key, { ts: line.ts, off: value.off === true, who, on: value.on, emoji: value.emoji });
+        }
+        continue;
+      }
+      // WHICH MESSAGE A REPLY ANSWERS belongs to that reply's line alone. Held
+      // as a value, the row would carry the newest reply's parent forever.
+      if (field === 'inReplyTo') continue;
       const held = item.wrote[field];
       // There used to be an exception here, for machinery spending a one-off
       // permission mode over the founder's own grant. That field is not on the
@@ -531,9 +607,59 @@ export function foldWorkItems(lines, now = Date.now()) {
   for (const item of items.values()) {
     item.claimExpired = !!(item.claim && item.claim.leaseUntil < now);
     if (item.status === 'claimed' && (!item.claim || item.claimExpired)) item.status = 'open';
+    if (item.reacts) {
+      const chips = rollUpReactions(item.reacts);
+      delete item.reacts;
+      if (chips) item.reactions = chips;
+    }
+    if (item.said) {
+      const said = item.said;
+      delete item.said;
+      if (Array.isArray(item.people) && item.people.length) item.talk = talkOf(said);
+    }
   }
 
   return items;
+}
+
+// A reply taken back reads as this, and is nobody's news.
+const WITHDRAWN = '(withdrawn)';
+// How much of a message the record keeps: enough for a row's one line.
+const TALK_TEXT = 280;
+// How many of the newest messages the record keeps, in the chat and in each
+// thread. The counts it answers stop at your own newest word, which in a chat
+// you are part of is never this far back.
+const TALK_KEEP = 100;
+
+/**
+ * THE CHAT AND ITS THREADS, AS WHO SPOKE WHERE (w-920461cbe6): `chat` is the
+ * main conversation, oldest first, and `threads` the replies under each message
+ * they answer, with who wrote that message and its words. Pure bookkeeping for
+ * `whatWaits` (shared/team-rules.mjs) and the row's one line; the messages
+ * themselves are read off the ledger by the thread view, as before.
+ */
+function talkOf(said) {
+  const lines = [...said].sort((a, b) => a.ts - b.ts);
+  const chat = [];
+  const threads = {};
+  const parents = new Map();
+  const bodies = new Set();
+  for (const s of lines) {
+    // A rename that sends the same opening words again is not a new message.
+    if (s.body) { if (bodies.has(s.text)) continue; bodies.add(s.text); }
+    const said1 = { by: s.by, ts: s.ts, text: s.text };
+    const parent = s.inReplyTo ? parents.get(s.inReplyTo) : null;
+    if (parent) {
+      (threads[s.inReplyTo] ??= { by: parent.by, text: parent.text, replies: [] }).replies.push(said1);
+      continue;
+    }
+    // A reply to a message this chat does not hold is drawn in the chat, so it
+    // counts there too.
+    chat.push(said1);
+    if (s.uid) parents.set(s.uid, said1);
+  }
+  for (const t of Object.values(threads)) t.replies = t.replies.slice(-TALK_KEEP);
+  return { chat: chat.slice(-TALK_KEEP), threads };
 }
 
 /* -------------------------------- the thread ----------------------------- */

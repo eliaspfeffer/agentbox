@@ -70,18 +70,32 @@ describe('the toast after an answer carries the same way in', () => {
   });
 
   it('an approval hands it the row it approved', () => {
-    expect(app).toContain('}, toast, undefined, undefined, { product: item.product, id: item.id }, undid);');
+    // The fourth argument was a written-down `undefined` until w-9cf2b43110,
+    // and it is now `stay`: an Approve pressed in the list of threads a thread
+    // filed approves a row that is NOT the one on screen, and passes stay so
+    // the pane keeps the thread the press came from. Every other caller leaves
+    // it out and it is undefined exactly as before. This test is about the
+    // FIFTH argument, the row that was approved, and that has not moved.
+    expect(app).toContain('}, toast, undefined, stay, { product: item.product, id: item.id }, undid);');
+    // And staying put is the caller's to ask for. Written in here as a
+    // constant, every approval would lose its way in.
+    expect(app).not.toMatch(/\}, toast, undefined, true, \{ product: item\.product/);
   });
 
   it('a picked option hands it the row it picked on', () => {
     expect(app).toContain('`Option ${option.n} → ${item.productName}`, undefined, undefined, { product: item.product, id: item.id }');
   });
 
+  // The fourth argument here is `stay`, for the same reason it is on the
+  // approval above: the No beside a thread this one filed closes THAT row from
+  // the parent, and advancing would throw you off the thread you pressed from
+  // (w-9cf2b43110). Every other caller leaves it out. The fifth stays
+  // undefined, which is what this test is about.
   it('closing a row still says nothing but what happened', () => {
     // Closing, scheduling and priority are not answers: nothing starts on them
     // and there is nothing to go and watch, so those toasts stay plain.
     // The fifth argument, the way in, stays undefined; the last is only what
     // the thread says if a Z takes the close back (w-c78d1e1607).
-    expect(app).toContain('}, `Closed: ${clipToSentence(item.title, TOAST_TITLE)}`, undefined, undefined, undefined, undid);');
+    expect(app).toContain('}, `Closed: ${clipToSentence(item.title, TOAST_TITLE)}`, undefined, stay, undefined, undid);');
   });
 });

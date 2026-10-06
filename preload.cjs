@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld('zero', {
   teamShare: (payload) => ipcRenderer.invoke('zero:team-share', payload),
   teamSync: () => ipcRenderer.invoke('zero:team-sync'),
   teamRoute: (payload) => ipcRenderer.invoke('zero:team-route', payload),
+  teamReact: (payload) => ipcRenderer.invoke('zero:team-react', payload),
   teamMessage: (payload) => ipcRenderer.invoke('zero:team-message', payload),
   threadEdit: (payload) => ipcRenderer.invoke('zero:thread-edit', payload),
   // Repeating tasks. A rule, not a work item, so it has its own channels
@@ -132,6 +133,9 @@ contextBridge.exposeInMainWorld('zero', {
   // it is also what makes the Coding agent row appear, because the path the
   // search lands on is the one that row is drawn from.
   codexRecheck: () => ipcRenderer.invoke('zero:codex-recheck'),
+  // Install a coding agent and start its own sign-in, for somebody who has a
+  // plan and nothing installed. Actions: ready, start, status, again, cancel.
+  engineSetup: (payload) => ipcRenderer.invoke('zero:engine-setup', payload),
   codexAddAccount: () => ipcRenderer.invoke('zero:codex-add-account'),
   // A second login for either agent is a second home folder. Main makes it and
   // hands back the line the built-in terminal runs to sign in.

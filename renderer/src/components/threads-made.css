@@ -2,16 +2,69 @@
    square, one 1px line between rows; the title in the reading face and the state
    in the app's mono capitals, quieter once it is done. */
 .made { margin: 22px 0 6px; }
+/* INSIDE THE CONVERSATION it is part of the turn above it rather than a section
+   under the whole thread (w-2e13752a85), so it sits close to the words that
+   came back with it and the thread's own 22px column sets the gap below. */
+.thread-block .made { margin: 12px 0 0; }
 .made-label { margin-bottom: 8px; font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
 .made-list { border: 1px solid var(--line); border-radius: var(--radius); }
-.made-row {
-  display: flex; align-items: center; gap: 14px; width: 100%; min-height: 40px; padding: 0 14px;
+/* The row holds the two presses. Its right-hand padding is all that stands
+   between the state word (or the press that replaces it) and the list's edge,
+   so every row ends in the same place whichever of the two it carries. 10px
+   rather than the 14 it opened with: "should be closer to the right side". */
+.made-row { display: flex; align-items: center; min-height: 40px; padding-right: 10px; }
+.made-row + .made-row { border-top: 1px solid var(--line); }
+.made-row:hover { background: var(--wash); }
+.made-open {
+  display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; min-height: 40px; padding: 0 0 0 14px;
   appearance: none; background: none; border: 0; border-radius: 0; cursor: pointer; text-align: left;
   font: inherit; font-size: 14px; color: var(--text);
 }
-.made-row + .made-row { border-top: 1px solid var(--line); }
-.made-row:hover { background: var(--wash); }
-.made-row:focus-visible { outline: 1px solid var(--text-faint); outline-offset: -1px; }
+.made-open:focus-visible { outline: 1px solid var(--text-faint); outline-offset: -1px; }
 .made-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .made-state { flex: none; font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim); }
 .made-state.done, .made-state.scheduled { color: var(--text-faint); }
+
+/* THE PRESS THAT STARTS A FILED THREAD (w-9cf2b43110), standing where that
+   row's state word would be and set in the same mono capitals, so the right-
+   hand column reads as one column and not as a word with a widget after it.
+   Square, because the app's own controls are: "a button that matches our own
+   app's style (sharp borders, caps text etc.)".
+
+   IN THE ACCENT, chosen off four drawings: the only thing in this list you can
+   press is the only coloured thing in it. Bordered rather than filled, because
+   three proposals would otherwise be three solid blocks shouting over the
+   titles they belong to, and the loudest thing here should stay the thread's
+   name. It fills in under the cursor.
+
+   TIGHT, AND HUNG 2px PAST THE WORDS: "feel as tho there's too much padding on
+   the approve button". The inside came down from 9px to 7, and the border sits
+   a touch outside the column the state words end at, because a box whose edge
+   lines up exactly with a column of text reads as standing further out than
+   the text does. Its letters stay inside that column; only its edge hangs. */
+.made-approve {
+  flex: none; margin-left: auto; margin-right: -2px; padding: 3px 7px;
+  appearance: none; cursor: pointer; border-radius: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  background: none; color: var(--accent);
+  font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase;
+}
+.made-approve:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.made-approve:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+
+/* AND THE NO (w-9cf2b43110), which settles a proposal rather than starting it:
+   the word alone, no box, in the quietest ink the list has. It appears under
+   the cursor and when it is tabbed to, because a list of three proposals
+   should read as three offers rather than six buttons, and rejecting is the
+   rarer press of the two. It is what stops the thread coming back. */
+.made-reject {
+  flex: none; margin-left: auto; margin-right: 10px; padding: 0;
+  appearance: none; cursor: pointer; border: 0; border-radius: 0; background: none;
+  color: var(--text-faint); font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase;
+  opacity: 0; transition: opacity .12s;
+}
+.made-row:hover .made-reject, .made-reject:focus-visible { opacity: 1; }
+.made-reject:hover { color: var(--text); }
+.made-reject:focus-visible { outline: 1px solid var(--text-faint); outline-offset: 2px; }
+/* With a No in the row, IT holds the auto margin and the chip follows it. */
+.made-reject + .made-approve { margin-left: 0; }

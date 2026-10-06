@@ -23,7 +23,7 @@ import { CLAUDE_PERMISSION_MODES } from '../shared/work-items.mjs';
 import { accountSentence, engineTroubleNote } from '../shared/spawn-trouble.mjs';
 import { readPlan } from './claude-plan.mjs';
 import { effectiveProfiles } from './account-discovery.mjs';
-import { machineSlots, machineNote, MAX_SLOTS } from './machine.mjs';
+import { machineSlots, machineNote, autoAgents, MAX_SLOTS } from './machine.mjs';
 import { NAME } from '../shared/product-name.mjs';
 import { autoSlots } from './memory-gate.mjs';
 import { accountIdentity, claudeLoginCommand, duplicateAccountNote, linkAccountTooling, makeClaudeHome } from './account-tooling.mjs';
@@ -464,6 +464,17 @@ export function readSettings({ config, supervisor, store }) {
     workspace: {
       agentsRunning: !supervisor.paused,
       sessionsAtOnce: config.maxConcurrentSessions,
+      // AUTOMATIC, AND WHAT IT WORKS OUT TO (w-e5225b62ba). `agentsAuto` is who
+      // is deciding; `agentsTotal` is what the whole Mac is running at once,
+      // which is the number the page shows, because the per-account one is
+      // arithmetic nobody should have to do. `agentsNudge` is how many steps
+      // down "Something felt slow" has taken it.
+      agentsAuto: !!config.agentsAuto,
+      agentsTotal: status.capacity,
+      agentsNudge: Math.max(0, Math.round(Number(config.agentsNudge) || 0)),
+      // What Automatic would say right now, so a manual number can be compared
+      // with it without turning Automatic back on to find out.
+      agentsAutoTotal: autoAgents({ gated: !!config.memoryGate, nudge: config.agentsNudge }),
       // THE PLAN THAT SET THE NUMBER ABOVE, when a plan set it. Null in the
       // ordinary case: she picked the number herself, or it is the three every
       // install has always had. It is only ever filled in when somebody would
@@ -833,7 +844,36 @@ export function memoryGateSettings({ config, supervisor }) {
       now = `${mem} ${run}${waiting ? `, ${waiting} waiting` : ''}.`;
     }
   }
-  return { on, slots, slotsAuto, slotsMax: MAX_SLOTS, now };
+  return { on, slots, slotsAuto, slotsMax: MAX_SLOTS, now, reading: memoryReading({ config, supervisor }) };
+}
+
+/**
+ * THE FIGURES THE RUNNING PAGE LEADS WITH (w-e5225b62ba), rather than the same
+ * facts tacked onto the end of three grey paragraphs: "6 running now", "Holding
+ * 3 commands now", "Nothing running now".
+ *
+ * Every field is null when it is not known, and the page leaves out what is
+ * null. A figure invented to fill a slot is worse than a gap: this card's whole
+ * job is to be the one place on the screen that is measured.
+ *
+ * `usedPct` is the kernel's own `kern.memorystatus_level` turned round, which is
+ * what the gate already polls, so the bar and the word above it cannot disagree.
+ */
+export function memoryReading({ config, supervisor }) {
+  const out = { heavy: null, waiting: null, pressure: null, usedPct: null, asked: null, waited: null, refused: null };
+  if (!config.memoryGate) return out;
+  let s = null;
+  try { s = supervisor.memoryGateStatus?.() ?? null; } catch { return out; }
+  if (!s || s.role === 'standby') return out;
+  out.heavy = (s.running ?? []).filter((r) => r.holdsSlot).length;
+  out.waiting = (s.waiting ?? []).length;
+  out.pressure = s.pressure ?? null;
+  if (Number.isFinite(s.freePct)) out.usedPct = Math.max(0, Math.min(100, 100 - s.freePct));
+  const c = s.counts ?? {};
+  if (Number.isFinite(c.asked)) out.asked = c.asked;
+  if (Number.isFinite(c.waited)) out.waited = c.waited;
+  if (Number.isFinite(c.refused)) out.refused = c.refused;
+  return out;
 }
 
 /**
@@ -883,13 +923,34 @@ export function setWorkspaceSetting({ config, supervisor }, { key, value }) {
       supervisor.paused = !value;
       supervisor.onChange?.();
       break;
+    // WHO DECIDES THE NUMBER (w-e5225b62ba). Turning Automatic on does not
+    // throw away the number somebody set: it stays in the file, unread, so
+    // turning Automatic off again gives them their own number back rather than
+    // a fresh guess.
+    case 'agentsAuto':
+      saveConfig(config, { agentsAuto: !!value });
+      supervisor.wake?.();
+      supervisor.onChange?.();
+      break;
+    // SOMETHING FELT SLOW. The one lever a person has that no reading can
+    // replace: they are sitting in front of the Mac and the app is not. It only
+    // ever subtracts, and main/machine.mjs refuses to take it below one.
+    case 'agentsFeltSlow': {
+      const now = Math.max(0, Math.round(Number(config.agentsNudge) || 0));
+      saveConfig(config, { agentsNudge: value === 'reset' ? 0 : now + 1 });
+      supervisor.wake?.();
+      supervisor.onChange?.();
+      break;
+    }
     case 'sessionsAtOnce': {
       // THE MACHINE DOES NOT CLAMP THIS, and for one round it did. These are
       // developers using the tool as they want, so the range is the control's
       // own range, the same on every Mac. What the hardware does is SUGGEST a
       // starting number, one row up.
       const n = Math.max(1, Math.min(MAX_SLOTS, Math.round(Number(value) || 1)));
-      saveConfig(config, { maxConcurrentSessions: n });
+      // Setting a number by hand IS taking the decision back, so the page never
+      // shows a stepper that the supervisor is quietly ignoring.
+      saveConfig(config, { maxConcurrentSessions: n, agentsAuto: false });
       // An explicit choice replaces the startup plan suggestion for BOTH
       // engines. Leaving this marker set makes Codex ignore the new number
       // until loadConfig runs again at restart. It is derived, not persisted.

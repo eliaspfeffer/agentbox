@@ -55,8 +55,15 @@ describe('the text', () => {
     expect(settings).toContain('{found && bin && <Row label="Runs from" desc={copy.where(bin)} />}');
   });
 
-  it('keeps the running count, in the Agents at once sentence', () => {
-    expect(settings).toContain("${w.running ? ` ${w.running} running now.` : ''}");
+  /* THE RUNNING COUNT MOVED OUT OF THE SENTENCE AND INTO THE CARD THAT LEADS
+     THE PAGE (w-e5225b62ba). It used to be the last clause of a grey paragraph
+     — "6 running now" — which is where the one measured fact on the screen went
+     to be read last. It is a figure in the reading card now. The count is still
+     on the page, which is all this ever asked. */
+  it('keeps the running count, now as a figure the page leads with', () => {
+    expect(settings).toContain('<Reading running={w.running}');
+    expect(settings).toContain("cells.push({ n: String(running)");
+    expect(settings).not.toContain('${w.running} running now.');
   });
 });
 

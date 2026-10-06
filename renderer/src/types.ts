@@ -7,6 +7,19 @@ export interface WorkItem {
   id: string;
   product: string;
   productName: string;
+  // WHAT PEOPLE PUT ON EACH MESSAGE IN A CONVERSATION (w-560647d4db): by the
+  // message's line uid, then by emoji, then the people on it. Folded out of the
+  // presses the ledger holds (shared/work-items.mjs); absent on every row
+  // nobody has reacted on, which is every row outside a chat.
+  reactions?: Record<string, Record<string, string[]>>;
+  // WHO SAID WHAT, AND WHERE, in a conversation between people (w-920461cbe6):
+  // the main chat and each thread, oldest first. What decides whose inbox a
+  // busy chat is in and what its row says (`whatWaits`, shared/team-rules.mjs).
+  // Absent on every row without people on it.
+  talk?: {
+    chat: { by: string; ts: number; text: string }[];
+    threads: Record<string, { by: string; text: string; replies: { by: string; ts: number; text: string }[] }>;
+  };
   status: 'open' | 'claimed' | 'done' | 'blocked';
   title: string;
   // The short written name the LIST draws instead of the title, when a session
@@ -457,6 +470,14 @@ export interface AgentTurn {
   // Which person wrote it, on a shared project (the team version). A message
   // from a teammate is drawn with their face and name instead of "You".
   by?: string;
+  // THE MESSAGE'S OWN NAME, the uid of the ledger line it was written as. A
+  // reaction is stored against it (w-560647d4db), so only a message that has
+  // one can wear chips: a message still on its way has not been written down
+  // yet, and the one the ask was quoted from lives on another row.
+  uid?: string;
+  // A REPLY IN A THREAD: the uid of the message it answers (w-920461cbe6).
+  // In a chat, `itemThread` lifts these out of the stream into `replies`.
+  inReplyTo?: string;
   // A CONTINUATION OF THE BLOCK ABOVE, not a new message. Shape B puts the
   // work between the messages, so a reply that stopped for a tool is drawn as
   // two blocks with the thing it ran between them. They are still one reply:
@@ -769,7 +790,23 @@ export interface WorkspaceSettings {
    * of heavy commands at once somebody picked, null for Auto; `slotsAuto` is
    * what Auto is on this Mac; `now` is one sentence about right now, null while
    * it is off. Optional so an older payload still draws the page it drew. */
-  memoryGate?: { on: boolean; slots: number | null; slotsAuto: number; slotsMax: number; now: string | null };
+  /** Who decides how many agents run: Agentbox from this Mac's memory, or a
+   *  number somebody set. `agentsTotal` is what the whole Mac runs at once,
+   *  which is what the page shows; the per-account number is arithmetic nobody
+   *  is asked to do. w-e5225b62ba. */
+  agentsAuto?: boolean;
+  agentsTotal?: number;
+  agentsAutoTotal?: number;
+  agentsNudge?: number;
+  memoryGate?: {
+    on: boolean; slots: number | null; slotsAuto: number; slotsMax: number; now: string | null;
+    /** What the check has measured, for the card the page leads with. Every
+     *  field is null when it is not known, and the card leaves those out. */
+    reading?: {
+      heavy: number | null; waiting: number | null; pressure: string | null; usedPct: number | null;
+      asked: number | null; waited: number | null; refused: number | null;
+    };
+  };
   /**
    * STOP WHAT FINISHED AGENTS LEAVE RUNNING (main/leftovers.mjs). `now` is one
    * sentence about what is left right now, null while it is off. */
@@ -946,7 +983,7 @@ declare global {
       compact(p: { product: string; id: string }): Promise<{state: string; at: number}>;
       remoteControl(p: {product: string; id: string; action?: string}): Promise<{state: string; at: number; text?: string; url?: string; mayBeActive?: boolean} | null>;
       compactionStatus(p: {product: string; id: string}): Promise<{state: string; at: number} | null>;
-      answer(p: { product: string; id: string; answer?: string; status?: string; priority?: number; permissionMode?: string | null; model?: string | null; effort?: string | null; now?: boolean }): Promise<WorkItem>;
+      answer(p: { product: string; id: string; answer?: string; status?: string; priority?: number; permissionMode?: string | null; model?: string | null; effort?: string | null; now?: boolean; inReplyTo?: string }): Promise<WorkItem>;
       sendNow(p: { product: string; id: string }): Promise<{ ok: boolean; interrupted: boolean }>;
       setProductOrder(p: { order: string[] }): Promise<unknown>;
       setProductHidden(p: { product: string; hidden: boolean }): Promise<unknown>;
@@ -972,7 +1009,8 @@ declare global {
       teamShare(p: { product: string; visibility: 'team' | 'people' | 'private'; people?: string[] }): Promise<TeamCallResult>;
       teamSync(): Promise<TeamCallResult>;
       teamRoute(p: { product: string; id: string; route: 'agent' | 'me' | 'back' }): Promise<TeamCallResult>;
-      teamMessage(p: { to: string | string[]; body: string }): Promise<TeamCallResult>;
+      teamReact(p: { product: string; id: string; on: string; emoji: string; off?: boolean }): Promise<TeamCallResult>;
+      teamMessage(p: { to: string | string[]; body: string; priority?: number }): Promise<TeamCallResult>;
       threadEdit(p: { product: string; id: string; patch: ThreadEditPatch }): Promise<{ ok: boolean; error?: string }>;
       schedule(p: { product: string; id: string; runAt: number }): Promise<WorkItem>;
       repeats(): Promise<RepeatRule[]>;
@@ -991,7 +1029,7 @@ declare global {
       // same reason as the two above: a page kept alive by ⌘R can be attached
       // to a main process packed before this channel existed, and the ⌘K row
       // has to be able to say so rather than throw.
-      openFreshUser?(p?: { withAgents?: boolean }): Promise<FreshUser>;
+      openFreshUser?(p?: { withAgents?: boolean; withTools?: boolean }): Promise<FreshUser>;
       // The demo inbox, beside this one. Optional for the same reason.
       openDemo?(): Promise<DemoOpened>;
       // Optional: it arrives with a main-process build, and a renderer running

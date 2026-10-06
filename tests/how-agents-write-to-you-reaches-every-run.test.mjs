@@ -202,6 +202,17 @@ describe(`the text ${NAME} ships`, () => {
     expect(shipped).toMatch(/only run that ends with no options\s+is one that changed nothing/);
   });
 
+  // The hole SHE found (w-1df18b337a, 2026-10-05): a thread said "Shipped" and
+  // its options still asked whether to ship, and the brief capped a list at
+  // "two is fine, three is the most", with nothing about one. Her words: "a
+  // one-option response here should be totally viable ... It can be 1 through
+  // maybe 4."
+  it('allows one to four options and never re-offers what already happened', () => {
+    expect(shipped).toContain('one to four options');
+    expect(shipped).toContain('NEVER OFFER WHAT YOUR RUN ALREADY DID');
+    expect(shipped).toContain('"Close this task"');
+  });
+
   // The hole SHE found, reading the first real example (2026-08-23): the bold
   // line asked whether to keep the fsync stub and option one asked whether to
   // commit the branch. The old text asked for a good opening line and,
@@ -287,8 +298,13 @@ describe(`the text ${NAME} ships`, () => {
   // those landed on a page of words. The app now opens only a drawing
   // (message-artifacts.ts); this file is where every run learns to stop writing
   // the report that used to fill the pane.
+  //
+  // Raised from 5800 to 6100 for 233 characters (w-1df18b337a): one to four
+  // options, and never offering what the run already did. Measured on her
+  // store that day: 248 of 825 rows drawing a pick were drawing one an agent
+  // had already acted on, her "Shipped" thread asking whether to ship among them.
   it('stays small enough to sit on every run', () => {
-    expect(shipped.length).toBeLessThan(5800);
+    expect(shipped.length).toBeLessThan(6100);
   });
 
   // THE SECOND COPY IS NOT ASKED FOR ANY MORE, AND THAT REPLACES THE RULE THAT

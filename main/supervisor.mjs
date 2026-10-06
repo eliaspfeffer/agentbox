@@ -110,6 +110,7 @@ import { MemoryGateServer, defaultSocketPath as memoryGateSocketPath } from './m
 import { autoSlots, DEFAULTS as MEMORY_GATE } from './memory-gate.mjs';
 import { LeftoverCleaner } from './leftovers.mjs';
 import { syncCodexMemoryGate } from './codex-memory-gate.mjs';
+import { autoAgents, perAccountAgents } from './machine.mjs';
 
 const POLL_MS = 15_000;
 // HOW LONG SHE WAITS AFTER PRESSING THE BUTTON, and until now it was the line
@@ -3202,8 +3203,41 @@ export class Supervisor {
    * used when nobody has said, which is also the number it already gets on
    * every Mac whose Claude plan is Max or unreadable.
    */
+  /**
+   * THE MACHINE AUTOMATIC SIZES FOR. Empty means this one: `autoAgents` reads
+   *  the memory and the cores itself. A test names a machine here, so what it
+   *  proves does not change with the computer the suite runs on (GitHub's
+   *  runner came out at one agent and turned three claims red, 2026-10-05). */
+  _machine() {
+    return {};
+  }
+
   _slotsPerAccount(engine = DEFAULT_ENGINE) {
     const planSpokeForClaude = engineOf(engine) !== DEFAULT_ENGINE && !!this.config.planSlotsFrom;
+    // AUTOMATIC ASKS THE MACHINE (w-e5225b62ba), and the whole of the change is
+    // where the number comes from: this still answers PER ACCOUNT and
+    // `_capacityFor` still multiplies it by the live accounts, so nothing
+    // downstream of it moved.
+    //
+    // THE DIVISION IS THE POINT. The number used to be per account, so
+    // connecting a second login silently asked the Mac to carry twice as much
+    // while the page still read 3. Automatic answers for the machine and shares
+    // that out, so what the Mac is asked to do does not change when an account
+    // is added.
+    //
+    // A SMALL PLAN STILL WINS. `slotsForPlans` answers one at a time for a
+    // subscription that is not Max; that is a fact about the subscription and
+    // not about this Mac, so Automatic may only ever come out at or under it.
+    if (this.config.agentsAuto && !planSpokeForClaude) {
+      const total = autoAgents({
+        ...this._machine(),
+        gated: !!this.config.memoryGate,
+        nudge: this.config.agentsNudge,
+      });
+      const per = perAccountAgents(total, this._liveProfilesFor(engineOf(engine)).length);
+      const plan = this.config.planSlotsFrom ? Number(this.config.maxConcurrentSessions) : null;
+      return Number.isFinite(plan) && plan >= 1 ? Math.min(Math.floor(plan), per) : per;
+    }
     const set = Number(planSpokeForClaude ? DEFAULT_SESSIONS_AT_ONCE : this.config.maxConcurrentSessions);
     return Number.isFinite(set) && set >= 1 ? Math.floor(set) : 1;
   }

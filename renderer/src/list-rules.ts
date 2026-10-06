@@ -14,7 +14,7 @@
 //             cmd (or ctrl) picks one out.
 import { isCleanRun } from '../../shared/repeats.mjs';
 import { answerSettled } from '../../shared/answers.mjs';
-import { previewText } from './format';
+import { firstRealLine, previewText } from './format';
 import { TROUBLE_ID } from './trouble-row';
 import { DONE } from './done-word';
 
@@ -56,6 +56,9 @@ export interface InboxItem {
   runAt?: number;
   /** 'later' while a thread sits in Later, written down and not begun. */
   start?: 'later' | 'now';
+  /** The thread this one was filed under: what makes it a proposal. */
+  parent?: string;
+  createdAt?: number;
   updatedAt?: number;
   wrote?: Record<string, { ts: number; source: string } | undefined>;
 }
@@ -226,10 +229,83 @@ export function belongsInInbox(
   if (i.status === 'blocked') return true;
   if (i.kind === 'question') return !liveAnswer(i); // answered questions are the agent's again
   if (i.kind === 'review') return !liveAnswer(i);   // an answered review is being enacted
-  // Human-in-the-loop: agent-filed work is a PROPOSAL awaiting your approval;
-  // it sits here, not in a queue, until you say run it.
+  // A PROPOSAL IS NOT A ROW HERE (w-9cf2b43110): it waits in Later and the
+  // thread that filed it shows it, with the press. See `isProposal` below.
+  if (isProposal(i)) return false;
+  // Human-in-the-loop: agent-filed work the thread mask cannot carry — one
+  // filed under no thread at all — is a PROPOSAL awaiting your approval; it
+  // sits here, not in a queue, until you say run it.
   if (i.status === 'open' && !hers(i)) return !liveAnswer(i);
   return false; // blocked is handled above; everything else here is the agent's
+}
+
+/* ------------------------- what an agent proposes ------------------------ */
+/**
+ * A THREAD AN AGENT FILED UNDER ANOTHER, WAITING ON A YES (w-9cf2b43110).
+ *
+ * "I shouldn't have to see those. They're often a little confusing, and
+ * there's lots of technical terminology. It's basically agents talking to each
+ * other... my expectation is that I am the human in the loop in the inbox and
+ * I only see things that need me."
+ *
+ * One of these used to be its own row in Needs you. It is now in Later, which
+ * is already the app's word for written down and deliberately not begun, and
+ * the thread that proposed it carries it with the press (ThreadsMade).
+ *
+ * FOUR KINDS ARE NOT PROPOSALS, and each for its own reason:
+ *
+ *   a question or a review, which an agent addresses TO you: its options are
+ *   only legible on the row, so hiding it would hide the ask itself;
+ *
+ *   one you wrote (`founder`), which needs nobody's approval;
+ *
+ *   one already answered, claimed, finished or blocked, which is no longer
+ *   waiting on anything from you. A WITHDRAWN approval is not an answer;
+ *
+ *   and ONE FILED UNDER NO THREAD AT ALL, which is the line that keeps this
+ *   safe. Nothing may be hidden with nowhere to be reached from — the same
+ *   rule `threadMasked` keeps above — so a proposal with no carrier stays
+ *   exactly where it was.
+ */
+export function isProposal(i: InboxItem): boolean {
+  if (i.status !== 'open' || hers(i) || liveAnswer(i)) return false;
+  if (i.kind === 'question' || i.kind === 'review') return false;
+  return Boolean(i.parent);
+}
+
+/**
+ * HOW LONG LATER MAY KEEP ONE QUIETLY. "Sometimes the tab later is not meant
+ * to be looked at, so I think things that go there are really easy to lose."
+ * So the quiet has a deadline, and their range for it was "24 - 72 hours,
+ * somewhere there. A week is likely no longer relevant/forgotten. Even 3 days
+ * is ancient tbh" — the short end of their own range.
+ */
+export const PROPOSAL_PATIENCE = 24 * 3_600_000;
+
+/**
+ * The threads that proposed something a day ago and have heard nothing.
+ *
+ * THE THREAD COMES BACK, NEVER THE PROPOSAL. The thread is the half written in
+ * words a person wrote, and it already draws every proposal under it with its
+ * press, so one row brings back all of them and brings back none of the
+ * agent-to-agent text that started this.
+ *
+ * It names a thread it can see in `items`: a proposal whose parent is not
+ * there has nothing to come back, which is why `isProposal` refuses to hide
+ * one in the first place.
+ */
+export function threadsOwedAnAnswer<T extends InboxItem & { id: string; parent?: string }>(
+  items: readonly T[],
+  now = Date.now(),
+): Set<string> {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const owed = new Set<string>();
+  for (const i of items) {
+    if (!isProposal(i)) continue;
+    if (now - (i.createdAt ?? 0) <= PROPOSAL_PATIENCE) continue;
+    if (i.parent && byId.has(i.parent)) owed.add(i.parent);
+  }
+  return owed;
 }
 
 /* ----------------------------- in progress ------------------------------ */
@@ -523,10 +599,20 @@ export function rowSummary(
   // title has to be what he said, not her own question read back to her. Only
   // a reply by somebody other than whoever wrote the ask counts, so on one Mac,
   // where no line carries a writer, nothing changes.
+  // THE NEWEST THING SAID IS THE NEWS, WHOEVER SAID IT (w-560647d4db). This
+  // used to require a DIFFERENT writer — a teammate's reply over your ask —
+  // which is the common case and not the only one. In a conversation between
+  // two people the same person routinely writes both: a teammate starts it and
+  // the same teammate sends the latest message, so the test failed and the row
+  // printed their oldest message, days old and already read. A row cannot print
+  // "what was said last" and then make an exception for who said it.
+  //
+  // `by` is still what gates this, and it still leaves the single-person app
+  // exactly as it was: with nobody signed in no line carries a writer at all.
   const said = i.wrote?.answer;
-  if (i.answer && said?.by && said.by !== i.wrote?.body?.by
+  if (i.answer && said?.by
     && said.ts >= Math.max(i.wrote?.body?.ts ?? 0, i.wrote?.result?.ts ?? 0)) {
-    return clipToSentence(previewText(i.answer));
+    return clipToSentence(firstRealLine(i.answer));
   }
   const finished = view === 'done' || i.status === 'done';
   const resultIsNewer = (i.wrote?.result?.ts ?? 0) > (i.wrote?.body?.ts ?? 0);

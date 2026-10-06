@@ -29,7 +29,9 @@ describe('the sidebar note is shown in the walk rather than described on a page'
   it('is not one of the introduction slabs', () => {
     expect(COPY.intro).toHaveLength(3);
     for (const slab of COPY.intro) expect(slab.piece).not.toBe('notes');
-    expect(INTRO).toEqual(['inbox', 'away', 'goal', 'hand']);
+    // The introduction is the hand-off alone since 2026-10-05 (w-9f6975906c),
+    // so there is no slab for the note to be.
+    expect(INTRO).toEqual(['hand']);
   });
 
   // THE NOTE BEAT IS GONE. It rang `.rail-note` on the project rail, and the

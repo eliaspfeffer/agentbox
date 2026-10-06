@@ -58,18 +58,71 @@ export function lastSpeaker(item) {
   return latest?.by ?? item?.createdBy ?? null;
 }
 
+/**
+ * WHAT IN A CONVERSATION IS WAITING ON YOU (w-920461cbe6). Asked the day
+ * threads shipped: in a busy chat, with three people answering your thread and
+ * others carrying on in the chat, what reaches your inbox? Not a row per
+ * message, and not a thread you are not in; and a thread waiting on you must
+ * not be lost because you said something in the chat.
+ *
+ * So: `chat` is how many messages in the main chat came after your own newest
+ * one there, and `threads` is every thread you are IN (you wrote the message it
+ * hangs off, or replied in it) where somebody else spoke after you, newest
+ * first, with how many replies are new, who wrote them, what the thread is
+ * about and its newest words. Null for a row with no record of who spoke where
+ * (one from before threads), which then reads by `lastSpeaker` as it always did.
+ */
+export function whatWaits(item, me) {
+  const talk = item?.talk;
+  if (!talk || !me) return null;
+  const since = (list) => { let n = 0; for (let k = list.length - 1; k >= 0 && list[k].by !== me; k -= 1) n += 1; return n; };
+  const threads = [];
+  for (const [uid, t] of Object.entries(talk.threads ?? {})) {
+    const replies = t.replies ?? [];
+    if (t.by !== me && !replies.some((r) => r.by === me)) continue;
+    const fresh = since(replies);
+    if (!fresh) continue;
+    const news = replies.slice(-fresh);
+    threads.push({
+      uid, mine: t.by === me, fresh,
+      people: [...new Set(news.map((r) => r.by))],
+      text: t.text, last: news[news.length - 1].text, lastBy: news[news.length - 1].by,
+      at: news[news.length - 1].ts,
+    });
+  }
+  threads.sort((a, b) => b.at - a.at);
+  return { chat: since(talk.chat ?? []), threads: threads.map(({ at, ...t }) => t) };
+}
+
 export function inMyInbox(item, product, me) {
   if (!isShared(product) || !me) return true;
   // A CONVERSATION NEEDS WHOEVER DID NOT SPEAK LAST (2026-10-01), so a message
   // to three people is in all three inboxes until one of them answers, and the
   // answer puts it back in everyone else's. One person to one works the same.
+  // WITH THREADS (w-920461cbe6) the same rule is read per place: the chat, and
+  // each thread you are in. One row, whichever of them is waiting.
   if (product?.team?.direct) {
     if (item.status === 'done') return false;
+    const waits = whatWaits(item, me);
+    if (waits) return waits.chat > 0 || waits.threads.length > 0;
     const by = lastSpeaker(item);
     return by ? by !== me : item.assignee === me;
   }
   if (heldByAPerson(item)) return item.assignee === me && item.status !== 'done';
   return runnerOf(item, product) === me;
+}
+
+// A CONVERSATION WHERE YOU SPOKE LAST IS DONE FOR YOU (w-57a202a968), until
+// the other person writes again and `inMyInbox` brings it back. Without it a
+// message you answered was on no tab and no column: out of your inbox by the
+// rule above, never In progress, and not Done because its status is not done.
+// Her words: "It's not supposed to leave the board; it's supposed to go in Done."
+export function iSpokeLast(item, product, me) {
+  if (!me || !product?.team?.direct || item?.status === 'done') return false;
+  // Done for you means nothing in it waits on you: the chat or any thread.
+  const waits = whatWaits(item, me);
+  if (waits) return waits.chat === 0 && waits.threads.length === 0;
+  return lastSpeaker(item) === me;
 }
 
 // A REPLY HANDS A PERSON-TO-PERSON ROW TO THE OTHER PERSON, so a conversation
@@ -93,10 +146,41 @@ export function handedOnByReply(item, product, me) {
 const A_TEAMMATE_MAY_SET = ['problem', 'progress', 'solution', 'blockedBy', 'blocks', 'assignee'];
 // The status rides too: a new message reopens a conversation put away, and a
 // message record never starts an agent (mayRunHere).
-const IN_A_MESSAGE_ALSO = ['title', 'body', 'answer', 'people', 'status'];
+//
+// AND A REACTION, which is the chips under a message (w-560647d4db). It is on
+// this list rather than the one above because it is only ever drawn in a
+// conversation, and because an unrecognised delta on an ordinary shared task
+// would be a teammate writing a field nothing there reads. It cannot start an
+// agent: `STARTS_A_RUN` above names the four fields that can, and a reaction
+// touches none of them, so a chip never puts the row in anybody's inbox.
+//
+// AND WHICH MESSAGE A REPLY ANSWERS (w-920461cbe6), for the same two reasons:
+// only a conversation draws a thread, and the mark rides beside an `answer`
+// this list already lets through. Without it a teammate's thread reply would
+// land in the middle of your chat instead of in the thread.
+const IN_A_MESSAGE_ALSO = ['title', 'body', 'answer', 'people', 'status', 'react', 'inReplyTo'];
+// AND THE LEVEL THE SENDER PICKED, ON THE OPENING LINE ALONE (w-7ba439c883).
+// A message now carries how urgent its sender thought it was, and that number
+// decides where it sits in the inbox it lands in, so it has to survive the
+// pull. It may not become a way to re-rank a row afterwards, though: the level
+// rides the line that MAKES the row and no other.
+//
+// `kind` is how that line is known. Only a row's first line sets it, and a
+// teammate may not set it here at all, so it is a marker rather than a field:
+// it is read, then dropped with everything else that is not allowed.
+//
+// WHAT THIS DOES NOT STOP, said plainly: a teammate who forges a line carrying
+// a kind can still re-rank the one conversation the two of you share. They can
+// already rewrite that row's title, body, answer and status (above), so this
+// opens no row that was closed to them, and nothing outside a conversation is
+// reachable either way.
+const WHEN_A_MESSAGE_OPENS = ['priority'];
+const opensARow = (patch) => 'kind' in patch;
 export function whatATeammateMaySet(line, { direct = false } = {}) {
   if (!line || typeof line !== 'object' || !line.patch || typeof line.patch !== 'object') return null;
-  const allowed = direct ? [...A_TEAMMATE_MAY_SET, ...IN_A_MESSAGE_ALSO] : A_TEAMMATE_MAY_SET;
+  const allowed = direct
+    ? [...A_TEAMMATE_MAY_SET, ...IN_A_MESSAGE_ALSO, ...(opensARow(line.patch) ? WHEN_A_MESSAGE_OPENS : [])]
+    : A_TEAMMATE_MAY_SET;
   const kept = {};
   for (const field of allowed) if (field in line.patch) kept[field] = line.patch[field];
   const patch = pickFields(kept);

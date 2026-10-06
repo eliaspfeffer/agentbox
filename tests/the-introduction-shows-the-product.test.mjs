@@ -261,12 +261,12 @@ describe('the walk teaches the goal', () => {
     expect(body.slice(0, 400)).toContain('go(run.step)');
     expect(body.slice(0, 400)).not.toContain('INTRO[slab + 1]');
     expect(body.slice(0, 400)).not.toMatch(/const next: Step\[\] = \[/);
-    // And the two lists really are one thing: every slab in the copy has a step
-    // in INTRO, in the same order, with the hand-off last.
-    expect(INTRO.slice(0, COPY.intro.length).map((s) => SLAB_OF[s]))
-      .toEqual(COPY.intro.map((_, i) => i));
-    expect(INTRO[INTRO.length - 1]).toBe('hand');
-    expect(SLAB_OF.hand).toBeUndefined();
+    // And the two lists really are one thing. Since 2026-10-05 (w-9f6975906c)
+    // that one thing is the hand-off alone: the three slabs went, so INTRO is
+    // only `hand` and no step draws a slab at all.
+    expect(INTRO).toEqual(['hand']);
+    expect(SLAB_OF).toEqual({});
+    for (const step of INTRO) expect(SLAB_OF[step]).toBeUndefined();
   });
 
   it('teaches the sidebar note nowhere, neither as a slab nor as a beat', () => {

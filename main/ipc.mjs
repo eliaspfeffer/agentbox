@@ -1,5 +1,6 @@
 import { openSourceFile } from './open-source-file.mjs';
 import {submitReply} from './live-replies.mjs';
+import { createEngineSetup } from './engine-setup.mjs';
 // IPC: a thin, typed-by-convention surface. The renderer asks; the main
 // process derives from files and answers. Pushes go one way: "state changed,
 // refetch." No state is cached on either side of the bridge.
@@ -48,6 +49,7 @@ import * as agents from './agents.mjs';
 import { findAgentFolders, readAgentFiles, readFolderAgents } from './agent-files.mjs';
 import { readSessionThreads } from './agent-sessions.mjs';
 import { readCodexThreads } from './codex-threads.mjs';
+import { markImported } from '../shared/agent-import.mjs';
 import { codexIdOf, importChoice, isCodexImportRow, isNotImportedRow } from '../shared/codex-import.mjs';
 import { checkProjectFolder } from '../shared/project-folder-check.mjs';
 import { openFreshUser } from './fresh-user.mjs';
@@ -519,8 +521,13 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // answered at once (supervisor.sendNow).
   ipcMain.handle('zero:send-now', (_e, { product, id }) => supervisor.sendNow(product, id));
 
-  ipcMain.handle('zero:answer', async (_e, { product, id, answer, status, priority, permissionMode, model, effort, now }) => {
+  ipcMain.handle('zero:answer', async (_e, { product, id, answer, status, priority, permissionMode, model, effort, now, inReplyTo }) => {
     if (isAgentRow(id)) return { ok: false };
+    // A REPLY IN A THREAD (w-920461cbe6) only means something in a conversation
+    // between people, which is the only place a thread is drawn and the only
+    // record the mark crosses to a teammate in (shared/team-rules.mjs). Anywhere
+    // else it is dropped and the words go in as an ordinary reply.
+    const thread = typeof inReplyTo === 'string' && inReplyTo && productOf(product)?.team?.direct ? inReplyTo : undefined;
     // A CODEX CONVERSATION'S YES OR NO NEVER REACHES A WORKER. The row asking
     // whether to import one is answered by the app itself: yes makes it a row
     // she can read, no parks it in Closed under Not imported, and Import on a
@@ -552,7 +559,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     // handing them over in one call and writing the model afterwards would be a
     // race the run usually wins, so she would pick a model and watch the old one
     // take the task. `answerItem` writes both, and it writes the model first.
-    const out = await submitReply(supervisor,{product,id,answer,status,permissionMode,now:!!now},()=>store.answerItem(product, id, { answer, status, priority, permissionMode, model, effort }));
+    const out = await submitReply(supervisor,{product,id,answer,status,permissionMode,now:!!now},()=>store.answerItem(product, id, { answer, status, priority, permissionMode, model, effort, inReplyTo: thread }));
     // A REPLY ON A ROW A TEAMMATE GAVE YOU HANDS IT BACK TO THEM, so the
     // conversation moves to their inbox instead of sitting in both
     // (shared/team-rules.mjs handedOnByReply). Archiving hands nothing on.
@@ -659,7 +666,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   ipcMain.handle('zero:team-sync', teamCall(() => team.syncNow()));
   // A MESSAGE TO A PERSON (approved 2026-10-01: people get messages, never
   // tasks). main/team/index.mjs keeps it between the two of them.
-  ipcMain.handle('zero:team-message', teamCall(({ to, body }) => team.message(to, body)));
+  ipcMain.handle('zero:team-message', teamCall(({ to, body, priority }) => team.message(to, body, priority)));
   // AN EDIT TO A THREAD, MADE IN PLACE from its summary: the summary's lines,
   // who sees it, its priority and what it is linked to. Works with or without a
   // team, since every thread has a summary.
@@ -689,6 +696,22 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
       store.teamPatch(product, id, { assignee: to });
     } else throw new Error(`unknown route ${route}`);
     supervisor.wake();
+  }));
+
+  // PUT A REACTION ON ONE MESSAGE, OR TAKE YOURS BACK (w-560647d4db). Only in a
+  // conversation between people, because a chip is only ever drawn in one: the
+  // sync carries a reaction across in a message record and nowhere else
+  // (shared/team-rules.mjs), so one written anywhere else would sit on this Mac
+  // alone and look to its author like it had reached somebody.
+  ipcMain.handle('zero:team-react', teamCall(async ({ product, id, on, emoji, off }) => {
+    const me = teamMe();
+    if (!me) throw new Error('sign in first');
+    const row = store.readItem(product, id);
+    if (!row) throw new Error('that conversation is gone');
+    const here = store.listProducts().find((p) => p.slug === product);
+    if (!here?.team?.direct) throw new Error('reactions are for a conversation with a teammate');
+    store.react(product, id, { on, emoji, off });
+    await team.syncNow();
   }));
 
   ipcMain.handle('zero:compose', (_e, { product, title, body, kind, priority, runAt, start, labels, engine, model, effort, assignee, due, visibility, visibleTo }) => {
@@ -790,6 +813,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   ipcMain.handle('zero:open-fresh-user', (_e, payload) => {
     return openFreshUser({
       withAgents: payload?.withAgents !== false,
+      withTools: payload?.withTools !== false,
       packaged: app.isPackaged,
     });
   });
@@ -1033,7 +1057,11 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   ipcMain.handle('zero:agent-threads', () => {
     const threads = readAllThreads();
     lastThreads = threads;
-    return { threads };
+    // Each one already in the inbox says so, and the card leaves it out
+    // (w-db6f5e331e). The walk's folder suggestions still read all of them.
+    let items = [];
+    try { items = store.listItems(); } catch { items = []; }
+    return { threads: markImported(threads, items) };
   });
 
   // So this is `zero:import-agents` with the agent taken out of it. No ticks are
@@ -1247,6 +1275,32 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   ipcMain.handle('zero:codex-recheck', () => {
     try {
       return { ok: true, workspace: recheckCodex(config) };
+    } catch (err) {
+      return { ok: false, error: String(err.message) };
+    }
+  });
+
+  // SETTING UP THEIR PLAN FOR THEM (w-9f6975906c). The walk asks which plan
+  // they pay for and this installs the tool and starts its own sign-in. The
+  // finder is the recheck, so what gets installed lands on the config and the
+  // rest of the app runs on it without a restart.
+  const engineSetup = createEngineSetup({
+    find: (engine) => {
+      if (engine === 'claude') { const s = recheckClaude(config); return { found: s.claudeFound, path: s.claudeBin }; }
+      const s = recheckCodex(config);
+      return { found: s.found, path: s.bin };
+    },
+  });
+  // A sign-in left waiting on the browser is not left running after the app.
+  app.on('will-quit', () => { engineSetup.cancel('claude'); engineSetup.cancel('codex'); });
+  ipcMain.handle('zero:engine-setup', async (_e, { action, engine } = {}) => {
+    if (engine !== 'claude' && engine !== 'codex') return { ok: false, error: 'Unknown coding agent.' };
+    try {
+      if (action === 'ready') return { ok: true, ...(await engineSetup.readiness(engine)) };
+      if (action === 'start') return { ok: true, ...engineSetup.start(engine) };
+      if (action === 'again') return { ok: true, ...engineSetup.signInAgain(engine) };
+      if (action === 'cancel') return { ok: true, ...engineSetup.cancel(engine) };
+      return { ok: true, ...engineSetup.status(engine) };
     } catch (err) {
       return { ok: false, error: String(err.message) };
     }

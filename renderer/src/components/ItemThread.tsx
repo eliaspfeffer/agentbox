@@ -20,17 +20,23 @@
 // NOTHING NEW IS STORED AND NOTHING IS WRITTEN. Two files that already exist
 // are read, and the marks a Z left on this Mac (../undo-marks).
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { ThreadPanel } from '../team/ThreadPanel';
+import { TeamContext } from '../team/people';
+import { useReactionsNow, type Press } from '../team/reactions-now';
 import { api } from '../api';
 import { changePathFor, type Change } from '../code-artifact';
+import { filedOnTurn } from '../filed-in-thread';
 import { itemThread, type PendingSaid } from '../item-thread';
 import { resultLeads } from '../recap';
 import { withoutTrailingWork } from '../trailing-work';
 import { marksFor, readUndoMarks, UNDO_MARKS_EVENT, type UndoMark } from '../undo-marks';
 import type { LedgerLine } from '../thread-history';
 import type { TraceSession } from '../notes';
-import type { RunningSession, WorkItem } from '../types';
+import type { AgentTurn, RunningSession, WorkItem } from '../types';
 import { ActLine, Thread, ThreadWaiting } from './Thread';
+import { ThreadsMade, type MadeRow } from './ThreadsMade';
 
 // THE BACKSTOP, NOT THE HEARTBEAT.
 //
@@ -54,8 +60,41 @@ const REFRESH_MS = 8_000;
 // screen is the kind of drift this row exists to end.
 const THEM = 'The agent';
 
-export function ItemThread({ item, engine, session, opening, sending, onOpenOrigin, onSendNow, md, clean, onOpenDoc, chat = false }: {
+export function ItemThread({ item, engine, session, opening, sending, filed = [], onOpenFiled, onApproveFiled, onRejectFiled, onOpenOrigin, onSendNow, md, clean, onOpenDoc, chat = false, onQuote, onHandToAgent, thread }: {
+  // A CHAT'S THREAD, IN THE PANEL BESIDE IT (w-920461cbe6). The pane owns which
+  // one is open and how wide it is; this draws it, because this is where the
+  // replies were read. `host` is the pane the panel is drawn into. Absent
+  // everywhere but a conversation between people.
+  thread?: {
+    open: string | null;
+    host: HTMLElement | null;
+    width: number;
+    onOpen: (uid: string) => void;
+    onClose: () => void;
+    onResize: (width: number) => void;
+    onSend: (uid: string, text: string) => unknown;
+    /** New replies waiting on you, by thread (`whatWaits`). */
+    fresh?: Record<string, number>;
+  };
   item: WorkItem;
+  // THE THREADS THIS ONE FILED, EACH ON THE TURN THAT FILED IT (w-2e13752a85).
+  // They used to be one block under the whole conversation, which left the
+  // morning's three threads standing over the composer all evening. The rule
+  // for which turn is ../filed-in-thread.ts, and it reads the moment each one
+  // was created against the moments in this conversation; `at` is that moment.
+  filed?: Array<MadeRow & { at: number }>;
+  onOpenFiled?: (id: string) => void;
+  // The press that starts one, beside its name (w-9cf2b43110).
+  onApproveFiled?: (id: string) => void;
+  // And the one that settles it without starting it: the ordinary close,
+  // reachable from the row it is about, which is what stops this thread
+  // coming back a day later (list-rules, `threadsOwedAnAnswer`).
+  onRejectFiled?: (id: string) => void;
+  // IN A CHAT ONLY: put a message's words in the reply box as a quote, and turn
+  // this conversation into work. The second was a line under the whole
+  // conversation and is an action on one message now (w-560647d4db).
+  onQuote?: (text: string) => void;
+  onHandToAgent?: () => void;
   // CUT THE RUNNING STEP so her waiting message is answered now (w-f37a34def6).
   // Handed in: this view draws a conversation and never writes anything.
   onSendNow?: () => unknown;
@@ -121,6 +160,13 @@ export function ItemThread({ item, engine, session, opening, sending, onOpenOrig
   // timer.
   const [whole, setWhole] = useState(false);
   useEffect(() => { setWhole(false); }, [item.product, item.id]);
+
+  // A REACTION SHOWS THE MOMENT IT IS PRESSED (w-45cbac227a), in the chat and in
+  // the thread panel alike, rather than after the sync and the next snapshot.
+  const me = useContext(TeamContext)?.me ?? null;
+  const sendReaction = useCallback((p: Press) => api.teamReact({ product: item.product, id: item.id, ...p })
+    .then((r) => { if (!r?.ok) throw new Error(r?.error ?? 'that reaction did not save'); }), [item.product, item.id]);
+  const chips = useReactionsNow(item.reactions, me, sendReaction);
 
   // THE Zs PRESSED ON THIS TASK, each drawn as one of her actions
   // (../undo-marks, w-c78d1e1607). Read again the moment a new one is left, so
@@ -231,7 +277,21 @@ export function ItemThread({ item, engine, session, opening, sending, onOpenOrig
     ? [{ at: opening.at, who: 'you' as const, text: opening.text, on: opening.on }, ...shown]
     : shown;
   const { omitted, outcome, after } = built;
+  // The message the open thread hangs off, if it is on the screen. One that is
+  // not (scrolled into the older part, or gone) draws no panel at all.
+  const openParent = chat && thread?.open
+    ? (built.events.find((e) => e.kind !== 'work' && e.uid === thread.open) as AgentTurn | undefined) ?? null
+    : null;
   if (!said.length && !opening && !outcome) return <div className="thread-wait">Nothing has been said here yet.</div>;
+
+  // WHICH TURN EACH FILED THREAD BELONGS TO. Measured against `events`, which
+  // is the list handed to `Thread` below, because the indexes it answers with
+  // are that list's. Everything belonging to the newest turn comes back in
+  // `atFoot` and is drawn under the checkpoint, which is that turn's last word.
+  const made = filedOnTurn(events, filed);
+  const madeList = (rows: typeof filed) => (
+    <ThreadsMade rows={rows} label="Filed from this thread" onOpen={(id) => onOpenFiled?.(id)} onApprove={onApproveFiled} onReject={onRejectFiled} />
+  );
 
   // THE ANSWER, WHOLE, AT THE FOOT OF THE CONVERSATION.
   //
@@ -269,14 +329,44 @@ export function ItemThread({ item, engine, session, opening, sending, onOpenOrig
         code={changed.length && onOpenDoc
           ? { paths: changed, open: (path) => onOpenDoc(changePathFor(item.id), path) }
           : null}
+        tail={(i) => { const rows = made.onTurn.get(i); return rows ? madeList(rows) : null; }}
+        {...(chat ? {
+          // ONLY IN A CHAT. The chips, the bar on pointing and the quote are
+          // drawing A's, and a thread with an agent keeps exactly the screen it
+          // had (w-560647d4db). `reactions` is folded off the row itself, so
+          // every press a teammate pushed is on screen the moment the pull
+          // lands, with nothing counted here.
+          reactions: chips.reactions,
+          onReact: chips.react,
+          onQuote,
+          onHandToAgent,
+          ...(thread ? { replies: built.replies, openThread: thread.open, onOpenThread: thread.onOpen, freshThreads: thread.fresh } : {}),
+        } : {})}
       />
+      {/* THE OPEN THREAD, beside the chat rather than in it (w-920461cbe6). */}
+      {chat && thread && openParent && thread.host && createPortal(
+        <ThreadPanel
+          parent={openParent}
+          replies={built.replies[openParent.uid!] ?? []}
+          md={(text) => md(clean(text))}
+          width={thread.width}
+          reactions={chips.reactions}
+          onReact={chips.react}
+          onSend={(text) => thread.onSend(openParent.uid!, text)}
+          onClose={thread.onClose}
+          onResize={thread.onResize}
+        />,
+        thread.host,
+      )}
       {answer}
       {/* What you did after that answer, under it and in order. */}
       {after.length > 0 && (
-        <div className="act-after">
+        <div className={`act-after${chat ? ' is-chat' : ''}`}>
           {after.map((act, i) => <ActLine key={`${act.at}-${i}`} act={act} />)}
         </div>
       )}
+      {/* AND WHAT THE NEWEST TURN FILED, under its own last word. */}
+      {madeList(made.atFoot)}
     </>
   );
 }

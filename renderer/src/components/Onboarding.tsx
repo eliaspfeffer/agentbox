@@ -13,7 +13,8 @@
 //      window: every tether is measured off the app's own rectangle, live, and
 //      re-measured when the window changes size.
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { TeamContext } from '../team/people';
 import {
   ALSO, ANCHOR, BOUNDS, BREATHE_AFTER_MS, COACHED, COPY, FLOOR, FLOOR_OF, TEAM_TAB_NAMES, TEXT_MAX, TEXT_MIN, teamTab,
   HELD_EVENTS, LINE_H, SLAB_OF, TEXT_GAP, UNDER,
@@ -30,6 +31,8 @@ import FolderPicker from './FolderPicker';
 import { PRACTICE_NAME, PRACTICE_ROWS, PRACTICE_TASK } from '../../../shared/first-run-practice.mjs';
 import { AppMark } from './AppMark';
 import { SidebarIcon } from './SidebarIcon';
+import { PlanQuestion, PlanSetupCard } from './PlanSetup';
+import { needsPlan, type Plan } from '../plan-setup';
 import { NAME, Name } from '../../../shared/product-name.mjs';
 
 /**
@@ -1288,6 +1291,7 @@ export function Landed({ agents, onGone }: {
       fall: 62 + ((i * 17) % 26),
     })),
   );
+  const team = useContext(TeamContext);
   useEffect(() => {
     const t = setTimeout(onGone, LANDED_MS);
     // ANY KEY TAKES IT DOWN, and the key still reaches the app underneath: this
@@ -1324,7 +1328,7 @@ export function Landed({ agents, onGone }: {
         <h1 className="fr-landed-head">{COPY.finishHead}</h1>
         <p className="fr-landed-line">{agents ? COPY.finishLineAgents : COPY.finishLine}</p>
         <ul className="fr-landed-next">
-          {COPY.finishNext.map((line) => <li key={line}>{line}</li>)}
+          {[...COPY.finishNext, ...(team ? COPY.finishNextTeam : [])].map((line) => <li key={line}>{line}</li>)}
         </ul>
       </div>
     </div>
@@ -1748,6 +1752,9 @@ export function Onboarding({
   onRecheck?: () => Promise<boolean>;
 }) {
   const nameRef = useRef<HTMLInputElement>(null);
+  // Null unless this Mac is signed into a team, which is the only time the
+  // walk names people (w-db6f5e331e).
+  const team = useContext(TeamContext);
   const [busy, setBusy] = useState(false);
   // WHY THE PROJECT WAS NOT MADE, when it was not. Null the rest of the time.
   const [notMade, setNotMade] = useState<string | null>(null);
@@ -1773,6 +1780,27 @@ export function Onboarding({
       .catch(() => { if (live) setRecent([]); });
     return () => { live = false; };
   }, [wantsRecent, recent, home]);
+  // WHETHER THIS MAC CAN RUN AN AGENT YET (w-9f6975906c), asked while the
+  // welcome is on screen, because each tool's own status check takes a few
+  // seconds and the welcome is where there is time to spare. Null until it
+  // answers; Get started waits for it only if it has not.
+  const asked = useRef<Promise<boolean> | null>(null);
+  const askMac = () => {
+    if (!asked.current) {
+      asked.current = import('../api').then(({ api }) => Promise.all([
+        api.engineSetup('ready', 'claude'), api.engineSetup('ready', 'codex'),
+      ])).then((r) => needsPlan(r.map((x) => ({ found: !!x.found, signedIn: !!x.signedIn }))))
+        .catch(() => false);
+    }
+    return asked.current;
+  };
+  useEffect(() => { if (run.step === 'welcome') void askMac(); }, [run.step]);
+  // The plan they picked, once they have. Null on the question.
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const begin = async () => {
+    if (await askMac()) { setPlan(null); onStep('plan'); }
+    else onEvent({ t: 'start' });
+  };
   const [now, setNow] = useState(() => Date.now());
   // HER AGENTS, read once. Null while it is being read, so the card never
   // flashes an empty list at a Mac that has eight.
@@ -1904,7 +1932,7 @@ export function Onboarding({
   useEffect(() => {
     if (run.step !== 'welcome') return;
     const on = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') { e.preventDefault(); onEvent({ t: 'start' }); }
+      if (e.key === 'Enter') { e.preventDefault(); void begin(); }
     };
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
@@ -2061,7 +2089,7 @@ export function Onboarding({
       && !!document.querySelector('.th-bar .tm-tabs');
     const say = coach(run.step, run.sentAt ? now - run.sentAt : 0, {
       opened, view, picking, palette, left: beat?.length, tabs,
-      tabNames: teamStrip ? TEAM_TAB_NAMES : undefined,
+      tabNames: teamStrip ? TEAM_TAB_NAMES : undefined, team: !!team,
     });
     if (!say) return null;
     // HER TASK'S OWN ROW FIRST. The walk knows which item it made, so on the
@@ -2265,10 +2293,21 @@ export function Onboarding({
                 reports", and written out in the README's "What this sends". */}
             <p className="fr-sub">{COPY.headSub}</p>
           </div>
-          <button className="fr-go" onClick={() => onEvent({ t: 'start' })}>
+          <button className="fr-go" onClick={() => void begin()}>
             {COPY.getStarted} <Cap cap="↵" />
           </button>
         </div>
+      )}
+
+      {/* WHICH PLAN, THEN SETTING IT UP (w-9f6975906c). Only on a Mac where
+          nothing can run an agent yet; see `begin`. Both hand on to the folder
+          screen, and so does Skip, because a walk that traps somebody without
+          a plan is worse than one that lets them look around. */}
+      {run.step === 'plan' && !plan && (
+        <PlanQuestion onPick={setPlan} onReady={() => onStep('folder')} />
+      )}
+      {run.step === 'plan' && plan && (
+        <PlanSetupCard plan={plan} onDone={() => onStep('folder')} onSkip={() => onStep('folder')} />
       )}
 
       {/* The app's own picker, over the walk, when there is no Mac one. It

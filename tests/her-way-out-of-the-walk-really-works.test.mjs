@@ -96,16 +96,12 @@ describe('1. the press reaches the page: nothing draggable covers Skip', () => {
     // NOT A STRING MATCH. Both numbers come out of the stylesheet and the sum
     // is done here, so widening either one without thinking fails this.
     const reserve = Number(rule('.fr-band-drag').match(/right: (\d+)px/)[1]);
-    const inset = Number(rule('.fr-out').match(/right: (\d+)px/)[1]);
-    const size = Number(rule('.fr-out').match(/font-size: (\d+)px/)[1]);
-    const pad = Number(rule('.fr-out').match(/padding: 0 (\d+)px/)[1]);
-    // Both are measured from the RIGHT edge, so the window width cancels: the
-    // lane ends `reserve` in and the button starts `inset + its width` in.
-    // The widest that word can be is one glyph per character at the font size,
-    // which no proportional face ever reaches, plus its padding on both sides.
-    const widest = COPY.leave.length * size + pad * 2;
+    // SKIP LEFT THE STRIP ON 2026-10-05 (w-9f6975906c). At the top it sat in
+    // the title bar band, where her clicks never landed, so it is anchored to
+    // the BOTTOM now and the lane along the top cannot cover it at any width.
+    expect(rule('.fr-out')).toMatch(/bottom: \d+px/);
+    expect(rule('.fr-out')).not.toMatch(/top: /);
     expect(COPY.leave.split(' ')).toHaveLength(1);
-    expect(inset + widest).toBeLessThan(reserve);
     // And it never eats into the capsule either. `.fr-band-pill` reserves 260px
     // of the window and is centred, so there is 130px of clear strip that side
     // at every width, down to the narrowest window the app will open.

@@ -21,7 +21,7 @@ import {
   PRACTICE_ANSWER, PRACTICE_FLAG, PRACTICE_NAME, PRACTICE_ROWS, PRACTICE_SLUG, PRACTICE_TASK,
 } from '../shared/first-run-practice.mjs';
 import {
-  BREATHE_AFTER_MS, BEAT, IN_PRACTICE, INTRO, N_BEATS, SLAB_OF, START, WRONG_MS,
+  BREATHE_AFTER_MS, BEAT, IN_PRACTICE, INTRO, N_BEATS, SLAB_OF, START, STEPS, WRONG_MS,
   COPY, advance, keyToken, practising, pressCounts, walkRows, wrongPress,
 } from '../renderer/src/onboarding.ts';
 
@@ -492,25 +492,24 @@ describe('where the band is on the screen', () => {
 });
 
 describe('the introduction, in front of the app', () => {
-  it('is four screens and every one of them counts', () => {
-    // FIVE UNTIL 2026-08-24.
-    expect(INTRO).toEqual(['inbox', 'away', 'goal', 'hand']);
+  it('is one screen, the hand-off, and it counts', () => {
+    // FIVE UNTIL 2026-08-24, FOUR UNTIL 2026-10-05. The three slabs went on
+    // 2026-10-05 (w-9f6975906c): "I think the welcome page gives enough."
+    expect(INTRO).toEqual(['hand']);
     // Nineteen since 2026-10-01: who a thread is for, and the board, each became a beat of their own.
-    expect(N_BEATS).toBe(19);
-    // THE THREE SLABS COME STRAIGHT AFTER THE THREE SETUP SCREENS, and the
-    // hand-off straight after the last slab.
-    expect(INTRO.map((s) => BEAT[s])).toEqual([4, 5, 6, 7]);
+    // Sixteen since 2026-10-05 (w-9f6975906c), with the three slabs gone.
+    expect(N_BEATS).toBe(16);
+    // THE HAND-OFF COMES STRAIGHT AFTER THE THREE SETUP SCREENS.
+    expect(INTRO.map((s) => BEAT[s])).toEqual([4]);
   });
 
-  it('is three slabs of words, and each one has something to say', () => {
-    expect(Object.keys(SLAB_OF)).toEqual(['inbox', 'away', 'goal']);
-    expect(COPY.intro).toHaveLength(3);
-    // One idea per sentence, no commas and no full stops, at her word
-    // (w-ec62ab6b38, 2026-09-28). They used to end in a full stop.
-    for (const slab of COPY.intro) {
-      expect(slab.head).not.toMatch(/[.,]/);
-      expect(slab.line).not.toMatch(/[.,]/);
-      expect(slab.line.length).toBeGreaterThan(40);
+  it('draws no slab of words any more, and the walk has no step for one', () => {
+    // It was three slabs until 2026-10-05 (w-9f6975906c). No step draws one
+    // now, and none of the three is a step of the walk.
+    expect(SLAB_OF).toEqual({});
+    for (const gone of ['inbox', 'away', 'goal']) {
+      expect(STEPS, gone).not.toContain(gone);
+      expect(BEAT[gone], gone).toBeUndefined();
     }
     // AND NO COUNT OVER THEM SINCE 2026-10-01. It read '3 of 3' on the third
     // slab with the theme picker and the tutorial card still to come, so the
@@ -560,7 +559,9 @@ describe('the introduction, in front of the app', () => {
 
   it('goes from naming the project into the introduction, not into the app', () => {
     const made = advance({ ...START, step: 'name' }, { t: 'made', product: 'orbit' });
-    expect(made.step).toBe('inbox');
+    // The introduction is the hand-off alone since 2026-10-05 (w-9f6975906c),
+    // and that is still in front of the app: the practice project is not made yet.
+    expect(made.step).toBe('hand');
     expect(made.product).toBe('orbit');
     expect(made.practice).toBe(null);
   });

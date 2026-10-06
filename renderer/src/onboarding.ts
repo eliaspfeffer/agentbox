@@ -38,15 +38,21 @@ import { DONE } from './done-word';
  * Clearing the three now goes straight on
  * to ⌘K. The deleted copy is in decisions.md, 08-23, verbatim. */
 export type Step =
-  | 'welcome' | 'folder' | 'name'
+  // `plan` IS ASKED ONLY ON A MAC WHERE NOTHING CAN RUN AN AGENT YET
+  // (w-9f6975906c): which plan they pay for, then the app installs and signs
+  // in for them. A Mac with Claude Code or Codex found and signed in never sees
+  // it. See ./plan-setup.ts.
+  | 'welcome' | 'plan' | 'folder' | 'name'
   // THERE WAS A `look` BEAT HERE, the theme picker. The app has one look now,
   // Light (w-9e434e8671), so there is nothing to pick. A walk saved at `look`
   // resumes at `hand` (`liveStep`).
-  // Three slabs, then the hand-off into the practice project. None of these
-  // four is the app: they are words on a screen, which is the point of them.
-  //
-  // AND THE SIDEBAR NOTE IS NOT ONE OF THEM.
-  | 'inbox' | 'away' | 'goal' | 'hand'
+  // THERE WERE THREE SLABS HERE, `inbox`, `away` and `goal`, each a picture of
+  // the app with a sentence beside it. They went on 2026-10-05 (w-9f6975906c),
+  // her words: "we should get rid of the page that the app is on because we
+  // don't really need it anymore. I think the welcome page gives enough." Naming
+  // the project hands straight to the tutorial now, and a walk saved on a slab
+  // resumes at `hand` (`liveStep`).
+  | 'hand'
   | 'make' | 'who' | 'task' | 'working' | 'open' | 'answer'
   // THERE WAS A `note` BEAT HERE, pointing at the project rail's notes panel.
   // The rail is retired on every screen, so the beat drew no ring and no card
@@ -58,7 +64,7 @@ export type Step =
 /**
  * HOW MANY BEATS THE WALK HAS. It stays because the walk still has a
  * length and the tests still hold it to one. */
-export const N_BEATS = 19;
+export const N_BEATS = 16;
 
 /**
  * WHICH BEAT EACH SCREEN IS. One pair shares one: `working` and `open` are one
@@ -70,37 +76,34 @@ export const N_BEATS = 19;
  *  comes after the inbox is cleared, and the finish card is last. Those are
  *  real claims about the walk whether or not anybody is counting on screen. */
 export const BEAT: Record<Step, number> = {
-  welcome: 1, folder: 2, name: 3,
-  // The introduction is four beats of its own and it counts, because a walk
-  // that says it is nine long and then keeps going is a walk that lied about how
-  // long it was. It went to four slabs on the morning of 2026-08-24 and back to
-  // three that evening, when the sidebar note moved out of it.
-  inbox: 4, away: 5, goal: 6,
-  // The theme picker was beat seven until the app went to one look
-  // (w-9e434e8671). Everything after it came down one.
-  hand: 7,
+  // The plan question shares the welcome's beat: most Macs never see it, and a
+  // walk whose numbering depended on the machine would be two walks.
+  welcome: 1, plan: 1, folder: 2, name: 3,
+  // The three introduction slabs were beats four to six until 2026-10-05
+  // (w-9f6975906c). Everything after them came down three.
+  hand: 4,
   // WRITING ONE IS TWO BEATS SINCE 2026-10-01: the card opens, you see who it
   // is to, then you send it. Everything after shifted by one.
-  make: 8, who: 9, task: 10,
-  working: 11, open: 11, answer: 12,
+  make: 5, who: 6, task: 7,
+  working: 8, open: 8, answer: 9,
   // `clear` closes the two that are finished and `unblock` answers the one that
   // is not, which is the difference the product exists to teach. AND THE THREE
   // WAYS A ROW LEAVES THE INBOX ARE THREE BEATS. `clear` closes the two that
   // are finished, `snooze` puts off the one that is real work and not for
   // today, and `unblock` answers the one an agent is stopped on. The rail's
   // note beat that sat at thirteen is gone with the rail.
-  clear: 13, snooze: 14, unblock: 15,
+  clear: 10, snooze: 11, unblock: 12,
   // AND BEAT FIFTEEN IS THE TOUR OF THE OTHER TWO TABS. It is one beat even
   // though it takes three presses of Tab, the same way `working` and `open`
   // share beat ten: it is one thing happening, which is somebody being shown
   // where the work they just did has gone.
-  where: 16,
+  where: 13,
   // AND THE BOARD IS THE BEAT AFTER THE TOUR (2026-10-01). The tour says where
   // the work went; the board is the same work laid out by what is happening to
   // it, which is the one view the walk never opened. The walk has to show the
   // view somebody uses to see what a whole team is up to, not only the tabs.
-  board: 17,
-  command: 18, done: 19, landed: 19,
+  board: 14,
+  command: 15, done: 16, landed: 16,
 };
 
 export interface FirstRun {
@@ -243,10 +246,9 @@ export function advance(s: FirstRun, e: Event): FirstRun {
       // practises in is a different project entirely. The old walk went from
       // here straight to the plus.
       //
-      // AND WHAT COMES NEXT IS THE INTRODUCTION.It is the last screen before
-      // the hand-off now, so nothing is between naming the project and being
-      // shown what the product is for.
-      return { ...s, product: e.product, step: 'inbox' };
+      // AND WHAT COMES NEXT IS THE TUTORIAL. The three introduction slabs that
+      // sat here went on 2026-10-05 (w-9f6975906c): the welcome says enough.
+      return { ...s, product: e.product, step: 'hand' };
     case 'practice':
       // THE THREE WAITING ROWS ARE WRITTEN NOW, not eight beats later. They are
       // in the practice project from the moment it exists, the way an inbox
@@ -295,6 +297,9 @@ export function stepTo(s: FirstRun, step: Step): FirstRun {
  *  to decide whether they are drawn at all. A Back that leads nowhere is the
  *  dead key `tests/the-walk-promises-no-dead-keys.test.mjs` exists to forbid. */
 export function stepBack(step: Step): Step | null {
+  // Nothing has been written down on the plan screen either: a setup that is
+  // running carries on in the background, and the welcome asks again.
+  if (step === 'plan') return 'welcome';
   if (step === 'folder') return 'welcome';
   if (step === 'name') return 'folder';
   return null;
@@ -375,6 +380,16 @@ export function shortPath(path: string, home?: string): string {
 export function firstRunNeeded(p: { products: number; done: boolean; forced?: boolean }): boolean {
   if (p.forced) return true;
   return !p.done && p.products === 0;
+}
+
+/**
+ * THE PROJECTS SOMEBODY MADE, which is what "never been used" counts.
+ *  My Workspace is made by the app at launch since e787f1c (2026-10-05), so a
+ *  brand-new store has one project in it before anybody has done anything, and
+ *  counting it skipped the onboarding for every new user (w-9f6975906c: the
+ *  new-user window and a fresh download both opened on an empty inbox). */
+export function projectsOfTheirOwn(products: Array<{ personal?: boolean }>): number {
+  return products.filter((p) => !p.personal).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -1143,8 +1158,12 @@ export const COPY = {
   // WHAT TO TRY NEXT, which is the other half of an ending. Two lines, and the
   // second is the only place the walk names the Team page and messaging a
   // person, which are half the product and were never mentioned.
+  // THE SECOND LINE IS DRAWN ONLY ON A TEAM (w-db6f5e331e), because the public
+  // app does not mention a team at all.
   finishNext: [
     'Next, start a real thread. Press N or click New thread.',
+  ] as readonly string[],
+  finishNextTeam: [
     'Open Team to see what your teammates are working on. To message one, start a thread and pick them in To.',
   ] as readonly string[],
   finishGo: 'Open my inbox',
@@ -1396,6 +1415,8 @@ export function coach(
     tabs?: readonly string[];
     /** The team strip's tab names, when that strip is what is drawn. */
     tabNames?: Readonly<Record<string, string>>;
+    /** Whether this Mac is signed into a team, so the walk names people only then. */
+    team?: boolean;
   } = {},
 ): Coach | null {
   switch (step) {
@@ -1429,8 +1450,10 @@ export function coach(
        key for To: the row is a button and that is the whole of how it opens.
        The loud line is therefore the click alone, with no cap, rather than a
        cap invented to keep the shape of the other cards. */
+    // THE PERSON HALF ONLY ON A TEAM (w-db6f5e331e): on a Mac with no team the
+    // list draws agents alone, and the public app does not mention a team.
     case 'who':
-      return say('Every thread goes to an agent, or to a person on your team.',
+      return say(ctx.team ? 'Every thread goes to an agent, or to a person on your team.' : 'Every thread goes to an agent, and To is where you pick which one.',
         'Click To at the top of the card to see who it can go to.');
     // AND IT NAMES THE BUTTON TOO (2026-10-01). Same round and same reason as
     // `make` above: the card's own button is the thing the ring is round, and
@@ -2605,6 +2628,8 @@ function liveStep(step: unknown, madeSomething: boolean): Step {
   // The retired theme picker. The introduction before it is done, so the walk
   // goes on from the hand-off into the practice project.
   if (step === 'look') return 'hand';
+  // The three retired introduction slabs, for the same reason.
+  if (step === 'inbox' || step === 'away' || step === 'goal') return 'hand';
   return madeSomething ? 'landed' : 'welcome';
 }
 
@@ -2653,8 +2678,8 @@ export function restartFirstRun(store: Store): void {
  *  that is already set up, which is what shooting it needs and what the row
  *  drawing alternatives to the tether needs. */
 export const STEPS: Step[] = [
-  'welcome', 'folder', 'name',
-  'inbox', 'away', 'goal', 'hand',
+  'welcome', 'plan', 'folder', 'name',
+  'hand',
   // WHO IT IS TO SITS BETWEEN OPENING THE CARD AND SENDING IT (2026-10-01),
   // because that is where it is on the card: To is its first line. The walk had
   // no beat for it at all, and it needs one: picking who a thread is to, and
@@ -2677,11 +2702,10 @@ export function nextStep(step: Step): Step | null {
 }
 
 /**
- * THE FOUR SCREENS OF THE INTRODUCTION, in order, and which slab each of the
- *  first three draws. Kept here rather than in the component so the order is a
- *  value that can be tested. */
-export const INTRO: Step[] = ['inbox', 'away', 'goal', 'hand'];
-export const SLAB_OF: Partial<Record<Step, number>> = { inbox: 0, away: 1, goal: 2 };
+ * WHAT IS LEFT OF THE INTRODUCTION: the hand-off into the tutorial. Its three
+ *  slabs went on 2026-10-05 (w-9f6975906c), so no step draws one any more. */
+export const INTRO: Step[] = ['hand'];
+export const SLAB_OF: Partial<Record<Step, number>> = {};
 
 /**
  * THE STEPS THAT HAPPEN INSIDE THE PRACTICE PROJECT. Everything from the

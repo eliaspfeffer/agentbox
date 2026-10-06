@@ -33,6 +33,7 @@ import { createUpdater } from './updater.mjs';
 import { createSourceUpdater } from './source-updater.mjs';
 import { installNotifier } from './notify.mjs';
 import { DOC_SCHEMES, DocGrants, docPath } from './doc-scheme.mjs';
+import { quietTheFramesScrollbars } from './frame-scrollbars.mjs';
 import { IMG_SCHEMES, imgPath, mediaResponse, mediaType, servable } from './img-scheme.mjs';
 import { hotWindowVerdict, storeHasWork } from './dev-window.mjs';
 import { writeHeldThenReload } from './write-before-reload.mjs';
@@ -359,14 +360,18 @@ async function createWindow() {
   // line this Mac writes says who wrote it and shared projects stay in sync.
   // Its session file sits beside the store, encrypted with the Mac's own
   // keychain-backed key, so each store root is its own signed-in person.
+  // THE KEYCHAIN IS ONLY ASKED WHEN THERE IS A TEAM (2026-10-06): asking it at
+  // every launch put a "Agentbox Safe Storage" password prompt in front of the
+  // single-person app, which has no sign-in to keep
+  // (tests/the-installed-app-is-the-single-person-app.test.mjs).
   const cloudConfig = loadCloudConfig(appDir, { packaged: app.isPackaged });
-  const encrypt = safeStorage.isEncryptionAvailable() ? (text) => safeStorage.encryptString(text) : null;
-  const decrypt = safeStorage.isEncryptionAvailable() ? (buf) => safeStorage.decryptString(buf) : null;
   const team = cloudConfig ? createTeamService({
     session: supabaseSession({
       cloudConfig,
       sessionFile: path.join(config.storeRoot, '.team-session'),
-      encrypt, decrypt,
+      ...(safeStorage.isEncryptionAvailable()
+        ? { encrypt: (text) => safeStorage.encryptString(text), decrypt: (buf) => safeStorage.decryptString(buf) }
+        : { encrypt: null, decrypt: null }),
       packaged: app.isPackaged,
       openExternal: (url) => shell.openExternal(url),
     }),
@@ -884,6 +889,10 @@ async function createWindow() {
     webPreferences.autoplayPolicy = 'document-user-activation-required';
   });
 
+  // A page in the pane hides its scrollbar until you scroll, like the app's own
+  // (frame-scrollbars.mjs). Without it, a mouse on macOS gets a white track.
+  quietTheFramesScrollbars(window.webContents);
+
   // Escape must ALWAYS leave the junk browser, even when the guest page has
   // focus and would otherwise swallow the key. Intercept it below the page.
   app.on('web-contents-created', (_event, contents) => {
@@ -999,6 +1008,9 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
   app.whenReady().then(() => {
+    // THE ABOUT BOX SAYS AGENTBOX AND ITS OWN VERSION (w-db6f5e331e). Run from
+    // source it read the bundle's, which is Electron's: "Electron 43.0.0".
+    app.setAboutPanelOptions({ applicationName: NAME, applicationVersion: app.getVersion(), version: '' });
     // Serve a granted file, and nothing else. A page under this scheme is one
     // of ours, but it is written by an agent and read by her, so the check is
     // on every request rather than only on the one the pane asked for.

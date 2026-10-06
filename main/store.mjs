@@ -307,7 +307,11 @@ export class Store {
   //
   // Undefined means she never opened the drawer and the row keeps what it had.
   // Null means she cleared it, and the engine chooses again.
-  answerItem(slug, id, { answer, status, priority, permissionMode, model, effort }) {
+  //
+  // `inReplyTo` makes the answer a reply in a thread (w-920461cbe6): the uid
+  // of the message it answers, on THE SAME LINE as the words, so the reply's
+  // own uid (what its reactions hang off) is the line that says where it goes.
+  answerItem(slug, id, { answer, status, priority, permissionMode, model, effort, inReplyTo }) {
     const { workItemsDisk } = this.modules;
     const dir = this.productDir(slug);
     let item = null;
@@ -322,7 +326,7 @@ export class Store {
     // special-cased in both engines' argument builders.
     if (model !== undefined) item = workItemsDisk.updateWorkItem(dir, id, { model: model ?? '' }, { source: 'founder' });
     if (effort !== undefined) item = workItemsDisk.updateWorkItem(dir, id, { effort: effort ?? '' }, { source: 'founder' });
-    if (answer) item = workItemsDisk.updateWorkItem(dir, id, { answer }, { source: 'founder' });
+    if (answer) item = workItemsDisk.updateWorkItem(dir, id, inReplyTo ? { answer, inReplyTo } : { answer }, { source: 'founder' });
     // The pane may still show a running row after Stop or a provider result.
     // Resolve omitted reply status against the ledger that was just written.
     if (status == null && typeof answer === 'string' && answer.trim() && answer !== '(withdrawn)'
@@ -468,6 +472,18 @@ export class Store {
     const allowed = Object.fromEntries(Object.entries(patch ?? {}).filter(([k]) => ['assignee', 'runner', 'due', 'people'].includes(k)));
     if (!Object.keys(allowed).length) throw new Error('nothing to change');
     return this.modules.workItemsDisk.updateWorkItem(this.productDir(slug), id, allowed, { source: 'founder' });
+  }
+
+  // A REACTION ON ONE MESSAGE (w-560647d4db): the chips under it in a chat.
+  // `on` is the uid of the ledger line the message was written as, which is the
+  // one name for a message that is the same on every teammate's Mac. Written as
+  // the person's own word, and appended like anything else: the fold keeps a
+  // press per person rather than one value per row, so two people reacting at
+  // the same moment keep both chips (shared/work-items.mjs).
+  react(slug, id, { on, emoji, off = false }) {
+    return this.modules.workItemsDisk.updateWorkItem(
+      this.productDir(slug), id, { react: off ? { on, emoji, off: true } : { on, emoji } }, { source: 'founder' },
+    );
   }
 
   // AN EDIT TO A THREAD FROM ITS SUMMARY (approved 2026-10-01): the summary's

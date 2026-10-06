@@ -66,13 +66,15 @@ describe('the question sits above the options', () => {
 
   it('says nothing at all when the field has no sentence in it, and the old label stands in', () => {
     expect(askLine({ body: OFFER })).toBe('');
-    const focus = readFileSync(new URL('../renderer/src/components/Focus.tsx', import.meta.url), 'utf8');
+    // The strip's markup lives in its own component since w-560647d4db, when it
+    // moved off the reply card and onto the turn that offered it.
+    const focus = readFileSync(new URL('../renderer/src/components/OptionsOffer.tsx', import.meta.url), 'utf8');
     expect(focus).toMatch(/\{ask \|\| 'Their options · pick or write your own'\}/);
   });
 
   it('is drawn as a sentence rather than in the label\'s small caps', () => {
     const css = readFileSync(new URL('../renderer/src/styles.css', import.meta.url), 'utf8');
-    const rule = css.slice(css.indexOf('.opt-head-ask span'), css.indexOf('.opt-collapse {'));
+    const rule = css.slice(css.indexOf('.opt-head-ask span'), css.indexOf('.opt-row {'));
     expect(rule).toMatch(/text-transform: none/);
     expect(rule).toMatch(/-webkit-line-clamp: 2/);
   });

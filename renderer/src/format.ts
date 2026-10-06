@@ -97,13 +97,25 @@ export function parseOptions(body?: string): ParsedOption[] {
 // So the offer comes off whatever the pane is actually leading with: the
 // result, else the checkpoint, else the ask. The fallback to the body is what
 // keeps this additive, so no row that already offered a pick loses one.
+//
+// WHEN BOTH THE RESULT AND THE CHECKPOINT OFFER, THE NEWER ONE WINS
+// (w-1df18b337a). The result used to win whatever its age, so a checkpoint
+// offering the next round sat under the last round's options.
 export type OptionsField = 'result' | 'note' | 'body';
 
-interface HasFields { result?: string; note?: string; body?: string }
+interface HasFields {
+  result?: string; note?: string; body?: string;
+  wrote?: Record<string, { ts: number } | undefined>;
+}
+
+const writtenAt = (item: HasFields, field: OptionsField) => item.wrote?.[field]?.ts ?? 0;
 
 export function optionsFrom(item: HasFields): OptionsField {
-  if (parseOptions(item.result).length) return 'result';
-  if (parseOptions(item.note).length) return 'note';
+  const inResult = parseOptions(item.result).length > 0;
+  const inNote = parseOptions(item.note).length > 0;
+  if (inResult && inNote) return writtenAt(item, 'note') > writtenAt(item, 'result') ? 'note' : 'result';
+  if (inResult) return 'result';
+  if (inNote) return 'note';
   return 'body';
 }
 
@@ -126,15 +138,33 @@ export function itemOptions(item: HasFields): ParsedOption[] {
 // which text is NEWER. An offer written after her last word is a live offer. An
 // offer she has already answered is spent, and stays hidden, which is the case
 // this rule was built for and still covers.
-export function offerIsLive(item: HasFields & {
-  answer?: string;
-  wrote?: Record<string, { ts: number } | undefined>;
-}): boolean {
+//
+// AN AGENT'S NEWER WORD SPENDS AN OFFER TOO (w-1df18b337a). The thread said
+// "Shipped to main as e4707e4." in a checkpoint and still drew the options of
+// the run before it, "let it go, or change the chip first?", so she picked
+// "ship it" and was told it had already shipped. A message written after the
+// offer that offers nothing of its own means the offer was acted on. A body's
+// offer is an agent's standing ask, so only a finished run (a newer result)
+// spends that one; a checkpoint saying "waiting on your pick" must not.
+export function offerIsLive(item: HasFields & { answer?: string }): boolean {
   if (!itemOptions(item).length) return false;
+  const field = optionsFrom(item);
+  const offered = writtenAt(item, field);
+  const later: OptionsField[] = field === 'body' ? ['result'] : ['result', 'note'];
+  if (later.some((f) => f !== field && writtenAt(item, f) > offered)) return false;
   if (!item.answer || item.answer === '(withdrawn)') return true;
   const spoke = item.wrote?.answer?.ts ?? 0;
-  const offered = item.wrote?.[optionsFrom(item)]?.ts ?? 0;
   return offered > spoke;
+}
+
+// THE OPTION THAT CLOSES THE TASK (w-1df18b337a). Once a run has shipped, the
+// one honest next move is often to close the row, and agents are told to offer
+// exactly "Close this task". A pick is a reply, and a reply on a finished row
+// starts a run, so this is caught and done the way E does it instead. Only the
+// whole option: "Ship it, then close the task" is still a reply.
+export function closesTheTask(option: string): boolean {
+  const words = option.replace(/\s*\(recommended\)\s*/i, '').trim().replace(/[.!]+$/, '');
+  return /^close (this|the) (task|thread)$/i.test(words);
 }
 
 // What Enter means in the schedule box, in one place so the key handler and the
@@ -304,4 +334,28 @@ export function searchText(body?: string): string {
 
 export function previewText(body?: string): string {
   return plainText(body).slice(0, 200);
+}
+
+// A LABEL IS NOT WHAT WAS SAID (w-560647d4db).
+//
+// A conversation's row in the list prints one line of the newest message, and
+// it was printing the message's first line whatever that line was. On the first
+// real conversation between two teammates that line was "Additional:", on its
+// own, with the findings under it — so the row said nothing at all, and the
+// list "looked a bit weird".
+//
+// So a message's line is the first line of it that is a line rather than a
+// heading for one.
+//
+// WHAT COUNTS AS A LABEL IS DELIBERATELY NARROW: short, ending in a colon, with
+// nothing after the colon. "Here is what I found in the three files I read this
+// morning:" ends in a colon and is a sentence, and skipping it would be the
+// same fault the other way round. A message that is nothing BUT a label prints
+// the label, because printing nothing is worse.
+const LABEL_CHARS = 32;
+
+export function firstRealLine(text?: string): string {
+  const lines = (text ?? '').split('\n').map((l) => plainText(l)).filter(Boolean);
+  const real = lines.find((l) => !(l.length <= LABEL_CHARS && l.endsWith(':')));
+  return real ?? lines[0] ?? '';
 }

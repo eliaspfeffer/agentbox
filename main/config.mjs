@@ -63,6 +63,14 @@ const DEFAULTS = {
   // ever chosen on. When nobody has set one, loadConfig below reads the plan
   // Claude Code is signed in on and lowers this for a smaller one.
   maxConcurrentSessions: DEFAULT_SESSIONS_AT_ONCE,
+  // LET AGENTBOX DECIDE HOW MANY RUN (w-e5225b62ba). On unless somebody has set
+  // a number themselves, which `loadConfig` works out below from whether one was
+  // ever written down. With it on, `maxConcurrentSessions` is not read at all:
+  // `Supervisor#_slotsPerAccount` asks main/machine.mjs for what this Mac
+  // carries and shares that out across the live accounts. `agentsNudge` is how
+  // many times "Something felt slow" has been pressed, and only ever subtracts.
+  agentsAuto: true,
+  agentsNudge: 0,
   // HOLD HEAVY WORK WHEN MEMORY IS SHORT (w-3958c3753d). Off until somebody
   // turns it on from the Agents page. With it on, every shell command a worker
   // runs asks main/memory-gate-server.mjs first, and heavy ones wait their turn
@@ -160,11 +168,20 @@ export function loadConfig(appDir, { home = os.homedir() } = {}) {
   // The account id, minted once per install. Written back immediately, because
   // a generated id that is not saved is a different id next launch and the
   // store would move out from under everything.
+  //
+  // AND A NEW INSTALL MAY CHOOSE CODEX FROM ITS FIRST LAUNCH (w-db6f5e331e).
+  // `engineChoice` is the moment from which a row may run on Codex; it exists
+  // so August rows in one old store never move engine unasked, and it could
+  // only be written by hand, so a new person with both engines never got
+  // Codex at all. A Mac with no config file has no old rows, so its first
+  // launch is that moment. An install with a config is left as it was.
+  const firstLaunch = fresh && !config.engineChoice ? new Date().toISOString() : null;
+  if (firstLaunch) config.engineChoice = firstLaunch;
   if (typeof config.accountId !== 'string' || !config.accountId) {
     config.accountId = crypto.randomUUID();
     try {
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, `${JSON.stringify({ ...overrides, accountId: config.accountId }, null, 2)}\n`);
+      fs.writeFileSync(file, `${JSON.stringify({ ...overrides, accountId: config.accountId, ...(firstLaunch ? { engineChoice: firstLaunch } : {}) }, null, 2)}\n`);
     } catch (err) {
       console.warn(`zero: could not write the new account id to ${file}: ${err.message}`);
     }
@@ -247,6 +264,16 @@ export function loadConfig(appDir, { home = os.homedir() } = {}) {
   // already in zero.config.json is untouched, for the same reason the plan cap
   // leaves it alone.
   config.machineSlots = machineSlots().slots;
+  // WHO IS DECIDING THE NUMBER, read off whether one was ever written down
+  // (w-e5225b62ba). A number in zero.config.json is somebody's own instruction
+  // about this Mac and keeps being obeyed; an install that never touched the
+  // stepper was already having its number filled in here, and Automatic is that
+  // same thing said out loud and kept up to date. An explicit `agentsAuto`
+  // outranks the guess, because turning Automatic back on after setting a number
+  // has to be possible.
+  if (typeof overrides.agentsAuto !== 'boolean') {
+    config.agentsAuto = typeof overrides.maxConcurrentSessions !== 'number';
+  }
   if (typeof overrides.maxConcurrentSessions !== 'number') {
     const plans = readPlans(effectiveProfiles(config.authProfiles, { home }), { home });
     const slots = slotsForPlans(plans, config.machineSlots);

@@ -63,6 +63,11 @@ import { watchScrollGutter } from '../scroll-gutter';
 import { artifactUrlTransform, isMediaPath, productPath, remarkArtifactPaths } from '../remark-artifact-paths';
 import { api } from '../api';
 import { draftKey, readDraft, saveDraft, clearDraft, readDraftAttachments, saveDraftAttachments, type SentDraft } from '../drafts';
+import { withQuote } from '../team/chat-quote';
+import { THREAD_WIDTH, THREAD_WIDTH_KEY, clampThreadWidth, threadToOpen } from '../team/chat-threads';
+import { whatWaits } from '../../../shared/team-rules.mjs';
+import { FormatBar } from '../team/FormatBar';
+import { OptionsOffer } from './OptionsOffer';
 import { foldedReply } from '../folded-reply';
 import { applyDockHeight } from '../dock-height';
 import { resumeTo } from '../thread-bottom';
@@ -419,7 +424,7 @@ function ArtifactEmbed({ product, path, fallback, open, onOpen }: {
 // not the user's, and it is the part that was unnecessary. `filesFromRuns` stays,
 // because App.tsx still reads it to choose the design a card opens itself on.
 
-export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlot, inlineArtifacts, headerTarget, cornerHeaderTarget, crumbFrom, item, parent, blockedBy, filed = [], runningMode, engineChoice, runningEngine, codexModels, codexModelDefault, session, live, stoppable: stoppableIn, productDir, repoDir, selectedOption, interruptedFrom, onBackToInterrupted, returnedFromSnooze, scheduledUntil, scheduledByAgent, replyOpen, sending, stalled, openDoc, resumeAt, onScrolled, onOpenDoc, onRedeliver, onUnschedule, onClose, onResolve, onPick, onReply, onReplySend, onReplyClose, onStop, onRunNow, onReopen, onSnooze, onReveal, onOpenItem, onNotice, onHandToAgent, onAddPeople }: {
+export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlot, inlineArtifacts, headerTarget, cornerHeaderTarget, crumbFrom, item, parent, blockedBy, filed = [], runningMode, engineChoice, runningEngine, codexModels, codexModelDefault, session, live, stoppable: stoppableIn, productDir, repoDir, selectedOption, interruptedFrom, onBackToInterrupted, returnedFromSnooze, scheduledUntil, scheduledByAgent, replyOpen, sending, stalled, openDoc, resumeAt, onScrolled, onOpenDoc, onRedeliver, onUnschedule, onClose, onResolve, onPick, onReply, onReplySend, onReplyClose, onStop, onRunNow, onReopen, onSnooze, onReveal, onOpenItem, onApproveFiled, onRejectFiled, onNotice, onHandToAgent, onAddPeople }: {
   previewSample?: string;
   /**
    * A MESSAGE FROM A PERSON IS NOT WORK UNTIL SHE SAYS SO. The one line under
@@ -478,9 +483,19 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   parent: WorkItem | null;
   blockedBy: WorkItem | null;
   // THE THREADS THIS ONE MADE, with where each stands (w-2e8aa16f0f). Drawn in
-  // line under the conversation; absent or empty draws nothing.
+  // the conversation, each on the turn that filed it (w-2e13752a85); absent or
+  // empty draws nothing.
   filed?: Array<MadeRow & { item: WorkItem }>;
   onOpenItem: (item: WorkItem) => void;
+  // SAYING GO TO ONE OF THEM FROM HERE (w-9cf2b43110), on the rows whose
+  // `approve` says they are waiting on it. The same approval ⌘K makes on the
+  // row itself, except that it does not take you off the thread you are
+  // reading: that is the whole point of the press being here.
+  onApproveFiled?: (item: WorkItem) => void;
+  // AND SAYING NO TO ONE (w-9cf2b43110): the ordinary close, from the row it
+  // is about. A proposal nobody answers brings this thread back a day later,
+  // so there has to be a way to settle one without starting it.
+  onRejectFiled?: (item: WorkItem) => void;
   // Said out loud when a file a worker named is not in this product. Nothing
   // else on the card can tell her a chip failed.
   onNotice: (text: string) => void;
@@ -576,6 +591,10 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   // "there is no ledger row behind this one".
   const update = isUpdateRow(item);
   const made = trouble || update;
+  // The door into a thread this one filed, wherever that list ends up drawn.
+  const openFiled = (id: string) => { const hit = filed.find((r) => r.id === id); if (hit) onOpenItem(hit.item); };
+  const approveFiled = (id: string) => { const hit = filed.find((r) => r.id === id); if (hit) onApproveFiled?.(hit.item); };
+  const rejectFiled = (id: string) => { const hit = filed.find((r) => r.id === id); if (hit) onRejectFiled?.(hit.item); };
   // ONE REASON THERE IS NO REPLY BOX, and it is a box. There was not one. A
   // quiet session is not stuck on anything — it is sitting at its prompt,
   // listening — and a message written to it lands and is worked on, measured
@@ -616,7 +635,59 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   const talkName = talkNames?.length ? joinNames(talkNames) : null;
   const talkFull = talkOthers.length > 1 ? talkOthers.map((p) => p.name).join(', ') : talkPerson?.name || talkName;
   const summarised = !agent && !made && !direct;
-  const [summaryOpen, toggleSummary] = useSummaryOpen();
+  // The pane's own width decides whether the summary has room (../room.ts),
+  // read before the first paint so a narrow window never flashes it open.
+  const paneRef = useRef<HTMLDivElement>(null);
+  const [paneWidth, setPaneWidth] = useState(Infinity);
+  useLayoutEffect(() => {
+    const pane = paneRef.current;
+    if (!pane) return undefined;
+    setPaneWidth(pane.clientWidth);
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => setPaneWidth(pane.clientWidth));
+    ro.observe(pane);
+    return () => ro.disconnect();
+  }, []);
+  // A CHAT'S THREAD, OPEN IN THE PANEL BESIDE IT (w-920461cbe6): which one, by
+  // its message's uid, and how wide the panel was last dragged. A thread is not
+  // carried from one conversation to the next, and a document open beside the
+  // task closes it, because the pane is then too narrow for two columns.
+  const [openThread, setOpenThread] = useState<string | null>(null);
+  // WHAT WAITS ON YOU IN THIS CHAT (w-920461cbe6): the threads with replies to
+  // you are marked, and when one of them is the only news it opens by itself as
+  // you arrive. Only on arriving: a thread you close stays closed while you read.
+  const waits = direct ? whatWaits(item, teamCtx?.me ?? null) : null;
+  const freshThreads = waits ? Object.fromEntries(waits.threads.map((t) => [t.uid, t.fresh])) : undefined;
+  useEffect(() => { setOpenThread(openDoc ? null : threadToOpen(waits)); }, [item.product, item.id]);
+  const [threadWant, setThreadWant] = useState<number>(() => {
+    const kept = Number(typeof localStorage === 'undefined' ? NaN : localStorage.getItem(THREAD_WIDTH_KEY));
+    return Number.isFinite(kept) && kept > 0 ? kept : THREAD_WIDTH.start;
+  });
+  const threadWidth = clampThreadWidth(threadWant, Number.isFinite(paneWidth) ? paneWidth : 1400);
+  const resizeThread = useCallback((width: number) => {
+    const held = clampThreadWidth(width, paneRef.current?.clientWidth ?? 1400);
+    setThreadWant(held);
+    try { localStorage.setItem(THREAD_WIDTH_KEY, String(held)); } catch { /* storage full or off */ }
+  }, []);
+  // ESC CLOSES THE THREAD FIRST, and only then means "leave this conversation".
+  // Taken at the window before anything else hears it, and left alone while a
+  // menu, or any box outside the thread you are typing in, has the key.
+  useEffect(() => {
+    if (!openThread) return undefined;
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const at = e.target as HTMLElement | null;
+      if (at?.closest?.('.chat-emoji, .chat-emoji-all, .prio-menu, .th-menu, [role="dialog"]')) return;
+      if (at?.closest?.('textarea, input, [contenteditable="true"]') && !at.closest('.chat-thread-panel')) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setOpenThread(null);
+    };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
+  }, [openThread]);
+  useEffect(() => { if (openDoc) setOpenThread(null); }, [openDoc]);
+  const [summaryOpen, toggleSummary] = useSummaryOpen(paneWidth);
   const summaryOffered = summarised && !openDoc;
   const summaryShown = summaryOffered && summaryOpen;
   useSummaryShortcut(toggleSummary, summaryOffered);
@@ -725,17 +796,13 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
     };
   }, [item.id, onScrolled]);
 
-  // The options strip on the composer collapses (chevron), and reopens fresh
-  // for every task: a fold is a reading preference, not a standing setting.
-  //
-  // THE HALF FOLD IT HAD FOR ONE DAY IS GONE. Under a full screen document
-  // this started false, so the strip drew its heading and nothing else. She is
-  // right: a heading with no options under it is neither the question answered
-  // nor the page unobstructed, it is a third state nobody asked for. Full
-  // screen hides the WHOLE strip until she opens the box, which is
-  // `stripShown` below.
-  const [optsOpen, setOptsOpen] = useState(true);
-  useEffect(() => { setOptsOpen(true); }, [item.id]);
+  // THE OPTIONS NO LONGER FOLD, AND THERE IS NOTHING HELD HERE FOR IT
+  // (w-2e13752a85). The chevron and the flag behind it were right while the
+  // block was docked over the composer, where folding was the only way to get
+  // the screen back. It is drawn at its own turn now and scrolls away with it,
+  // so the fold answered a question that had stopped being asked: "just remove
+  // the dropdown as it's not needed and it'd be perfect." Full screen still
+  // hides the WHOLE block until the box is open, which is `stripShown` below.
 
   // Arrowing onto an option that has scrolled offscreen brings it into view.
   const selRef = useRef<HTMLButtonElement>(null);
@@ -751,7 +818,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   // whether two lines are enough depends on the width the pane happens to have
   // right now, and reading it once per hover is both current and free.
   const [peek, setPeek] = useState<number | null>(null);
-  useEffect(() => { setPeek(null); }, [item.id, optsOpen]);
+  useEffect(() => { setPeek(null); }, [item.id]);
   const onOptionEnter = (n: number, el: HTMLElement) => {
     const text = el.querySelector('.opt-text');
     setPeek(optionPeek(n, !!text && optionIsClipped(text)));
@@ -961,7 +1028,27 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   // `showOptions` itself must NOT be narrowed for this. It also decides whether
   // the options list is stripped out of the message text below (`cleanMessage`),
   // so a full screen row would have printed its own options twice.
-  const stripShown = showOptions && (artifactView !== 'focus' || replyOpen);
+  // WHETHER THE OFFER IS DRAWN AT ALL. Unchanged, and it has to stay the whole
+  // question rather than either half below, because this is also the flag that
+  // takes the options list out of the message text (`cleanMessage`). Narrowed,
+  // a row would print its own options twice.
+  const stripShown = showOptions;
+  // AND WHERE IT IS DRAWN (w-560647d4db). Almost always in the pane, at the foot
+  // of the turn that made the offer, which is the whole of this round: pinned to
+  // the reply card it followed the reader down the page.
+  //
+  // FULL SCREEN IS THE ONE PLACE IT CANNOT GO THERE. With a document full
+  // screen the pane's whole scrolling body is hidden and only its dock is on
+  // the screen (`.list-pane .focus-scroll { display:none }`,
+  // workspace-navigation.css), so an offer in the pane would not be hidden
+  // tastefully — it would be unreachable, and the only way to answer a question
+  // would be to leave the document. So there, and only there, it keeps its old
+  // home on the card, on the old terms: with the box, gone when the box folds.
+  // It is not pinned under anything in that mode, because there is no
+  // conversation on the screen for it to be pinned under.
+  const fullScreenDoc = artifactView === 'focus';
+  const offerInPane = stripShown && !fullScreenDoc;
+  const offerInDock = stripShown && fullScreenDoc && replyOpen;
   // The strip already draws the list, so the field that carried it prints
   // without it. Only that field: a result offering a pick must not silently
   // eat an "## Options" heading left behind in an older body.
@@ -1147,7 +1234,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   // away with the words. An earlier cut of folded state into the className and
   // turned that guard off silently.
   return (
-    <div className="focus-pane" data-summary={summaryShown ? 'open' : summaryOffered ? 'rail' : undefined}>
+    <div className="focus-pane" ref={paneRef} data-summary={summaryShown ? 'open' : summaryOffered ? 'rail' : undefined}>
     {/* THERE IS NO WAY-OUT CONTROL ON AN OPENED TASK ANY MORE.
 
         Both faults were real and both are measured on this row. With a
@@ -1359,13 +1446,71 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
               md={md}
               clean={cleanMessage}
               onOpenDoc={onOpenDoc}
+              /* WHAT THIS THREAD FILED, EACH ON THE TURN THAT FILED IT
+                 (w-2e13752a85). It used to be one block hung under the whole
+                 conversation, drawn right here, so threads filed in the morning
+                 were still standing over the composer in the evening, under an
+                 answer from a run that had nothing to do with them. The
+                 conversation places them now, by the moment each was created,
+                 and they scroll away with the turn that came back with them. */
+              filed={filed.map((r) => ({ ...r, at: r.item.createdAt ?? 0 }))}
+              onOpenFiled={openFiled}
+              onApproveFiled={onApproveFiled && approveFiled}
+              onRejectFiled={onRejectFiled && rejectFiled}
+              // REPLY, AND HAND IT TO AN AGENT, both on the message rather than
+              // under the conversation (w-560647d4db). Reply takes the same
+              // road the review strip already takes into the reply box: write
+              // the draft, say so, open the box.
+              onQuote={(said) => {
+                saveDraft(item, withQuote(readDraft(item), said));
+                window.dispatchEvent(new CustomEvent('zero:reply-restored', { detail: draftKey(item) }));
+                onReply();
+              }}
+              onHandToAgent={onHandToAgent ? () => onHandToAgent(item) : undefined}
+              thread={direct ? {
+                open: openThread,
+                host: paneRef.current,
+                width: threadWidth,
+                onOpen: (uid) => setOpenThread(uid),
+                onClose: () => setOpenThread(null),
+                onResize: resizeThread,
+                // A REPLY IN A THREAD is an answer on this conversation like any
+                // other, so it reaches the same inboxes and syncs the same way;
+                // it only names the message it answers.
+                onSend: (uid, text) => api.answer({ product: item.product, id: item.id, answer: text, inReplyTo: uid })
+                  .catch(() => onNotice('That reply did not send. Try again.')),
+                fresh: freshThreads,
+              } : undefined}
             />
           )}
 
-        {/* WHAT THIS THREAD FILED, IN LINE, under what it said about them
-            (w-2e8aa16f0f). The result names them in prose; this is where each
-            one stands now, and the door into it. */}
-        <ThreadsMade rows={filed} label="Filed from this thread" onOpen={(id) => { const hit = filed.find((r) => r.id === id); if (hit) onOpenItem(hit.item); }} />
+        {/* NEITHER OF THOSE TWO ROWS HAS A CONVERSATION TO PUT THE LIST IN, so
+            the list keeps its old place under what they said instead. */}
+        {(made || agent) && (
+          <ThreadsMade
+            rows={filed}
+            label="Filed from this thread"
+            onOpen={openFiled}
+            onApprove={onApproveFiled && approveFiled}
+            onReject={onRejectFiled && rejectFiled}
+          />
+        )}
+
+        {/* AND THE OPTIONS IT OFFERED, AT THE FOOT OF THAT SAME TURN
+            (w-560647d4db).
+
+            Everywhere but full screen, where the pane's body is not on the
+            screen at all and the offer keeps its old home on the reply card
+            (see `offerInPane` for the whole of that). */}
+        {offerInPane && (
+          <OptionsOffer
+            ask={ask} askAll={askAll} options={options}
+            peekOption={peekOption} askPeek={askPeek}
+            selectedOption={selectedOption} selRef={selRef}
+            onPick={onPick} onOptionEnter={onOptionEnter} onAskEnter={onAskEnter}
+            setPeek={setPeek} setAskPeek={setAskPeek}
+          />
+        )}
 
         {!agent && <RemoteControl key={`remote:${item.product}:${item.id}`} product={item.product} id={item.id} />}
         {!agent && <CompactionResult engine={runningEngine ?? 'claude-code'} key={`${item.product}:${item.id}`} item={item} />}
@@ -1389,7 +1534,15 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
         {/* NO LINE UNDER A CONVERSATION OFFERING TO HAND IT TO AN AGENT
             (w-2e8aa16f0f): it read as one more message, and it made the whole
             conversation one task. An agent comes in with @ in the reply box,
-            in the project its mention names (../team/ChatAgents.tsx). */}
+            in the project its mention names (../team/ChatAgents.tsx).
+
+            AND WHERE A HAND-OFF SURVIVES, IT IS ON A MESSAGE (w-560647d4db).
+            Pinned under the conversation the deleted line had no subject: it
+            offered the same thing under the newest message whatever that
+            message was, and the thing you want work made of is usually one
+            message further up. The action is in the bar that appears when you
+            point at a message (team/ChatActions.tsx), which is where drawing A
+            puts it and what `onHandToAgent` is still here for. */}
 
       </div>
 
@@ -1535,89 +1688,25 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
               Unless they wrote options of their own, which are the better
               answers to their question and are drawn instead. */}
           {!stripShown && <TeamRouteStrip item={item} />}
-          {stripShown && (
-            <div className="opt-strip">
-              {/* THE HEADING IS THE QUESTION, NOT THE NAME OF THE CONTROL.
+          {/* THE OPTIONS ARE NOT DOWN HERE ANY MORE, EXCEPT IN FULL SCREEN
+              (w-560647d4db). They are drawn in the pane, at the foot of the turn
+              that offered them, and the note at that call site says why.
 
-                  The ask is up in the message and the message scrolls; this
-                  strip is docked and does not, so by the time she has read
-                  down to the answers the sentence they answer is off the top
-                  of the screen. It comes off the same field the options came
-                  off, so the two can never be from different rounds
-                  (ask-line.ts).
-
-                  The old words are the fallback and nothing more: a row whose
-                  offering field opens with no sentence still needs a heading
-                  saying what the numbers under it are.
-               */}
-              {/* THE HOVER SITS ON THE WHOLE HEADING ROW, not on the text node
-                  inside it. A pointer travelling down the pane crosses the
-                  padding before it crosses the words, and a card that opens
-                  only on the glyphs themselves blinks shut in the gaps between
-                  the two lines. The chevron is inside this row and keeps its
-                  own click; reading the question while reaching for it is not
-                  a conflict. */}
-              <div
-                className={`opt-head ${ask ? 'opt-head-ask' : ''}`}
-                onMouseEnter={(e) => onAskEnter(e.currentTarget)}
-                onMouseLeave={() => setAskPeek(false)}
-              >
-                <span>{ask || 'Their options · pick or write your own'}</span>
-                <button className="opt-collapse" onClick={() => setOptsOpen((o) => !o)} title={optsOpen ? 'Collapse options' : 'Expand options'}>
-                  <svg viewBox="0 0 16 16" className={optsOpen ? '' : 'flipped'} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6l4 4 4-4" /></svg>
-                </button>
-              </div>
-              {/* The card, drawn FIRST so it is the strip's first child: appended
-                  last it stole the last row's 4px of bottom padding and the
-                  strip measured 4px short. It is out of the flow entirely
-                  (`bottom: 100%`), which is the promise of this design: the
-                  strip is the same height with the card open as without it. */}
-              {optsOpen && peekOption && (
-                <div className="opt-peek">
-                  <div className="opt-peek-head">Option {peekOption.n}, in full</div>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {peekOption.text.replace(/\s*\(recommended\)/i, '')}
-                  </ReactMarkdown>
-                </div>
-              )}
-              {/* ONE SLOT, SO NEVER TWO CARDS. The option card wins when both
-                  could be open, which cannot happen from one pointer but can
-                  from a stale state, and two of these stacked would cover the
-                  message they are supposed to be read against.
-
-                  IT OPENS WITH THE STRIP COLLAPSED TOO. The chevron folds the
-                  answers away and leaves the question, so a folded strip is
-                  exactly the case where this line is all she has. */}
-              {!peekOption && askPeek && (
-                <div className="opt-peek">
-                  <div className="opt-peek-head">The question, in full</div>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{askAll}</ReactMarkdown>
-                </div>
-              )}
-              {optsOpen && options.map((o) => (
-                <button
-                  key={o.n}
-                  ref={o.n === selectedOption ? selRef : undefined}
-                  className={`opt-row ${o.n === selectedOption ? 'selected' : ''}`}
-                  onClick={() => onPick(o.n)}
-                  onMouseEnter={(e) => onOptionEnter(o.n, e.currentTarget)}
-                  onMouseLeave={() => setPeek(null)}
-                >
-                  <span className="opt-key">{o.n}</span>
-                  <span className="opt-text">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{ p: ({ children }) => <>{children}</> }}
-                    >
-                      {o.text.replace(/\s*\(recommended\)/i, '')}
-                    </ReactMarkdown>
-                  </span>
-                  {o.n === selectedOption
-                    ? <span className="opt-rec">↵ send</span>
-                    : o.recommended && <span className="opt-rec">recommended</span>}
-                </button>
-              ))}
-            </div>
+              With a document full screen the pane's body is not on the screen —
+              only this dock is — so an offer in the pane would be unreachable
+              rather than merely out of the way, and answering a question would
+              mean leaving the document first. There it keeps its old home and
+              its old terms: it comes up with the box and goes when the box
+              folds. It follows nobody down a page, because in that mode there
+              is no page of conversation on the screen. */}
+          {offerInDock && (
+            <OptionsOffer
+              ask={ask} askAll={askAll} options={options}
+              peekOption={peekOption} askPeek={askPeek}
+              selectedOption={selectedOption} selRef={selRef}
+              onPick={onPick} onOptionEnter={onOptionEnter} onAskEnter={onAskEnter}
+              setPeek={setPeek} setAskPeek={setAskPeek}
+            />
           )}
           {/* NO REPLY BOX ON THE TROUBLE ROW EITHER, and for the same reason as
               the one below: there is nobody on the other end of it. A box that
@@ -1973,9 +2062,16 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
     setEffort(item.effort ?? null);
   }, [item.product, item.id, item.model, item.effort]);
   const ref = useRef<HTMLTextAreaElement>(null);
+  // The hidden file input the formatting bar's attach button opens.
+  const filePicker = useRef<HTMLInputElement>(null);
+  const pickFiles = () => filePicker.current?.click();
   // AGENTS IN A CONVERSATION WITH A PERSON (w-7b9cb8636a, ../team/ChatAgents.tsx):
   // the @ menu, mentions that carry their own project, model and effort, and
   // the rule that Send waits until every agent has a project.
+  //
+  // THE FORMATTING BAR'S @ BUTTON IS A WAY INTO THIS and not a second
+  // mechanism: it types an @ into the box at the caret, which is exactly what
+  // the menu below watches for, so pressing it and typing it are the same act.
   const chat = useChatMentions({ on: !!talkTo?.length && !item.agent, where: item, text, setText, input: ref, people: talkTo ?? [] });
   // WHAT THIS ONE MESSAGE MAY DO.So it is not a project setting and not a
   // workspace one; it rides on the send.
@@ -2431,6 +2527,24 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
           if (dropped.length) setAttachments((a) => [...a, ...dropped]);
         }}
       />
+      {/* THE FILE PICKER THE ATTACH BUTTON OPENS. The box already took files by
+          paste and by drop; the bar's + is the third way in, and all three end
+          in the same `collectFiles` and the same row of thumbnails below. The
+          input is hidden rather than styled: an <input type=file> cannot be
+          drawn as one of these buttons, and a second-looking control beside
+          them would be the one rounded thing on the screen. */}
+      <input
+        ref={filePicker}
+        type="file"
+        multiple
+        style={{ display: 'none' }}
+        onChange={async (e) => {
+          const picked = await collectFiles(e.target.files ?? []);
+          if (picked.length) setAttachments((a) => [...a, ...picked]);
+          // Cleared so picking the same file twice in a row still fires.
+          e.target.value = '';
+        }}
+      />
       <AttachRow attachments={attachments} onRemove={(i) => setAttachments((x) => x.filter((_, j) => j !== i))} />
       {/* The notes, which cost a line only when there is something true to say,
           and which are NOT in the sentence: a sentence that grows a clause when
@@ -2465,6 +2579,12 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
             Runs once." under a message going into somebody's terminal is a
             sentence about a thing that is not happening. What is left is the
             send button, which is the whole act. */}
+        {/* THE FORMATTING BAR, IN A CHAT AND NOWHERE ELSE (w-560647d4db). It
+            goes first on the footer line, which is where drawing A has it:
+            left of "Goes to Maya's inbox." and left of Send. A reply to an agent
+            is an instruction rather than a formatted message, so that box keeps
+            exactly the footer it had. */}
+        {talkTo?.length ? <FormatBar box={ref} onChange={changeText} onAttach={pickFiles} /> : null}
         <span className="compose-clauses">
           {/* WHERE IT GOES, NOT WHO SEES IT (w-a8e752a9f2). The conversation's
               own header already reads "MESSAGES · MAYA GAVE YOU THIS" with both
