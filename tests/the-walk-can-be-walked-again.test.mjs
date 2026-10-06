@@ -112,7 +112,7 @@ describe('being a brand new user', () => {
     expect(app).toContain('onFreshUser={openAsNewUser}');
     const at = app.indexOf('const openAsNewUser = useCallback');
     const fn = app.slice(at, app.indexOf('}, [showToast]);', at));
-    expect(fn).toContain('api.openFreshUser(withAgents)');
+    expect(fn).toContain('api.openFreshUser(withAgents, withTools)');
     // It may not touch the store, and it may not clear anything.
     expect(fn).not.toMatch(/localStorage/);
     expect(fn).not.toMatch(/restartFirstRun/);

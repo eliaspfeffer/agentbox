@@ -39,9 +39,11 @@ describe('⌘K offers one new user, and it is the blank one', () => {
   it('never hands the palette a fresh user without saying which kind', () => {
     // The bug was a hard-coded `true` in App.tsx. If it comes back, the row
     // silently goes back to showing her own sessions and nothing fails.
-    expect(app).not.toContain('api.openFreshUser(true)');
-    expect(app).toContain('api.openFreshUser(withAgents)');
-    expect(app).toContain('const openAsNewUser = useCallback(async (withAgents: boolean)');
+    expect(app).not.toContain('api.openFreshUser(true');
+    // `withTools` joined it on 2026-10-05 (w-9f6975906c): the row for a new
+    // user with no Claude Code or Codex, which is how the plan setup is tried.
+    expect(app).toContain('api.openFreshUser(withAgents, withTools)');
+    expect(app).toContain('const openAsNewUser = useCallback(async (withAgents: boolean, withTools = true)');
   });
 
   // HER LENGTH RULE, AS A NUMBER RATHER THAN AS TASTE.
