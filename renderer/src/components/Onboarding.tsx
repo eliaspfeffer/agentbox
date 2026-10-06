@@ -328,8 +328,12 @@ export function Cap({ cap, className }: { cap: string; className?: string }) {
  * the accompanying text was "the biggest weakness", so the quiet line says
  * where you are and the loud line says the one thing to press, and neither has
  * to do the other's job. */
-function Card({ say, beat, pointed, knock = 0 }: {
+function Card({ say, beat, pointed, knock = 0, onNext }: {
   say: Coach;
+  /**
+   * WHAT NEXT DOES, on the two look-around cards (2026-10-06). ↵ does the same
+   * and never reaches the app, where it would open whichever row is selected. */
+  onNext?: () => void;
   /**
    * HOW MANY STRAY CLICKS THE WALK HAS ANSWERED ON THIS BEAT, from `Ringed`.
    *  It rides into the same counter a wrong KEY bumps, so the cap answers a
@@ -358,6 +362,8 @@ function Card({ say, beat, pointed, knock = 0 }: {
   // breathing clock at somebody who is standing still.
   const aim = useRef<{ beat: string[]; pointed: string | null }>({ beat: [], pointed: null });
   aim.current = { beat: beat ?? [], pointed: pointed ?? null };
+  const next = useRef(onNext);
+  next.current = onNext;
   useEffect(() => {
     setWrong(0);
     setBreathe(false);
@@ -373,6 +379,14 @@ function Card({ say, beat, pointed, knock = 0 }: {
       setBreathe(false);
       clearTimeout(idle);
       idle = setTimeout(() => { if (live) setBreathe(true); }, BREATHE_AFTER_MS);
+      // ↵ ON A CARD WITH ITS OWN NEXT IS THE CARD'S, and stops here.
+      if (say.next && keyToken(e) === say.key && next.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        next.current();
+        return;
+      }
       // A WRONG PRESS IS ANSWERED AND THEN STOPPED.This used to pulse the cap
       // and then hand the press to the app exactly as it would have had it,
       // which is how one stray E closed a real row and took the lesson with it.
@@ -410,7 +424,7 @@ function Card({ say, beat, pointed, knock = 0 }: {
     };
     window.addEventListener('keydown', on, true);
     return () => { live = false; clearTimeout(idle); window.removeEventListener('keydown', on, true); };
-  }, [say.key]);
+  }, [say.key, say.next]);
   // The count is the key on the element, so two wrong presses in a row really
   // are two pulses: a class toggled off and on again inside one frame is a
   // class React never draws.
@@ -428,7 +442,7 @@ function Card({ say, beat, pointed, knock = 0 }: {
       {say.quiet ? <span className="fr-quiet">{say.quiet}</span> : null}
       <span className={say.quiet ? 'fr-loud' : 'fr-loud fr-alone'}>
         {say.lead}
-        {say.key && (
+        {say.key && !say.next && (
           <Cap
             key={pulse}
             cap={say.key}
@@ -437,6 +451,20 @@ function Card({ say, beat, pointed, knock = 0 }: {
         )}
         {say.tail}
       </span>
+      {/* THE LOOK AROUND'S OWN WAY ON (2026-10-06). The cap rides on the button
+          so the key and the click are one thing on the card. */}
+      {say.next && onNext ? (
+        <button type="button" className="fr-next" onClick={onNext}>
+          Next
+          {say.key && (
+            <Cap
+              key={pulse}
+              cap={say.key}
+              className={`${pulse ? 'fr-wrong' : ''}${breathe ? ' fr-breathe' : ''}`.trim() || undefined}
+            />
+          )}
+        </button>
+      ) : null}
       {/* AND NOTHING UNDER THE LIGHTS ANY MORE. There was a third line here, a `why` under a
          hairline rule, and it is gone from every beat of the walk (w-9a6ea066d6,
          2026-08-28). What each of the four `why` lines said is folded into the two that
@@ -729,7 +757,13 @@ function adriftAt(): { x: number; y: number; w: number } {
   const pane = document.querySelector('.list-pane') ?? document.querySelector('.body');
   const r = pane ? pane.getBoundingClientRect() : null;
   const bar = document.querySelector('.th-bar');
-  const top = bar ? bar.getBoundingClientRect().bottom + 28 : (r && r.height > 0 ? r.top + 48 : 120);
+  const head = bar ? bar.getBoundingClientRect().bottom + 28 : (r && r.height > 0 ? r.top + 48 : 120);
+  // AND UNDER THE ROWS, NOT ON THEM (2026-10-06). The ⌘K beat has nothing to
+  // ring in the default layout and its card was printed across the first two
+  // threads of the list. Below the last row, while that still leaves room.
+  const rows = document.querySelector('.list-pane .list');
+  const under = rows ? rows.getBoundingClientRect().bottom + 28 : 0;
+  const top = under > head && under < window.innerHeight - 200 ? under : head;
   const left = r && r.width > 0 ? r.left + 40 : 80;
   const right = r && r.width > 0 ? r.right : window.innerWidth;
   return {
@@ -741,9 +775,11 @@ function adriftAt(): { x: number; y: number; w: number } {
 
 function Ringed({
   selector, boundsSel, underSel, makesRoom, say, beside, besideRing, besideOf, beat, pointed,
-  hold, also,
+  hold, also, onNext,
 }: {
   selector: string[]; boundsSel?: string; underSel?: string; say: Coach;
+  /** The look around's Next. See `Card`. */
+  onNext?: () => void;
   /**
    * THE LIST OPENS A GAP RATHER THAN THE CARD LEAVING ITS RING. See
    *  `makeRoom` above for the measurements. This is set on the beats that ring
@@ -945,7 +981,7 @@ function Ringed({
           className="fr-tether fr-adrift"
           style={{ left: adrift.x, top: adrift.y, maxWidth: adrift.w }}
           role="status"
-        ><Card say={say} beat={beat} pointed={pointed} knock={knock} /></p>
+        ><Card say={say} beat={beat} pointed={pointed} knock={knock} onNext={onNext} /></p>
       </>
     );
   }
@@ -1002,10 +1038,12 @@ function Ringed({
             top: geo.ring.y + geo.ring.h / 2,
             maxWidth: besideRing
               ? Math.max(240, window.innerWidth - (geo.ring.x + geo.ring.w + 26) - 40)
-              : Math.max(240, window.innerWidth - besideLeft(geo, besideOf) - 200),
+              // No wider than an ordinary card (2026-10-06): beside the tab
+              // strip it ran on across the header and over Search.
+              : Math.max(240, Math.min(TEXT_MAX + 60, window.innerWidth - besideLeft(geo, besideOf) - 200)),
           }}
           role="status"
-        ><Card say={say} beat={beat} pointed={pointed} knock={knock} /></p>
+        ><Card say={say} beat={beat} pointed={pointed} knock={knock} onNext={onNext} /></p>
       ) : (
         <p
           ref={cardRef}
@@ -1014,7 +1052,7 @@ function Ringed({
             ? { left: geo.text.x, top: geo.text.y, maxWidth: geo.text.w }
             : { right: geo.text.right, top: geo.text.y, maxWidth: geo.text.w }}
           role="status"
-        ><Card say={say} beat={beat} pointed={pointed} knock={knock} /></p>
+        ><Card say={say} beat={beat} pointed={pointed} knock={knock} onNext={onNext} /></p>
       )}
     </>
   );
@@ -1149,6 +1187,9 @@ function Finished({
   // every Mac now, and on an empty one it answers rather than offers. See
   // `finishCard` in ../onboarding.
   //
+  // AND NOTHING TO BRING IN GOES STRAIGHT ON (2026-10-06): see `finishCard`.
+  const skip = !!card.skip;
+  useEffect(() => { if (skip) onDone([]); }, [skip]);
   // NOTHING AT ALL WHILE HER MAC IS STILL BEING READ. An empty veil over the app
   // for a frame would be a flicker on the way into her own inbox.
   if (!card.show) return null;
@@ -1615,8 +1656,10 @@ function Slab({ head, line, piece, onNext }: {
  * ONE STATEMENT AND ONE BUTTON. The rule and the hand-off are both this: no
  *  choice on them, nothing to read twice, and the same card shape the finish
  *  uses so the walk has one kind of card in it rather than three. */
-function Statement({ head, line, go, onNext }: {
+function Statement({ head, line, go, onNext, skip, onSkip }: {
   head: string; line: string; go: string; onNext: () => void;
+  /** A quiet second button under the main one (2026-10-06). */
+  skip?: string; onSkip?: () => void;
 }) {
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
@@ -1643,6 +1686,7 @@ function Statement({ head, line, go, onNext }: {
           <h1 className="fr-finish-head">{head}</h1>
           <p className="fr-finish-line">{line}</p>
           <button className="fr-finish-go" onClick={onNext} autoFocus>{go}</button>
+          {skip && onSkip ? <button type="button" className="fr-finish-skip" onClick={onSkip}>{skip}</button> : null}
         </div>
       </div>
     </div>
@@ -1650,10 +1694,12 @@ function Statement({ head, line, go, onNext }: {
 }
 
 export function Onboarding({
-  run, claude, home, opened, waiting, later, picking, palette, view, tabs, products = [],
+  run, claude, home, opened, waiting, later, picking, palette, board, view, tabs, products = [],
   beat, pointed,
-  onEvent, onStep, onSkipToApp, onPractice, onDone, onFiled, onProjectMade, onRecheck,
+  onEvent, onStep, onSkipToApp, onPractice, onDone, onFiled, onProjectMade, onRecheck, onLeave,
 }: {
+  /** Skip the tutorial from its hand-off page, into her own project. */
+  onLeave?: () => void;
   run: FirstRun;
   /**
    * EVERY PROJECT THE APP HAS. The last card files into one, so it needs the
@@ -1685,6 +1731,8 @@ export function Onboarding({
    *  thing that opens over the app, and until 2026-08-28 the walk said nothing
    *  at all once it was open. See `command` in `coach`. */
   palette?: boolean;
+  /** Whether the page is drawn as the board, for the board beat's second half. */
+  board?: boolean;
   /**
    * THE ROWS THE CURRENT BEAT'S KEY IS RIGHT FOR, in the order they are drawn,
    *  and the row the row-keys would actually land on. Both come from the app,
@@ -2068,6 +2116,11 @@ export function Onboarding({
         line={COPY.handLine}
         go={COPY.handGo}
         onNext={onPractice}
+        // A WAY PAST IT ON THE PAGE ITSELF (2026-10-06), her words: "this is a
+        // tutorial page. Add a skip button, obviously a secondary button."
+        // The same exit as the corner Skip inside the tutorial.
+        skip={COPY.handSkip}
+        onSkip={onLeave}
       />
     );
   }
@@ -2088,7 +2141,7 @@ export function Onboarding({
     const teamStrip = run.step === 'where' && typeof document !== 'undefined'
       && !!document.querySelector('.th-bar .tm-tabs');
     const say = coach(run.step, run.sentAt ? now - run.sentAt : 0, {
-      opened, view, picking, palette, left: beat?.length, tabs,
+      opened, view, picking, palette, board, left: beat?.length, tabs, replies: run.replies,
       tabNames: teamStrip ? TEAM_TAB_NAMES : undefined, team: !!team,
     });
     if (!say) return null;
@@ -2126,6 +2179,10 @@ export function Onboarding({
     const clearing = run.step === 'clear' ? beat?.[0] ?? null : null;
     const sel = own
       ? [`.list-pane .row[data-item-id="${run.item}"]`, ...ANCHOR[run.step] ?? []]
+      // THE BOARD ITSELF ONCE IT IS UP (2026-10-06), so the card sits under
+      // the columns rather than dropping off the View button onto Done.
+      : run.step === 'board' && board
+      ? ['.th-board', ...ANCHOR.board ?? []]
       : clearing
       ? [`.list-pane .row[data-item-id="${clearing}"]`, ...ANCHOR.clear ?? []]
       : run.step === 'unblock' && waiting && !opened
@@ -2160,11 +2217,20 @@ export function Onboarding({
         // already flips the sentence above it into the empty middle of the
         // pane. There is nothing beside it to stand off and nothing under it to
         // cover: the overlap the rig prints as `overDock` is 0 by construction.
-        beside={(run.step === 'where' && !teamStrip) || (run.step === 'command' && !!palette)}
-        besideRing={run.step === 'command' && !!palette}
+        // AND THE LOOK AROUND'S TABS CARD, for the tour's reason: under the
+        // strip it printed over the first three thread titles (2026-10-06).
+        // Beside the team strip too on the look around: its ring is the whole
+        // strip, so there is no later tab for the card to land on, only the
+        // empty space to the right of All.
+        beside={(run.step === 'where' && !teamStrip) || run.step === 'tabs' || (run.step === 'command' && !!palette) || run.step === 'answer'}
+        // AND THE ANSWER BEAT STANDS OFF THE REPLY BOX TO ITS RIGHT
+        // (2026-10-06). Above the box it covered the agent's answer, the newest
+        // thing in the thread and the one thing she is there to read: all four
+        // persona testers and Codex named it, on the shorter summary especially.
+        besideRing={(run.step === 'command' && !!palette) || run.step === 'answer'}
         // The tour's tabs are the sidebar's rows now, so the card stands off
         // the sidebar's right edge and holds one x for every press.
-        besideOf={run.step === 'where' ? '.workspace-navigation, .tabs' : undefined}
+        besideOf={run.step === 'tabs' ? '.th-bar .tm-tabs, .workspace-navigation, .tabs' : run.step === 'where' ? '.workspace-navigation, .tabs' : undefined}
         boundsSel={BOUNDS[run.step]}
         // AND THE CARD GOES UNDER THE WHOLE PICKER, NOT UNDER THE LIST INSIDE
         // IT. The ring is on the options, which is what the press is about, but
@@ -2194,6 +2260,9 @@ export function Onboarding({
         */
         hold={practising(run)}
         also={ALSO[run.step]}
+        // THE LOOK AROUND MOVES ON BY ITSELF: the list, then the tabs, then the
+        // plus. Read off the walk's one order like every other Next.
+        onNext={say.next ? () => go(run.step) : undefined}
       />
     );
   }

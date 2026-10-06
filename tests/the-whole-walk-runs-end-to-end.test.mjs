@@ -35,7 +35,7 @@ const EXAMPLE_IDS = PRACTICE_ROWS.map((_, i) => `w-ex${i + 1}`);
  * THE RUN. Every move is one the app really makes: `stepTo` where a screen
  *  just leaves, `advance` where something really happened in the store. The
  *  step after each move is recorded so the order can be read as one thing. */
-function walkIt({ bare = false } = {}) {
+function walkIt({ bare = false, reply = false } = {}) {
   const seen = [];
   let s = { ...START };
   const at = (label) => seen.push({ label, step: s.step, dot: BEAT[s.step], run: s });
@@ -59,15 +59,24 @@ function walkIt({ bare = false } = {}) {
   // THE PRACTICE PROJECT IS REAL AND IT IS NOT THEIRS. Made here, with the
   // three rows already waiting in it, and archived when the walk ends.
   s = advance(s, { t: 'practice', product: 'practice', examples: EXAMPLE_IDS });
-  at('practising');
-  // WRITING ONE IS TWO BEATS SINCE 2026-10-01. The card opens on who the
-  // thread is for, which the walk never used to say a word about, and the beat
-  // ends when the To list is really open (App.tsx, `onOpenMenu`).
-  s = stepTo(s, 'who');                                 at('who it is for');
+  at('looking around');
+  // THE LOOK AROUND IS TWO STOPS, EACH LEFT BY ITS NEXT (2026-10-06), and the
+  // plus is the beat after them.
+  s = stepTo(s, 'tabs');                                at('the tabs');
+  s = stepTo(s, 'make');                                at('practising');
+  // WRITING ONE IS TWO BEATS AGAIN SINCE 2026-10-06: the card opens and she
+  // sends it. The beat about who it was to went with single player.
   s = stepTo(s, 'task');                                at('composing');
   s = advance(s, { t: 'sent', item: 'w-first', at: 1_000 }); at('it is running');
   s = advance(s, { t: 'answered' });                    at('it came back');
   s = stepTo(s, 'answer');                              at('opened it');
+  // AND SHE MAY REPLY TO IT (2026-10-06), which sends it back to work and
+  // brings it back changed, through the same two beats it took the first time.
+  if (reply) {
+    s = advance(s, { t: 'replied', at: 2_000 });        at('replied to it');
+    s = advance(s, { t: 'answered' });                  at('it came back again');
+    s = stepTo(s, 'answer');                            at('opened it again');
+  }
   // The rows arriving lands straight on the beat that clears them. The rail's
   // note beat sat between the two until w-ec62ab6b38 (2026-09-28) removed it.
   s = advance(s, { t: 'staged', examples: EXAMPLE_IDS }); at('two to close');
@@ -143,6 +152,9 @@ describe('the walk, start to finish', () => {
     // EIGHT AND SIXTEEN since 2026-10-05 (w-9f6975906c): the three
     // introduction slabs went, so both pairs came down three.
     //
+    // NINE AND SEVENTEEN since 2026-10-06: the look around added two beats in
+    // front of the plus and the beat about To went.
+    //
     // `where` IS ONE BEAT AND ONE STEP even though it takes three presses of
     // Tab. The presses move the VIEW, not the step, which is exactly why the
     // card cannot get out of step with the screen it is describing.
@@ -155,6 +167,27 @@ describe('the walk, start to finish', () => {
     }
     expect(beats.filter((s) => BEAT[s] === BEAT.working)).toEqual(['working', 'open']);
     expect(beats.filter((s) => BEAT[s] === BEAT.done)).toEqual(['done', 'landed']);
+  });
+
+  // A REPLY IS THE ONE MOVE BACK, AND IT IS ON PURPOSE (2026-10-06). Her words:
+  // "your first task doesn't let you actually reply but forces you to do 'e'".
+  // Replying sends the thread back to work, so the walk steps back to the beat
+  // that watches it run and comes forward through the same two beats again.
+  it('takes a reply back to work and forward again, and nowhere else', () => {
+    const { seen: replied, end: after } = walkIt({ reply: true });
+    const back = [];
+    for (let i = 1; i < replied.length; i += 1) {
+      if (replied[i].dot < replied[i - 1].dot) back.push(`${replied[i - 1].step}->${replied[i].step}`);
+    }
+    expect(back).toEqual(['answer->working']);
+    expect(after.step).toBe('landed');
+    expect(after.replies).toBe(1);
+    expect(after.sentAt).toBe(2_000);
+    // And only from her own open thread: anywhere else the walk does not move.
+    for (const step of ['open', 'working', 'clear', 'unblock']) {
+      const run = { ...START, step, item: 'w-first' };
+      expect(advance(run, { t: 'replied', at: 5 }), step).toBe(run);
+    }
   });
 
   it('still knows the folder and the name it was given at the start', () => {
@@ -211,18 +244,25 @@ describe('what the list holds under each beat', () => {
   ];
   const at = (label) => seen.find((m) => m.label === label).run;
 
-  it('holds only her own task while it is running and while she opens it', () => {
+  // THE EXAMPLES ARE IN THE LIST FROM THE FIRST LOOK (2026-10-06), so the look
+  // around stands on an inbox with something in it and the inbox does not
+  // empty itself while she writes her first thread. Codex, consulted on the
+  // round: "don't make the inbox mysteriously empty when creation begins."
+  it('holds her own task and the examples from the look around on, and nothing found on the Mac', () => {
+    expect(walkRows(rows, at('looking around')).map((r) => r.id)).toEqual(EXAMPLE_IDS);
     for (const label of ['it is running', 'it came back', 'opened it']) {
-      expect(walkRows(rows, at(label)).map((r) => r.id)).toEqual(['w-first']);
+      expect(walkRows(rows, at(label)).map((r) => r.id)).toEqual(['w-first', ...EXAMPLE_IDS]);
     }
   });
 
-  it('holds exactly the three examples on both halves of beat thirteen, and nothing found on the Mac', () => {
-    expect(walkRows(rows, at('two to close')).map((r) => r.id)).toEqual(EXAMPLE_IDS);
+  it('holds the examples on both halves of beat thirteen, and nothing found on the Mac', () => {
+    // Her own task is still kept, and by this beat it is closed, so the inbox
+    // tab does not draw it.
+    expect(walkRows(rows, at('two to close')).map((r) => r.id)).toEqual(['w-first', ...EXAMPLE_IDS]);
     // AND STILL ON THE HALF THAT ANSWERS THE STOPPED ONE. Without this the row
     // she is being told to open would leave the screen the moment the beat she
     // is being told to open it on begins.
-    expect(walkRows(rows, at('one to answer')).map((r) => r.id)).toEqual(EXAMPLE_IDS);
+    expect(walkRows(rows, at('one to answer')).map((r) => r.id)).toEqual(['w-first', ...EXAMPLE_IDS]);
   });
 
   it('is empty under the finish card, because that card says the inbox is empty', () => {

@@ -20,7 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  COACHED, KEY_NAMES, coach, keyName,
+  COACHED, COPY, KEY_NAMES, coach, keyName,
 } from '../renderer/src/onboarding.ts';
 import { PRACTICE_ANSWER, PRACTICE_ROWS, PRACTICE_TASK } from '../shared/first-run-practice.mjs';
 import { NAME, Name } from '../shared/product-name.mjs';
@@ -54,8 +54,11 @@ describe('3. a coaching card is two lines, everywhere in the walk', () => {
   it('has nowhere to put a third line, on any beat or any half of one', () => {
     for (const [name, card] of everyCard()) {
       expect(card.why, `${name} has a third line`).toBeUndefined();
-      expect(Object.keys(card).sort(), `${name} has a field to hide one in`)
-        .toEqual(card.caps ? ['caps', 'key', 'lead', 'quiet', 'tail'] : ['key', 'lead', 'quiet', 'tail']);
+      // `next` is a yes or no, the look around's button (2026-10-06): it holds
+      // no words, so there is still nowhere to put a third line.
+      const fields = ['key', 'lead', 'quiet', 'tail', ...(card.caps ? ['caps'] : []), ...(card.next ? ['next'] : [])].sort();
+      expect(Object.keys(card).sort(), `${name} has a field to hide one in`).toEqual(fields);
+      if ('next' in card) expect(card.next, name).toBe(true);
     }
   });
 
@@ -74,7 +77,7 @@ describe('3. a coaching card is two lines, everywhere in the walk', () => {
     const end = logic.indexOf('THE WORDS OF THE WALK');
     expect(end).toBeGreaterThan(0);
     const helper = logic.slice(logic.indexOf('const say = ('), end);
-    expect(helper).toContain('extra: { caps?: number } = {}');
+    expect(helper).toContain('extra: { caps?: number; next?: boolean } = {}');
     expect(helper).not.toContain('why');
   });
 
@@ -104,7 +107,10 @@ describe('3. a coaching card is two lines, everywhere in the walk', () => {
     // now the sentence describing the row, so it is read before the key rather
     // than after it.
     const listed = coach('unblock', 0);
-    expect(listed.quiet.toLowerCase()).toContain('stopped for good');
+    // Said without the alarm since 2026-10-06: "stopped for good" read to all
+    // four persona testers as something having broken. The danger is the same.
+    expect(listed.quiet.toLowerCase()).toContain('waiting on your answer');
+    expect(listed.quiet.toLowerCase()).toContain('marking it done leaves it stuck');
     expect(listed.key).toBe('↵');
   });
 
@@ -122,9 +128,14 @@ describe('4. the last card ends on the thing she does next', () => {
     // "Press ⌘K any time" is a permission, not a step, and it was the last
     // thing the walk said. a tester did not know what to do with it.
     const said = `${card.quiet} ${card.lead}${card.key}${card.tail}`;
-    // w-ec62ab6b38 (2026-09-28): her word for a row is thread now, not task.
-    expect(said.toLowerCase()).toContain('first real thread');
     expect(said).not.toMatch(/any time\.?$/);
+    // AND THE FIRST REAL THREAD IS ON THE LANDING SINCE 2026-10-06, which is
+    // the last thing the walk says now. The ⌘K card carried it as a second
+    // instruction in the same sentence ("Press ⌘K or click the ⌘ button, or N
+    // for your first real thread"), and the landing says it on its own.
+    // w-ec62ab6b38 (2026-09-28): her word for a row is thread now, not task.
+    expect(COPY.finishNext.join(' ').toLowerCase()).toContain('real thread');
+    expect(said.toLowerCase()).not.toContain('first real thread');
   });
 
   it('still teaches the key, and still ends on the press the beat wants', () => {
@@ -218,13 +229,19 @@ describe('1. the first practice task is fiction about a named pretend app', () =
     // "Practice" is the name the rail, the band and the compose card already
     // say. There is no second pretend name invented for this string.
     expect(PRACTICE_TASK.title).toContain('Practice');
-    expect(PRACTICE_TASK.body).toContain('Practice');
   });
 
-  it(`says out loud that it is neither her code nor ${NAME}`, () => {
-    // Her exact misreading was that it was a button for signing out of Agentbox.
-    expect(PRACTICE_TASK.body.toLowerCase()).toContain('pretend');
-    expect(PRACTICE_TASK.body).toContain(NAME);
+  // THE BODY IS WHAT A PERSON WOULD TYPE SINCE 2026-10-06. It said "Practice
+  // is a pretend project, not your work and not Agentbox. This one is written
+  // for you already.", which answered a misreading of a task long since
+  // replaced (a sign-out button for a pretend app), and it was then drawn in
+  // her own thread as a message from "You". The band over the window says
+  // nothing in here is hers on every beat of the tutorial.
+  it(`is written as a request a person would send, not as the walk talking to her`, () => {
+    expect(PRACTICE_TASK.body.toLowerCase()).not.toContain('pretend');
+    expect(PRACTICE_TASK.body).not.toContain(NAME);
+    expect(PRACTICE_TASK.body.toLowerCase()).not.toContain('for you');
+    expect(COPY.band.toLowerCase()).toContain('nothing in here is yours');
   });
 
   it('reads sensibly as the request that PRACTICE_ANSWER answers', () => {

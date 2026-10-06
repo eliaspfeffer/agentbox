@@ -95,13 +95,17 @@ describe('the press that turns Claude Code up', () => {
     expect(card.show).toBe(false);
   });
 
-  // AND THE STALE EMPTY ANSWER NO LONGER ENDS THE WALK, because nothing does.
-  // A read that came back empty now draws the card with its empty answer on
-  // it, which is a screen somebody can stand on while Claude Code finishes
-  // installing and press Look again.
-  it('draws the card on an empty answer rather than walking her past it', () => {
+  // AN EMPTY ANSWER GOES STRAIGHT TO THE LANDING AGAIN SINCE 2026-10-06. From
+  // 2026-08-28 it drew the card with "No agents to bring across yet" and a
+  // ~/.claude/agents path on it, and that was the ending every brand new user
+  // got: a finished tutorial closing on what read as a failed setup. ⌘K's
+  // import row is still there for the day there is something to bring. What
+  // stays true is the half above: an answer read before Claude Code arrived is
+  // forgotten when it does, so a Mac with agents is never walked past them.
+  it('walks an empty answer straight on to the landing, and never as a blocked gate', () => {
     const stale = finishCard({ missing: false }, { read: true, some: false });
-    expect(stale.show).toBe(true);
+    expect(stale.show).toBe(false);
+    expect(stale.skip).toBe(true);
     expect(stale.blocked).toBe(false);
   });
 

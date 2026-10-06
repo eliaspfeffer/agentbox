@@ -115,13 +115,24 @@ const NO_CLICK = {
   // rather than close the list. esc is not a shortcut anybody has to remember;
   // it is the key every window on this machine closes on, which is the whole
   // difference from the letters this round is about.
-  command: 'esc, with nothing inside the ring to click',
+  // AND BOTH HALVES SINCE 2026-10-06. The first said "or click the ⌘ button",
+  // and driving the default layout found no such button: the card had nothing
+  // to ring and floated over the list. ⌘K is the whole of what it teaches.
+  command: 'esc, with nothing inside the ring to click; and ⌘K, with no button on screen',
 };
 
 describe('every practice beat names something to click', () => {
   for (const [name, say] of everyCard()) {
     it(`${name} says what to click as well as what to press`, () => {
       const step = name.split(' ')[0];
+      // THE LOOK AROUND'S CLICK IS THE BUTTON ON THE CARD (2026-10-06): its two
+      // cards carry a Next with the ↵ cap on it, so the key and the click are
+      // one thing and the sentence does not need to name either.
+      if (say.next) {
+        expect(['tour', 'tabs'], `${name} has a Next it should not`).toContain(step);
+        expect(say.key).toBe('↵');
+        return;
+      }
       if (!say.key) {
         // A card with no key either asks for nothing at all, or asks for a
         // click on something the app has no key for. `who` is the second kind
@@ -137,7 +148,7 @@ describe('every practice beat names something to click', () => {
         if (step === 'who' || step === 'board') expect(loud(say).toLowerCase(), `${name} names no click`).toContain('click');
         return;
       }
-      if (NO_CLICK[step] && (say.key === 'esc' || step === 'working' || step === 'clear' || step === 'snooze')) {
+      if (NO_CLICK[step] && (say.key === 'esc' || step === 'working' || step === 'clear' || step === 'snooze' || step === 'command')) {
         // One of the four written out above, each with its reason. The card
         // must then name NO click, because a half-promise is the thing being
         // guarded against: either the app answers a mouse here or the card
@@ -156,16 +167,17 @@ describe('every practice beat names something to click', () => {
     expect(Object.keys(NO_CLICK).sort()).toEqual(['clear', 'command', 'snooze', 'working']);
     expect(coach('working', 0).key).toBeNull();
     expect(coach('command', 0, { palette: true }).key).toBe('esc');
-    // And the first half of that same beat DOES name one, which is the half
-    // that asks for the least guessable press in the walk.
-    expect(loud(coach('command', 0))).toContain('click the ⌘ button');
+    // The first half named "the ⌘ button" until 2026-10-06, when driving the
+    // default layout found no such button on the screen to click.
+    expect(loud(coach('command', 0))).toBe('Press ⌘K to see them all.');
   });
 
   // THE TWO ROW BEATS, WORD FOR WORD, because this is the pair that went wrong
   // and a regex for the absence of "click" would pass on a card that had lost
   // its key as well.
   it('leaves the two row beats on the key alone, and says so plainly', () => {
-    expect(loud(coach('clear', 0, { left: 2 }))).toBe('Press E to close it.');
+    // "Mark it done" since 2026-10-06, the word on the row's own chip.
+    expect(loud(coach('clear', 0, { left: 2 }))).toBe('Press E to mark it done.');
     expect(loud(coach('snooze', 0))).toBe('Press L to deal with it later.');
   });
 });
@@ -188,19 +200,14 @@ describe('the click each card names is a real one', () => {
     expect(read('renderer/src/threads/ThreadComposer.tsx')).toMatch(/className="tc-send-main"[\s\S]{0,400}Send/);
   });
 
-  // WHO THE THREAD IS FOR (2026-10-01). THE WALK MUST TEACH PICKING WHO A
-  // THREAD IS TO, and that a thread goes to a person as well as to an agent.
-  // It rings the To row and the list it opens, and
-  // says both halves, because on a Mac with no teammates the list draws Agent
-  // alone and the People half appears the day somebody joins.
-  it('points at the To row, and names an agent and a person', () => {
-    // On a team. With no team the person half is not said at all
-    // (a-mac-with-no-team-never-hears-about-a-team.test.mjs).
-    const say = coach('who', 0, { team: true });
-    expect(say.key).toBeNull();
-    expect(loud(say)).toBe('Click To at the top of the card to see who it can go to.');
-    expect(say.quiet).toBe('Every thread goes to an agent, or to a person on your team.');
-    expect(ANCHOR.who).toEqual(['.tc-card .tc-to-menu', '.tc-card .tc-word']);
+  // WHO THE THREAD IS FOR had a beat from 2026-10-01 to 2026-10-06, ringing the
+  // To row. It went with single player, her words: "hitting 'to' doesn't
+  // matter because we're in single player mode so it's only ever 'to' the
+  // agent." So the claim now is that there is no such beat to ring anything.
+  it('has no beat about the To row any more', () => {
+    expect(COACHED).not.toContain('who');
+    expect(coach('who', 0, { team: true })).toBeNull();
+    expect(ANCHOR.who).toBeUndefined();
   });
 
   it('points at the row on the two beats that ring a row', () => {
@@ -211,7 +218,7 @@ describe('the click each card names is a real one', () => {
   });
 
   it('points at the reply box and the options strip, which are what those beats ring', () => {
-    expect(loud(coach('answer', 0))).toContain('Click the box below');
+    expect(loud(coach('answer', 0))).toContain('Click the reply box');
     expect(ANCHOR.answer[0]).toBe('.focus-dock .dock-card');
     expect(loud(coach('unblock', 0, { opened: true }))).toContain('click the first answer');
     expect(ANCHOR.unblock[0]).toBe('.opt-strip');

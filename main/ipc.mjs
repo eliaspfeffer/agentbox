@@ -759,8 +759,8 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // The whole of the work is reading the readme in the folder chosen two
   // screens earlier, so this returns in milliseconds. The two second pause
   // before it is called is in the renderer, where the row is being watched.
-  ipcMain.handle('zero:first-run-answer', (_e, { product, id }) => {
-    return store.finishFirstRunTask(product, id);
+  ipcMain.handle('zero:first-run-answer', (_e, { product, id, round = 0 }) => {
+    return store.finishFirstRunTask(product, id, round);
   });
 
   // THE PRACTICE PROJECT.Made when the hand-off screen is pressed, filled with
