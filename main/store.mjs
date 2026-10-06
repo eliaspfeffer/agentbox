@@ -307,7 +307,11 @@ export class Store {
   //
   // Undefined means she never opened the drawer and the row keeps what it had.
   // Null means she cleared it, and the engine chooses again.
-  answerItem(slug, id, { answer, status, priority, permissionMode, model, effort }) {
+  //
+  // `inReplyTo` makes the answer a reply in a thread (w-920461cbe6): the uid
+  // of the message it answers, on THE SAME LINE as the words, so the reply's
+  // own uid (what its reactions hang off) is the line that says where it goes.
+  answerItem(slug, id, { answer, status, priority, permissionMode, model, effort, inReplyTo }) {
     const { workItemsDisk } = this.modules;
     const dir = this.productDir(slug);
     let item = null;
@@ -322,7 +326,7 @@ export class Store {
     // special-cased in both engines' argument builders.
     if (model !== undefined) item = workItemsDisk.updateWorkItem(dir, id, { model: model ?? '' }, { source: 'founder' });
     if (effort !== undefined) item = workItemsDisk.updateWorkItem(dir, id, { effort: effort ?? '' }, { source: 'founder' });
-    if (answer) item = workItemsDisk.updateWorkItem(dir, id, { answer }, { source: 'founder' });
+    if (answer) item = workItemsDisk.updateWorkItem(dir, id, inReplyTo ? { answer, inReplyTo } : { answer }, { source: 'founder' });
     // The pane may still show a running row after Stop or a provider result.
     // Resolve omitted reply status against the ledger that was just written.
     if (status == null && typeof answer === 'string' && answer.trim() && answer !== '(withdrawn)'

@@ -113,6 +113,12 @@ export function checkProjectFolder(folder, { home = '' } = {}) {
 /**
  * WHERE A NEW PROJECT'S FOLDER IS PROPOSED, when nobody has pointed at one.
  *
+ *  NOTHING CALLS THIS ANY MORE (w-33e1c968f0, 2026-10-05). A new project is
+ *  made in a folder picked in the Mac's own window, so there is no proposal to
+ *  make and no folder is ever created from a name. It is kept because two tests
+ *  use it as the record of what the wrong home folder used to cost; do not wire
+ *  it back into the app without reading that work item first.
+ *
  *  This used to be `~/Desktop/dev/<slug>` flat, which is one developer's own
  *  filing system shipped to everybody, and it is inside Desktop, which is one
  *  of the guarded seven above: the very first project anybody made through the

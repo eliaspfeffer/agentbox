@@ -34,6 +34,7 @@ import { clock, dayHeading } from '../thread-history';
 import { chatLayout } from '../team/chat-layout';
 import { ChatFold } from '../team/ChatFold';
 import { MessageActions, Reactions } from '../team/ChatActions';
+import { ThreadLine } from '../team/ThreadPanel';
 import { AgentAnswers } from '../team/ChatAgents';
 import {
   conversationGap, fileInChange, gapIndex, groupWork, outputCut, runFailures, runOverflow, runSummary,
@@ -71,7 +72,7 @@ export interface CodeInThread {
   open: (path: string) => void;
 }
 
-export function Thread({ events, omitted = 0, onWhole, onOpenOrigin, onSendNow, name, landOn, md, code, tail, chat = false, reactions, onReact, onQuote, onHandToAgent }: {
+export function Thread({ events, omitted = 0, onWhole, onOpenOrigin, onSendNow, name, landOn, md, code, tail, chat = false, reactions, onReact, onQuote, onHandToAgent, replies, openThread = null, onOpenThread }: {
   // CUT THE AGENT'S CURRENT STEP so a message of hers that is waiting on it is
   // answered now (w-f37a34def6). Absent where nothing can be cut.
   onSendNow?: () => unknown;
@@ -129,6 +130,13 @@ export function Thread({ events, omitted = 0, onWhole, onOpenOrigin, onSendNow, 
   // Turn this conversation into work. The line that used to say so sat under
   // the whole conversation; it is an action on a message now.
   onHandToAgent?: () => void;
+  // THREADS (w-920461cbe6). The replies to each message, by its uid, which
+  // `itemThread` lifted out of `events`; the uid of the one open in the panel
+  // beside the chat; and the way to open one. With `onOpenThread`, Reply on a
+  // message opens its thread instead of quoting it.
+  replies?: Record<string, AgentTurn[]>;
+  openThread?: string | null;
+  onOpenThread?: (uid: string) => void;
 }) {
   // Which work lines are open, and how far. Kept per conversation, not globally.
   const [open, setOpen] = useState<Map<number, number>>(new Map());
@@ -297,7 +305,7 @@ export function Thread({ events, omitted = 0, onWhole, onOpenOrigin, onSendNow, 
           : slot && !slot.head ? 'is-msg is-chat-cont'
           : e.same ? 'is-msg-same' : 'is-msg';
         return (
-        <div key={`${e.at}-${key}-${n}`} className={`thread-block ${holds} ${ends === gapAfter ? 'has-gap' : ''}`}>
+        <div key={`${e.at}-${key}-${n}`} className={`thread-block ${holds} ${ends === gapAfter ? 'has-gap' : ''}${chat && e.kind !== 'work' && e.kind !== 'run' && e.uid && e.uid === openThread ? ' is-thread-open' : ''}`}>
           {slot?.day && <div className="chat-day">{slot.day}</div>}
           {e.kind === 'work' && e.yours
             ? <ActLine act={e} />
@@ -351,10 +359,18 @@ export function Thread({ events, omitted = 0, onWhole, onOpenOrigin, onSendNow, 
                     onReact={(emoji, off) => onReact?.(e.uid!, emoji, off)}
                   />
                 )}
+                {/* ITS THREAD, AS ONE LINE (w-920461cbe6): who replied, how
+                    many, and when the last came in. Pressing it opens the
+                    thread in the panel beside the chat. */}
+                {e.uid && onOpenThread && (replies?.[e.uid]?.length ?? 0) > 0 && (
+                  <ThreadLine replies={replies![e.uid]} open={e.uid === openThread} onOpen={() => onOpenThread(e.uid!)} />
+                )}
                 {e.uid && onReact && (
                   <MessageActions
                     onReact={(emoji) => onReact(e.uid!, emoji, (reactions?.[e.uid!]?.[emoji] ?? []).includes(team?.me ?? ''))}
-                    onQuote={() => onQuote?.(e.text ?? '')}
+                    {...(onOpenThread
+                      ? { onQuote: () => onOpenThread(e.uid!), replyLabel: 'Reply in thread' }
+                      : { onQuote: () => onQuote?.(e.text ?? '') })}
                     onHandToAgent={onHandToAgent}
                   />
                 )}

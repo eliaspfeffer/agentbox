@@ -34,8 +34,8 @@ import { documentCandidates } from './message-artifacts';
 import { filesFromRuns } from './run-files';
 import { Rail } from './components/Rail';
 import { ThreadComposer } from './threads/ThreadComposer';
-import { proposeParent } from '../../shared/project-folder-check.mjs';
 import { NewProject } from './components/NewProject';
+import { shortFolder } from './project-folder';
 import { ImportAgents } from './components/ImportAgents';
 import { importedLine } from './agent-import-card';
 import { whenLabel } from './components/When';
@@ -51,7 +51,7 @@ import { Snooze } from './components/Snooze';
 import { announcesUpdate, isUpdateRow } from './update-row';
 // Inbox zero is `IdlePage`.
 import { IdlePage } from './components/IdlePage';
-import { ago, itemOptions, offerIsLive, parseRepeat } from './format';
+import { ago, closesTheTask, itemOptions, offerIsLive, parseRepeat } from './format';
 import {
   hasDraft, restoreDraft, restoreFailedDraft, readComposeDraft, restoreComposeDraft, saveDraft, clearComposeDraft,
   type SentDraft, type ComposeDraft,
@@ -3572,6 +3572,9 @@ export default function App() {
     if (item.agent || isTroubleRow(item) || isUpdateRow(item)) return;
     const option = itemOptions(item).find((o) => o.n === n);
     if (!option) return;
+    // "Close this task" is done here, the way E does it, and never sent: as a
+    // reply it would reopen the row and start a run to close it (format.ts).
+    if (closesTheTask(option.text)) { await markDone(item); return; }
     // A PICK IS A REPLY, so it reopens a finished thread exactly as typing one
     // does (statusForReply). It did not, and nothing showed that: the answer
     // was written to the ledger, the toast said it had been sent, and the
@@ -3594,7 +3597,7 @@ export default function App() {
         await api.answer({ product: item.product, id: item.id, ...withdrawReply(item.status) });
       } });
     }, `Option ${option.n} → ${item.productName}`, undefined, undefined, { product: item.product, id: item.id }, undid);
-  }, [deferCommit, pushUndo]);
+  }, [deferCommit, pushUndo, markDone]);
 
   /* ------------------------ the task she just wrote ------------------------ */
   // THE TASK SHE JUST MADE IS WHAT Z TAKES BACK.
@@ -5934,19 +5937,15 @@ export default function App() {
           onClose={() => setImportAgents(false)}
         />
       )}
-      {/* THE NEW PROJECT CARD. Last, so it draws over the composer it can be
-          opened from AND over the Settings screen, which is not in the modal
-          stack. One card, three doors. */}
+      {/* MAKING A PROJECT. There is no card any more: this opens the Mac's own
+          folder window and makes the project in the folder that comes back
+          (w-33e1c968f0). Last in the tree, so the window it draws in a browser
+          tab is over the composer it can be opened from AND over the Settings
+          screen, which is not in the modal stack. One flow, four doors: the
+          thread composer's project menu, ⌘K, Settings and the agent import. */}
       {newProject && (
         <NewProject
-          // WHERE THE FOLDER IS PROPOSED. Beside the projects she already
-          // has; `~/dev` only when there are none to learn from. It was
-          // `~/Desktop/dev` for everybody, and Desktop is guarded by macOS,
-          // so the first project anybody made asked for their Desktop.
-          parent={proposeParent(
-            (snap?.products ?? []).map((p) => p.repoPath).filter((p): p is string => !!p),
-            { home: home || '~' },
-          )}
+          onRefused={(say) => showToast(say)}
           onCreate={async ({ name, repoPath }) => {
             try {
               const made = await api.createProduct({ name, repoPath }) as { slug?: string } | null;
@@ -5955,7 +5954,10 @@ export default function App() {
               // The composer remembers by slug, so the project just made is the
               // one the next task is addressed to.
               if (slug) { rememberProject(slug); setPickProject(slug); }
-              showToast(repoPath ? `New project: ${name} · its code is in ${repoPath}` : `New project: ${name}`);
+              // The folder as the person writes it, `~` and all, the way the
+              // rail and Settings write one. It is the only confirmation of
+              // WHICH folder they picked, so it is worth reading.
+              showToast(`New project: ${name} · its code is in ${shortFolder(repoPath)}`);
               await refresh();
               /* * AND THE TUTORIAL OFFERS ITSELF HERE.
 
@@ -5986,10 +5988,12 @@ export default function App() {
                 offered: !neverOffered(localStorage),
               })) setOffer({ product: slug });
             } catch (err) {
-              // The card stays open holding what was typed. A failure that also
-              // eats the name is two failures.
-              // In words, the way the walk's own name screen says it, not the
-              // store's "product x already exists".
+              // Nothing is held open any more, because nothing was typed: the
+              // folder window has already closed and there is no card behind
+              // it. The sentence is the whole of what is left to say, and it is
+              // the walk's own words rather than the store's "product x already
+              // exists". Picking the same folder twice is the common one.
+              setNewProject(false);
               showToast(whyNotMade((err as Error).message, name));
             }
           }}

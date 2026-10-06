@@ -21,6 +21,8 @@
 // are read, and the marks a Z left on this Mac (../undo-marks).
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { ThreadPanel } from '../team/ThreadPanel';
 import { api } from '../api';
 import { changePathFor, type Change } from '../code-artifact';
 import { filedOnTurn } from '../filed-in-thread';
@@ -30,7 +32,7 @@ import { withoutTrailingWork } from '../trailing-work';
 import { marksFor, readUndoMarks, UNDO_MARKS_EVENT, type UndoMark } from '../undo-marks';
 import type { LedgerLine } from '../thread-history';
 import type { TraceSession } from '../notes';
-import type { RunningSession, WorkItem } from '../types';
+import type { AgentTurn, RunningSession, WorkItem } from '../types';
 import { ActLine, Thread, ThreadWaiting } from './Thread';
 import { ThreadsMade, type MadeRow } from './ThreadsMade';
 
@@ -56,7 +58,20 @@ const REFRESH_MS = 8_000;
 // screen is the kind of drift this row exists to end.
 const THEM = 'The agent';
 
-export function ItemThread({ item, engine, session, opening, sending, filed = [], onOpenFiled, onApproveFiled, onOpenOrigin, onSendNow, md, clean, onOpenDoc, chat = false, onQuote, onHandToAgent }: {
+export function ItemThread({ item, engine, session, opening, sending, filed = [], onOpenFiled, onApproveFiled, onOpenOrigin, onSendNow, md, clean, onOpenDoc, chat = false, onQuote, onHandToAgent, thread }: {
+  // A CHAT'S THREAD, IN THE PANEL BESIDE IT (w-920461cbe6). The pane owns which
+  // one is open and how wide it is; this draws it, because this is where the
+  // replies were read. `host` is the pane the panel is drawn into. Absent
+  // everywhere but a conversation between people.
+  thread?: {
+    open: string | null;
+    host: HTMLElement | null;
+    width: number;
+    onOpen: (uid: string) => void;
+    onClose: () => void;
+    onResize: (width: number) => void;
+    onSend: (uid: string, text: string) => unknown;
+  };
   item: WorkItem;
   // THE THREADS THIS ONE FILED, EACH ON THE TURN THAT FILED IT (w-2e13752a85).
   // They used to be one block under the whole conversation, which left the
@@ -247,6 +262,11 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
     ? [{ at: opening.at, who: 'you' as const, text: opening.text, on: opening.on }, ...shown]
     : shown;
   const { omitted, outcome, after } = built;
+  // The message the open thread hangs off, if it is on the screen. One that is
+  // not (scrolled into the older part, or gone) draws no panel at all.
+  const openParent = chat && thread?.open
+    ? (built.events.find((e) => e.kind !== 'work' && e.uid === thread.open) as AgentTurn | undefined) ?? null
+    : null;
   if (!said.length && !opening && !outcome) return <div className="thread-wait">Nothing has been said here yet.</div>;
 
   // WHICH TURN EACH FILED THREAD BELONGS TO. Measured against `events`, which
@@ -307,8 +327,24 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
           },
           onQuote,
           onHandToAgent,
+          ...(thread ? { replies: built.replies, openThread: thread.open, onOpenThread: thread.onOpen } : {}),
         } : {})}
       />
+      {/* THE OPEN THREAD, beside the chat rather than in it (w-920461cbe6). */}
+      {chat && thread && openParent && thread.host && createPortal(
+        <ThreadPanel
+          parent={openParent}
+          replies={built.replies[openParent.uid!] ?? []}
+          md={(text) => md(clean(text))}
+          width={thread.width}
+          reactions={item.reactions}
+          onReact={(on, emoji, off) => { api.teamReact({ product: item.product, id: item.id, on, emoji, off }); }}
+          onSend={(text) => thread.onSend(openParent.uid!, text)}
+          onClose={thread.onClose}
+          onResize={thread.onResize}
+        />,
+        thread.host,
+      )}
       {answer}
       {/* What you did after that answer, under it and in order. */}
       {after.length > 0 && (
