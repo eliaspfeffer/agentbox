@@ -54,7 +54,7 @@ import { announcesUpdate, isUpdateRow } from './update-row';
 import { IdlePage } from './components/IdlePage';
 import { ago, closesTheTask, itemOptions, offerIsLive, parseRepeat } from './format';
 import {
-  hasDraft, restoreDraft, restoreFailedDraft, readComposeDraft, restoreComposeDraft, saveDraft, clearComposeDraft,
+  draftKey, hasDraft, restoreDraft, restoreFailedDraft, readComposeDraft, restoreComposeDraft, saveDraft, clearComposeDraft,
   type SentDraft, type ComposeDraft,
 } from './drafts';
 import { approvalStage } from './approval-stage';
@@ -96,7 +96,7 @@ import { Landed, Onboarding, PracticeBand, WayOut } from './components/Onboardin
 import { PlanBar, PlanSetupCard } from './components/PlanSetup';
 import { AppMark } from './components/AppMark';
 import { needsPlan, type Plan } from './plan-setup';
-import { PRACTICE_ROWS, PRACTICE_SLUG } from '../../shared/first-run-practice.mjs';
+import { PRACTICE_REPLY, PRACTICE_ROWS, PRACTICE_SLUG } from '../../shared/first-run-practice.mjs';
 import { ModeScreen, isModeVariant } from './components/ModeScreen';
 import { practiceRemembered, rememberProject, rememberedProject } from './compose-project';
 import { needsStaging, walkStageKey } from './walk-staging';
@@ -1080,6 +1080,20 @@ export default function App() {
     if (run?.step !== 'open' || !focused || focused.id !== run.item) return;
     setRun((r) => (r ? stepTo(r, 'answer') : r));
   }, [run?.step, focused?.id]);
+
+  // THE REPLY IS WRITTEN IN FOR HER (2026-10-06), hers: "when they do that or
+  // click the inbox have it auto-write something". Written the moment the box
+  // opens, by R or by a click, and NOT before: a thread with a draft opens with
+  // its box already open and focused, so a draft saved earlier made R and E
+  // type into the box instead (measured in the built app: "rMake it shorter,
+  // please."). Only the first time; `restoreDraft` never writes over her words.
+  useEffect(() => {
+    if (run?.step !== 'answer' || run.replies || !run.item || modal !== 'reply') return;
+    const product = run.practice ?? run.product;
+    if (!product) return;
+    const ref = { product, id: run.item };
+    if (restoreDraft(ref, PRACTICE_REPLY)) window.dispatchEvent(new CustomEvent('zero:reply-restored', { detail: draftKey(ref) }));
+  }, [run?.step, run?.replies, run?.item, modal]);
 
   // THE ANSWER ARRIVES. The walk watches the real item in the real snapshot, so
   // "it is running" stops being true at the moment it stops being true.
@@ -6163,6 +6177,9 @@ export default function App() {
           // Whether the board is what the page is drawn as, for the board
           // beat's second half (2026-10-06).
           board={inboxDisplay.view === 'board'}
+          // And whether the reply box is open, so the answer beat stops saying
+          // R over a box that R would type into (2026-10-06).
+          replying={modal === 'reply'}
           view={view}
           /* THE TABS THE WALK NAMES ARE THE TABS TAB MOVES ALONG. Its tour
              tells somebody to press Tab and then says where that press lands,
@@ -6197,6 +6214,8 @@ export default function App() {
           }}
           // The tutorial page's own Skip, the same exit as the corner one.
           onLeave={() => finishRun([], { celebrate: false })}
+          // Any press on the ⌘K list shuts it, which ends that beat.
+          onShut={() => setModal(null)}
           onPractice={async () => {
             // THE PRACTICE PROJECT, MADE FOR REAL.One call makes the project
             // and writes the three rows already waiting in it.

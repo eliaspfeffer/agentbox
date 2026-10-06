@@ -31,7 +31,7 @@ import {
   ANCHOR, BEAT, COACHED, START, STEPS, advance, beatRows, coach, finishCard, readFirstRun,
   replyAnswered, replyWritten, walkRows,
 } from '../renderer/src/onboarding.ts';
-import { PRACTICE_ANSWER, PRACTICE_REPLY_ANSWER, PRACTICE_SLUG } from '../shared/first-run-practice.mjs';
+import { PRACTICE_ANSWER, PRACTICE_REPLY, PRACTICE_REPLY_ANSWER, PRACTICE_SLUG } from '../shared/first-run-practice.mjs';
 import { answerSettled } from '../shared/answers.mjs';
 import { Store } from '../main/store.mjs';
 
@@ -110,7 +110,7 @@ describe('3. a look around before the first thread', () => {
   it('lets ↵ on the card move the walk on and never reach the app underneath', () => {
     const card = read('renderer/src/components/Onboarding.tsx');
     expect(card).toMatch(/if \(say\.next && keyToken\(e\) === say\.key && next\.current\) \{\s*\n\s*e\.preventDefault\(\);\s*\n\s*e\.stopPropagation\(\);\s*\n\s*e\.stopImmediatePropagation\(\);\s*\n\s*next\.current\(\);/);
-    expect(card).toMatch(/onNext=\{say\.next \? \(\) => go\(run\.step\) : undefined\}/);
+    expect(card).toMatch(/onNext=\{say\.next \? \(\) => go\(run\.step\) : say\.anyKey \? onShut : undefined\}/);
   });
 });
 
@@ -118,7 +118,11 @@ describe('4. a reply on her first thread is answered', () => {
   it('tells her what to reply with, and that closing it is the other way', () => {
     const first = coach('answer', 0);
     expect(first.quiet).toContain('shorter');
-    expect(loud(first)).toBe('Click the reply box to ask for that, or press E to mark it done.');
+    // R is the cap, the app's reply key (hers, 2026-10-06: "it's actually R to
+    // reply"), and E is the beat's second key, so it is not a wrong press.
+    expect(loud(first)).toBe('Press R or click the reply box to ask for that, or E to mark it done.');
+    expect(first.key).toBe('R');
+    expect(first.alt).toBe('E');
     // And once the change has come back, marking it done is the one thing left.
     const after = coach('answer', 0, { replies: 1 });
     expect(loud(after)).toBe('Press E to mark it done.');
@@ -207,11 +211,84 @@ describe('4b. the tutorial page can be skipped from the page itself', () => {
     const css = read('renderer/src/styles.css');
     expect(card).toMatch(/skip=\{COPY\.handSkip\}\s*\n\s*onSkip=\{onLeave\}/);
     expect(card).toMatch(/className="fr-finish-skip" onClick=\{onSkip\}/);
-    expect(app).toMatch(/onLeave=\{\(\) => finishRun\(\[\], \{ celebrate: false \}\)\}\s*\n\s*onPractice=/);
+    expect(app).toMatch(/onLeave=\{\(\) => finishRun\(\[\], \{ celebrate: false \}\)\}/);
     // Secondary: no border and no fill, unlike Start.
     const rule = css.slice(css.indexOf('.fr-finish-skip {'), css.indexOf('}', css.indexOf('.fr-finish-skip {')));
     expect(rule).toMatch(/border: 0/);
     expect(rule).toMatch(/background: none/);
+  });
+});
+
+describe('4c. R replies, and the reply is written in when the box opens', () => {
+  // Hers, 2026-10-06: "it's actually R to reply (and when they do that or
+  // click the inbox have it auto-write something)". MEASURED in the built app
+  // before this: the card's only key was E, so R was answered as a wrong press;
+  // and a reply saved before the thread opened made the box open focused, so R
+  // typed into it ("rMake it shorter, please.").
+  it('writes the reply in when the box opens on her first answer, not before', () => {
+    expect(PRACTICE_REPLY).toBe('Make it shorter, please.');
+    expect(app).toMatch(/if \(run\?\.step !== 'answer' \|\| run\.replies \|\| !run\.item \|\| modal !== 'reply'\) return;/);
+    expect(app).toMatch(/if \(restoreDraft\(ref, PRACTICE_REPLY\)\) window\.dispatchEvent\(new CustomEvent\('zero:reply-restored'/);
+    // THE CASE THAT MUST NOT MATCH: nothing is written on the beat before it.
+    expect(app).not.toMatch(/run\?\.step !== 'open' \|\| run\.replies/);
+  });
+
+  it('lets E through as the second key rather than a wrong one', () => {
+    const card = read('renderer/src/components/Onboarding.tsx');
+    expect(card).toMatch(/if \(say\.alt && keyToken\(e\) === say\.alt\) return;/);
+  });
+});
+
+describe('4e. with the reply box open, the card asks to send it, not for R', () => {
+  // Hers, 2026-10-06, with a picture of "Make it shorter, please.r": "If I type
+  // R here, it just adds R to the input field rather than actually moving to
+  // the next step." The card kept saying "Press R" over an open, focused box.
+  // Driven in the built app after the fix: opened by R, by a click, and still
+  // open after Escape, the card says ⌘↵, and ⌘↵ sends it back to work.
+  it('switches to ⌘↵ and Send once the box is open, and back is not needed', () => {
+    const open = coach('answer', 0, { replying: true });
+    expect(open.key).toBe('⌘↵');
+    expect(loud(open)).toBe('Press ⌘↵ or click Send to ask for it.');
+    expect(open.alt).toBeUndefined();
+    // THE CASE THAT MUST NOT MATCH: closed, it still names R; after a reply,
+    // marking it done wins whatever the box is doing.
+    expect(coach('answer', 0).key).toBe('R');
+    expect(coach('answer', 0, { replying: true, replies: 1 }).key).toBe('E');
+  });
+
+  it('reads the open box off the app and off where the typing cursor is', () => {
+    const card = read('renderer/src/components/Onboarding.tsx');
+    expect(app).toMatch(/replying=\{modal === 'reply'\}/);
+    expect(card).toMatch(/replying: !!replying \|\| inReply/);
+    expect(card).toMatch(/el\.closest\('\.focus-dock'\)/);
+  });
+
+  it('keeps the corner Skip in the strip under the sidebar, clear of Settings', () => {
+    // Measured in the built app at 1440x900: Skip 878 to 900, Settings 838 to
+    // 874. It was 38 tall from 14 up and sat on Settings.
+    const css = read('renderer/src/styles.css');
+    const rule = css.slice(css.indexOf('.fr-out {'), css.indexOf('}', css.indexOf('.fr-out {')));
+    expect(rule).toMatch(/bottom: 0px; height: 22px;/);
+  });
+});
+
+describe('4d. on the ⌘K list any key or click finishes, and runs nothing', () => {
+  // Hers, 2026-10-06: "i keep accidentally hitting these commands like making a
+  // new project in tutorial. it should just respond with any key to moving to
+  // the next step". Driven in the built app: N on the open list ended the
+  // tutorial and no New project card opened.
+  it('says so on the card and takes any key, even inside the list\'s own field', () => {
+    const open = coach('command', 0, { palette: true });
+    expect(open.anyKey).toBe(true);
+    expect(`${open.lead}${open.tail}`).toBe('Press any key to finish.');
+    const card = read('renderer/src/components/Onboarding.tsx');
+    expect(card).toMatch(/if \(\['Meta', 'Shift', 'Alt', 'Control', 'CapsLock'\]\.includes\(e\.key\)\) return;\s*\n\s*move\(e\);/);
+    expect(card).toMatch(/el\.closest\('\.modal\.palette'\)\) move\(e\);/);
+    expect(app).toMatch(/onShut=\{\(\) => setModal\(null\)\}/);
+    // THE CASE THAT MUST NOT MATCH: the half before the list opens still
+    // wants ⌘K and nothing else.
+    expect(coach('command', 0).anyKey).toBeUndefined();
+    expect(coach('command', 0).key).toBe('⌘K');
   });
 });
 

@@ -124,8 +124,12 @@ describe('the ten beats, in her order', () => {
     // walk. The mouse route on this beat is replying.
     // AND IT SAYS WHAT TO REPLY WITH SINCE 2026-10-06: the answer offers to
     // make the summary shorter, and a reply is now answered with that.
-    expect(coach('answer', 0).lead).toBe('Click the reply box to ask for that, or press ');
-    expect(coach('answer', 0).key).toBe('E');
+    // AND R IS THE CAP, the app's own reply key (hers, 2026-10-06), with E
+    // the beat's second key.
+    expect(coach('answer', 0).lead).toBe('Press ');
+    expect(coach('answer', 0).key).toBe('R');
+    expect(coach('answer', 0).tail).toBe(' or click the reply box to ask for that, or E to mark it done.');
+    expect(coach('answer', 0).alt).toBe('E');
   });
 
   it('has no beat that says the walk is over while it carries on', () => {

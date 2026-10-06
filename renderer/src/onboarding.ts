@@ -1378,6 +1378,16 @@ export interface Coach {
    * around has one: those two beats ask nothing of the app, so the card is the
    * thing being pressed, by ↵ or by a click on the button. */
   next?: boolean;
+  /**
+   * A SECOND KEY THE BEAT ALSO TAKES (2026-10-06), named in the sentence but
+   * not drawn as a cap. The first thread's answer takes R to reply and E to
+   * mark it done; with only one key allowed, R was answered as a wrong press. */
+  alt?: string;
+  /**
+   * ANY KEY MOVES ON (2026-10-06), her words: "i keep accidentally hitting these
+   * commands like making a new project in tutorial. it should just respond with
+   * any key to moving to the next step". Only the ⌘K list's half has it. */
+  anyKey?: boolean;
   /* * AND THERE IS NO `why` ANY MORE, WHICH IS THE TWO-LINE BUDGET (w-9a6ea066d6,
      2026-08-28). Four beats carried a third sentence under a hairline rule saying why the
      beat mattered.
@@ -1393,7 +1403,7 @@ export interface Coach {
 
 const say = (
   quiet: string, lead: string, key: string | null = null, tail = '',
-  extra: { caps?: number; next?: boolean } = {},
+  extra: { caps?: number; next?: boolean; alt?: string; anyKey?: boolean } = {},
 ): Coach => ({ quiet, lead, key, tail, ...extra });
 
 /**
@@ -1502,6 +1512,8 @@ export function coach(
     team?: boolean;
     /** How many times she has replied to her own thread (`FirstRun.replies`). */
     replies?: number;
+    /** Whether the reply box is open, for the answer beat's second half. */
+    replying?: boolean;
   } = {},
 ): Coach | null {
   switch (step) {
@@ -1617,7 +1629,18 @@ export function coach(
         // the tab says Done and the card said close, three words for one key
         // to every persona tester. Done is the app's word (./done-word.ts).
         ? say('It is shorter now, so this one is finished.', 'Press ', 'E', ' to mark it done.')
-        : say('Your agent finished, and offers to make it shorter.', 'Click the reply box to ask for that, or press ', 'E', ' to mark it done.');
+        // AND ONCE THE BOX IS OPEN THE NEXT MOVE IS SENDING (2026-10-06). The
+        // card kept saying "Press R" over an open box with the reply in it, so
+        // R typed an r on the end of the reply: hers, "If I type R here, it
+        // just adds R to the input field rather than actually moving to the
+        // next step." Now the card says what the open box is waiting for.
+        : ctx.replying
+        ? say('Your reply is written for you.', 'Press ', '⌘↵', ' or click Send to ask for it.')
+        // R IS THE APP'S REPLY KEY, AND IT IS THE CAP (2026-10-06), hers: "it's
+        // actually R to reply". E rides as the beat's second key, so pressing
+        // it is still taken, and the box writes the reply in for her when it
+        // opens (App.tsx, PRACTICE_REPLY).
+        : say('Your agent finished, and offers to make it shorter.', 'Press ', 'R', ' or click the reply box to ask for that, or E to mark it done.', { alt: 'E' });
     // THE THREE ARE EXAMPLES AND THE CARD HAS TO SAY SO.
     //
     // The old line was 'Three of these are waiting on you.' over 'Clear them.
@@ -2029,9 +2052,15 @@ export function coach(
         // every window on the Mac closes on.
         // AND IT SAYS WHERE THE TUTORIAL LIVES WHILE THE LIST IS OPEN
         // (2026-10-06), because that is the moment the word means something.
+        // AND ANY KEY OR CLICK FINISHES IT (2026-10-06), hers: "i keep
+        // accidentally hitting these commands like making a new project in
+        // tutorial. it should just respond with any key to moving to the next
+        // step". Nothing in the list runs while the walk is on it; the press
+        // closes the list and the walk goes on. "Type tutorial" says "later",
+        // because typing here now finishes rather than searches.
         ? say(
-          `Every command in ${NAME} is in this list. Type tutorial to take this again.`,
-          'Press ', 'esc', ' to close it.',
+          `Every command in ${NAME} is in this list. Later, type tutorial here to take this again.`,
+          'Press any key to finish.', null, '', { anyKey: true },
         )
         // AND THE QUIET LINE ON THIS HALF IS NOT THE ONE THAT ROUND CUT. That
         // round emptied it, and it was right to: it said "Back at an empty

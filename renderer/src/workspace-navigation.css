@@ -128,6 +128,15 @@
 
 .workspace-bottom { margin-top: auto; padding-top: 24px; }
 .workspace-utilities { display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px; }
+/* SETTINGS SITS 4 POINTS OFF THE BOTTOM WHEN IT IS THE LAST ROW (w-b59cbe3154,
+   2026-10-05). With nobody to show, the corner row is not drawn at all
+   (WorkspaceNavigation.tsx), so this padding is the whole of the air under
+   Settings. As built that air was 66 (this 12, plus the row's 8 of margin and
+   46 of height), and removing the row alone left 12: "no i meant there was too
+   much space. 12 px was too much." Shown 0, 4 and 8 she picked 4. The 12 above
+   is untouched, because with a row under it this is the gap between two
+   things rather than the foot of the sidebar. */
+.workspace-utilities:last-child { padding-bottom: 4px; }
 .workspace-utilities button { width: 100%; }
 .workspace-bottom .workspace-footer { margin-top: 0; border-top: 1px solid var(--line); padding-top: 12px; }
 .workspace-usage:empty { display: none; }

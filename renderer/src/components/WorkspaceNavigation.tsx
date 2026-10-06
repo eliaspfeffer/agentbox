@@ -86,6 +86,30 @@ export function WorkspaceNavigation({ view, collapsed, onToggle, onView, onSearc
   const mark = team?.team?.name
     ? <span className="th-mark" aria-hidden="true">{teamName.slice(0, 1).toUpperCase()}</span>
     : <span className="th-mark th-mark-app" aria-hidden="true"><AppMark size={20} /></span>;
+  // THE BOTTOM-LEFT CORNER, AND IT IS NULL WHEN THERE IS NOBODY TO PUT IN IT.
+  //
+  // YOUR OWN ROW IS ONE BUTTON, face, name and email, and it opens your account
+  // menu upward (w-a09476712f): what you are up to, Invite people, Settings and
+  // Sign out. Clicking it used to open a page with Sign out somewhere on it, and
+  // "I tried clicking my profile area ... expecting a sign out or somthing and
+  // nothing."
+  //
+  // WITH NOBODY TO SHOW, NOTHING IS DRAWN AT ALL (w-b59cbe3154, 2026-10-05).
+  // This used to fall through to an empty `<span />`, and `.th-me` carries its
+  // own 46px height and a hairline above it, so a Mac with no team cloud and
+  // nobody signed in ended on a divider with 46 points of nothing under it:
+  // "There's just this empty space in the bottom-left corner because it doesn't
+  // have data on the user." Five things that could sit there were drawn and she
+  // picked nothing at all, so Settings is the last row. The element is absent
+  // rather than hidden with `:empty`, which is what lets the foot's own
+  // `:last-child` rule close the gap under Settings (workspace-navigation.css).
+  const corner = me
+    ? (onAccount
+      ? <AccountMenu me={me} now={Date.now()} collapsed={collapsed} onAccount={onAccount} onInvite={onInvite} onSettings={onSettings} onSignOut={onSignOut} />
+      : <><Face person={me} me /><span>{me.name || me.email}<small>{me.email}</small></span></>)
+    : team?.configured && onTeam
+      ? <button type="button" className="th-me-signin" aria-label="Sign in to your team" onClick={onTeam}>Sign in to your team</button>
+      : null;
   return <aside className="workspace-navigation" aria-label="Workspace">
     {/* THE TOGGLE SITS BESIDE THE TEAM'S NAME, at the top, where sidebars keep
         it (2026-10-01). Collapsed, the mark itself is the way back
@@ -127,18 +151,7 @@ export function WorkspaceNavigation({ view, collapsed, onToggle, onView, onSearc
         {onSettings && <button aria-label="Settings" aria-current={page === 'settings' ? 'page' : undefined} title="Settings" onClick={onSettings}><SettingsIcon/><span>Settings</span></button>}
       </div>
       {usage && <div className="workspace-usage">{usage}</div>}
-      <div className="th-me">
-        {/* YOUR OWN ROW IS ONE BUTTON, face, name and email, and it opens your
-            account menu upward (w-a09476712f): what you are up to, Invite
-            people, Settings and Sign out. Clicking it used to open a page with
-            Sign out somewhere on it, and "I tried clicking my profile area ...
-            expecting a sign out or somthing and nothing." */}
-        {me ? (onAccount
-          ? <AccountMenu me={me} now={Date.now()} collapsed={collapsed} onAccount={onAccount} onInvite={onInvite} onSettings={onSettings} onSignOut={onSignOut} />
-          : <><Face person={me} me /><span>{me.name || me.email}<small>{me.email}</small></span></>)
-          : team?.configured && onTeam ? <button type="button" className="th-me-signin" aria-label="Sign in to your team" onClick={onTeam}>Sign in to your team</button>
-            : <span />}
-      </div>
+      {corner && <div className="th-me">{corner}</div>}
     </div>
   </aside>;
 }

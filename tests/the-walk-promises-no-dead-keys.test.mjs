@@ -253,11 +253,14 @@ describe('the coaching card promises no dead key either', () => {
   // NINE SINCE 2026-10-02: the board beat names B, which was added to the app
   // for that switch when it was asked for (w-58c8f466e7; it was V for one
   // ship). Its handler is the next test in this block.
-  it('names nine keys and no others', () => {
+  it('names ten keys and no others', () => {
     // The tour printed ⌘ and a number from 2026-09-23 until 2026-10-02
     // (w-914b16eab6); it prints ⇥ at every stop now, so the list is exact again.
+    // R since 2026-10-06, the app's reply key, on the first thread's answer
+    // (hers: "it's actually R to reply"). The app answers R in an open thread.
     const said = [...new Set([...keys, ...tourKeys])];
-    expect(said.sort()).toEqual(['1', 'N', 'E', 'L', 'B', '↵', '⌘K', '⌘↵', '⇥'].sort());
+    expect(said.sort()).toEqual(['1', 'N', 'E', 'L', 'B', 'R', '↵', '⌘K', '⌘↵', '⇥'].sort());
+    expect(app).toContain("else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); setOpenDoc(null); setModal('reply'); }");
   });
 
   it('B flips the inbox to the board, which is what the board beat says', () => {

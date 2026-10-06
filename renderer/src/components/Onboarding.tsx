@@ -364,6 +364,36 @@ function Card({ say, beat, pointed, knock = 0, onNext }: {
   aim.current = { beat: beat ?? [], pointed: pointed ?? null };
   const next = useRef(onNext);
   next.current = onNext;
+  // ANY KEY, OR A CLICK INSIDE WHAT IS RINGED, MOVES ON (2026-10-06). Before
+  // the field rule below, because on the ⌘K beat the typing cursor is in the
+  // list's own search field and every key lands there. A lone modifier is not
+  // a press. Nothing reaches the list, so no command runs by accident.
+  useEffect(() => {
+    if (!say.anyKey) return;
+    const move = (e: Event) => {
+      if (!next.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      next.current();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (['Meta', 'Shift', 'Alt', 'Control', 'CapsLock'].includes(e.key)) return;
+      move(e);
+    };
+    const onPoint = (e: Event) => {
+      const el = e.target as Element | null;
+      if (el && typeof el.closest === 'function' && el.closest('.modal.palette')) move(e);
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('pointerdown', onPoint, true);
+    window.addEventListener('click', onPoint, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('pointerdown', onPoint, true);
+      window.removeEventListener('click', onPoint, true);
+    };
+  }, [say.anyKey]);
   useEffect(() => {
     setWrong(0);
     setBreathe(false);
@@ -415,6 +445,8 @@ function Card({ say, beat, pointed, knock = 0, onNext }: {
         return;
       }
       if (!wrongPress(say.key, e)) return;
+      // THE BEAT'S SECOND KEY IS NOT A WRONG ONE (2026-10-06): E beside R.
+      if (say.alt && keyToken(e) === say.alt) return;
       setWrong((n) => n + 1);
       if (swallowPress(say.key, e, e.target)) {
         e.preventDefault();
@@ -1705,12 +1737,14 @@ function Statement({ head, line, go, onNext, skip, onSkip }: {
 }
 
 export function Onboarding({
-  run, claude, home, opened, waiting, later, picking, palette, board, view, tabs, products = [],
+  run, claude, home, opened, waiting, later, picking, palette, board, replying, view, tabs, products = [],
   beat, pointed,
-  onEvent, onStep, onSkipToApp, onPractice, onDone, onFiled, onProjectMade, onRecheck, onLeave,
+  onEvent, onStep, onSkipToApp, onPractice, onDone, onFiled, onProjectMade, onRecheck, onLeave, onShut,
 }: {
   /** Skip the tutorial from its hand-off page, into her own project. */
   onLeave?: () => void;
+  /** Shut whatever is open over the app; the ⌘K beat's any-key press. */
+  onShut?: () => void;
   run: FirstRun;
   /**
    * EVERY PROJECT THE APP HAS. The last card files into one, so it needs the
@@ -1744,6 +1778,8 @@ export function Onboarding({
   palette?: boolean;
   /** Whether the page is drawn as the board, for the board beat's second half. */
   board?: boolean;
+  /** Whether the reply box is open, for the answer beat's second half. */
+  replying?: boolean;
   /**
    * THE ROWS THE CURRENT BEAT'S KEY IS RIGHT FOR, in the order they are drawn,
    *  and the row the row-keys would actually land on. Both come from the app,
@@ -1861,6 +1897,21 @@ export function Onboarding({
     else onEvent({ t: 'start' });
   };
   const [now, setNow] = useState(() => Date.now());
+  // WHETHER THE TYPING CURSOR IS IN THE REPLY BOX (2026-10-06). The app's own
+  // `replying` is the box opened by R or a click; the box can also stay open
+  // and focused after that state has moved on, and a card saying "Press R"
+  // over a focused box is the one that typed an r onto the end of her reply.
+  const [inReply, setInReply] = useState(false);
+  useEffect(() => {
+    const read = () => {
+      const el = document.activeElement as Element | null;
+      setInReply(!!el && typeof el.closest === 'function' && !!el.closest('.focus-dock'));
+    };
+    read();
+    window.addEventListener('focusin', read);
+    window.addEventListener('focusout', read);
+    return () => { window.removeEventListener('focusin', read); window.removeEventListener('focusout', read); };
+  }, []);
   // HER AGENTS, read once. Null while it is being read, so the card never
   // flashes an empty list at a Mac that has eight.
   const [found, setFound] = useState<{ user: AgentFile[]; project: AgentFile[] } | null>(null);
@@ -2152,7 +2203,7 @@ export function Onboarding({
     const teamStrip = run.step === 'where' && typeof document !== 'undefined'
       && !!document.querySelector('.th-bar .tm-tabs');
     const say = coach(run.step, run.sentAt ? now - run.sentAt : 0, {
-      opened, view, picking, palette, board, left: beat?.length, tabs, replies: run.replies,
+      opened, view, picking, palette, board, replying: !!replying || inReply, left: beat?.length, tabs, replies: run.replies,
       tabNames: teamStrip ? TEAM_TAB_NAMES : undefined, team: !!team,
     });
     if (!say) return null;
@@ -2273,7 +2324,8 @@ export function Onboarding({
         also={ALSO[run.step]}
         // THE LOOK AROUND MOVES ON BY ITSELF: the list, then the tabs, then the
         // plus. Read off the walk's one order like every other Next.
-        onNext={say.next ? () => go(run.step) : undefined}
+        // AND ON THE ⌘K LIST ANY PRESS SHUTS IT, which is what ends that beat.
+        onNext={say.next ? () => go(run.step) : say.anyKey ? onShut : undefined}
       />
     );
   }

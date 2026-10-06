@@ -130,8 +130,13 @@ describe('the ⌘K beat', () => {
   it('says what the palette is for, and the one key that leaves it', () => {
     const open = coach('command', 0, { palette: true });
     // AND THE WAY BACK TO THE TUTORIAL, while the list it is typed into is up.
-    expect(open.quiet).toBe(`Every command in ${NAME} is in this list. Type tutorial to take this again.`);
-    expect(open.key).toBe('esc');
+    // "Later", because typing on the list finishes the tutorial since
+    // 2026-10-06 (hers: "it should just respond with any key to moving to the
+    // next step"), so the word is for another time.
+    expect(open.quiet).toBe(`Every command in ${NAME} is in this list. Later, type tutorial here to take this again.`);
+    expect(open.key).toBeNull();
+    expect(`${open.lead}${open.tail}`).toBe('Press any key to finish.');
+    expect(open.anyKey).toBe(true);
   });
 
   it('is never the same card twice, because that reads as a screen that did not notice', () => {
