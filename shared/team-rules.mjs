@@ -57,13 +57,53 @@ export function lastSpeaker(item) {
   return latest?.by ?? item?.createdBy ?? null;
 }
 
+/**
+ * WHAT IN A CONVERSATION IS WAITING ON YOU (w-920461cbe6). Asked the day
+ * threads shipped: in a busy chat, with three people answering your thread and
+ * others carrying on in the chat, what reaches your inbox? Not a row per
+ * message, and not a thread you are not in; and a thread waiting on you must
+ * not be lost because you said something in the chat.
+ *
+ * So: `chat` is how many messages in the main chat came after your own newest
+ * one there, and `threads` is every thread you are IN (you wrote the message it
+ * hangs off, or replied in it) where somebody else spoke after you, newest
+ * first, with how many replies are new, who wrote them, what the thread is
+ * about and its newest words. Null for a row with no record of who spoke where
+ * (one from before threads), which then reads by `lastSpeaker` as it always did.
+ */
+export function whatWaits(item, me) {
+  const talk = item?.talk;
+  if (!talk || !me) return null;
+  const since = (list) => { let n = 0; for (let k = list.length - 1; k >= 0 && list[k].by !== me; k -= 1) n += 1; return n; };
+  const threads = [];
+  for (const [uid, t] of Object.entries(talk.threads ?? {})) {
+    const replies = t.replies ?? [];
+    if (t.by !== me && !replies.some((r) => r.by === me)) continue;
+    const fresh = since(replies);
+    if (!fresh) continue;
+    const news = replies.slice(-fresh);
+    threads.push({
+      uid, mine: t.by === me, fresh,
+      people: [...new Set(news.map((r) => r.by))],
+      text: t.text, last: news[news.length - 1].text,
+      at: news[news.length - 1].ts,
+    });
+  }
+  threads.sort((a, b) => b.at - a.at);
+  return { chat: since(talk.chat ?? []), threads: threads.map(({ at, ...t }) => t) };
+}
+
 export function inMyInbox(item, product, me) {
   if (!isShared(product) || !me) return true;
   // A CONVERSATION NEEDS WHOEVER DID NOT SPEAK LAST (2026-10-01), so a message
   // to three people is in all three inboxes until one of them answers, and the
   // answer puts it back in everyone else's. One person to one works the same.
+  // WITH THREADS (w-920461cbe6) the same rule is read per place: the chat, and
+  // each thread you are in. One row, whichever of them is waiting.
   if (product?.team?.direct) {
     if (item.status === 'done') return false;
+    const waits = whatWaits(item, me);
+    if (waits) return waits.chat > 0 || waits.threads.length > 0;
     const by = lastSpeaker(item);
     return by ? by !== me : item.assignee === me;
   }
@@ -78,6 +118,9 @@ export function inMyInbox(item, product, me) {
 // Her words: "It's not supposed to leave the board; it's supposed to go in Done."
 export function iSpokeLast(item, product, me) {
   if (!me || !product?.team?.direct || item?.status === 'done') return false;
+  // Done for you means nothing in it waits on you: the chat or any thread.
+  const waits = whatWaits(item, me);
+  if (waits) return waits.chat === 0 && waits.threads.length === 0;
   return lastSpeaker(item) === me;
 }
 

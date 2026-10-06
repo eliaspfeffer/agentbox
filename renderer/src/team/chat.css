@@ -213,6 +213,10 @@
 .chat-thread-faces .tm-av { width: 20px; height: 20px; line-height: 18px; font-size: 8px; }
 .chat-thread-n { color: var(--text); font-weight: 500; }
 .chat-thread-last { color: var(--text-faint); }
+/* A thread with replies waiting on you (w-920461cbe6): a heavier count behind a
+   small square in the app's accent, the one mark in a chat that means "yours". */
+.chat-thread-line.fresh .chat-thread-n { font-weight: 600; display: inline-flex; align-items: center; gap: 7px; }
+.chat-thread-line.fresh .chat-thread-n::before { content: ''; width: 6px; height: 6px; background: var(--accent); }
 
 /* The message whose thread is open, marked in the chat by a faint wash that
    reaches past its edges, so the eye can go from the panel back to it. */

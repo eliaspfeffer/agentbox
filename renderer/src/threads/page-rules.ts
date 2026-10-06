@@ -13,6 +13,7 @@ import { firstRealLine } from '../format';
 import { threadState } from '../../../shared/thread-cards.mjs';
 import { placeScore } from '../../../shared/rank.mjs';
 import { plainWords } from '../team/agent-mentions';
+import { whatWaits } from '../../../shared/team-rules.mjs';
 
 export type PageId = 'inbox' | 'team';
 export type UpdatedWindow = 'today' | 'week' | 'any';
@@ -392,12 +393,29 @@ export function rowSharing(
  * conversation, whether the newest message is mine, and its first line. Null
  * on anything that is not a conversation.
  */
-export function messageLine(item: WorkItem, product: Product | undefined | null, me: string | null): { people: string[]; fromMe: boolean; text: string } | null {
+export function messageLine(item: WorkItem, product: Product | undefined | null, me: string | null, nameOf: (id: string) => string = () => 'Someone'): { people: string[]; fromMe: boolean; text: string } | null {
   if (!isDirect(product)) return null;
   const team = (product as { team?: { people?: string[]; sharedBy?: string | null } }).team;
   const everyone = [...(team?.people ?? []), ...(team?.sharedBy ? [team.sharedBy] : []), ...(item.people ?? [])];
   let people = [...new Set(everyone)].filter((p) => p && p !== me);
   if (!people.length && item.createdBy && item.createdBy !== me) people = [item.createdBy];
+  // A CHAT WITH THREADS SAYS WHAT IS WAITING ON YOU (w-920461cbe6), and so
+  // changes as the chat does: a thread of yours with replies, the chat's own
+  // news beside it, or, with nothing waiting, the chat's newest line. Never a
+  // thread reply standing in for the chat, and never a thread you are not in.
+  const waits = whatWaits(item, me);
+  if (waits && item.talk) {
+    const line = (text: string) => firstRealLine(plainWords(text));
+    const [one, ...more] = waits.threads;
+    if (one) {
+      const where = one.mine ? 'your thread' : `“${clip(line(one.text), 48)}”`;
+      const head = more.length ? `Replies in ${waits.threads.length} of your threads` : `${namesOf(one.people, nameOf)} replied in ${where}`;
+      if (waits.chat) return { people, fromMe: false, text: `${head} · ${waits.chat} new in the chat` };
+      return { people, fromMe: false, text: more.length ? head : `${head}: ${line(one.last)}` };
+    }
+    const newest = item.talk.chat[item.talk.chat.length - 1];
+    if (newest) return { people, fromMe: !!me && newest.by === me, text: line(newest.text) };
+  }
   const answered = !!item.answer && item.answer !== '(withdrawn)';
   // An agent mentioned in the message reads as its words, not its link (w-7b9cb8636a).
   //
@@ -411,6 +429,21 @@ export function messageLine(item: WorkItem, product: Product | undefined | null,
   const text = firstRealLine(plainWords(String((answered ? item.answer : item.body) || item.title || '')));
   const by = (answered ? item.wrote?.answer?.by : item.wrote?.body?.by) ?? item.createdBy ?? null;
   return { people, fromMe: !!me && by === me, text };
+}
+
+/** "Theo", "Theo and Jun", "Theo, Jun and Maya", "Theo, Jun and 2 others". */
+function namesOf(ids: string[], nameOf: (id: string) => string): string {
+  const names = ids.map(nameOf);
+  if (names.length <= 1) return names[0] ?? 'Someone';
+  if (names.length <= 3) return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${names.slice(0, 2).join(', ')} and ${names.length - 2} others`;
+}
+
+/** A thread's subject, cut at a word with an ellipsis when it runs long. */
+function clip(text: string, most: number): string {
+  if (text.length <= most) return text;
+  const cut = text.slice(0, most);
+  return `${cut.slice(0, cut.lastIndexOf(' ') > most / 2 ? cut.lastIndexOf(' ') : most).trimEnd()}…`;
 }
 
 /**
@@ -461,8 +494,10 @@ export interface BoardEntry {
 // disagree). Your own threads sit in
 // the column whose tab lists them; `threadState` is only the fallback for a row
 // no tab lists. `live` is the set an agent is on right now.
-export function teamEntries({ items, products, cards, me, now, since = null, stateOf, live, allMine = false }: {
+export function teamEntries({ items, products, cards, me, now, since = null, stateOf, live, allMine = false, nameOf }: {
   items: WorkItem[]; products: Product[]; cards: ThreadCard[]; me: string | null; now: number; since?: number | null;
+  /** A teammate's first name, for a conversation's line (w-920461cbe6). */
+  nameOf?: (id: string) => string;
   stateOf?: (item: WorkItem) => ThreadStateWord | null; live?: Set<string>;
   /** Your own page (w-05ff3d1438): every thread of yours, the private ones
    *  included, and your conversations with people (w-2ad23ca814). */
@@ -479,7 +514,7 @@ export function teamEntries({ items, products, cards, me, now, since = null, sta
     // (w-2ad23ca814: a message from a teammate was on no column at all). The
     // Team page's board stays about work, so it never draws one.
     if (isDirect(product)) {
-      const said = allMine ? messageLine(item, product, me) : null;
+      const said = allMine ? messageLine(item, product, me, nameOf) : null;
       const state = said && stateOf?.(item);
       if (!said || !state) continue;
       if (state === 'done' && !(item.updatedAt >= today)) continue;
@@ -612,8 +647,9 @@ export function teamKeeps(e: BoardEntry, { person, projectName }: { person: stri
  * to walk the current tab's list, which a card from another column is not in,
  * so J stopped with the board still full (2026-10-02).
  */
-export function boardColumns({ items, products, display, now, stateOf, cards = [], picked, me, since = null, live, order = DEFAULT_COLUMN_ORDER, projectOrder = [] }: {
+export function boardColumns({ items, products, display, now, stateOf, cards = [], picked, me, since = null, live, order = DEFAULT_COLUMN_ORDER, projectOrder = [], nameOf }: {
   items: WorkItem[]; products: Product[]; display: Display; now: number;
+  nameOf?: (id: string) => string;
   stateOf?: (item: WorkItem) => ThreadStateWord | null;
   cards?: ThreadCard[]; picked?: string[]; me: string | null; since?: number | null; live?: Set<string>;
   /** The columns left to right, as you dragged them (`readColumnOrder`). */
@@ -626,7 +662,7 @@ export function boardColumns({ items, products, display, now, stateOf, cards = [
   const seen = (e: BoardEntry): Seen | null => (e.item
     ? rowSharing(e.item, products.find((p) => p.slug === e.item!.product), me ? { me, since } : null)
     : 'team');
-  const entries = teamEntries({ items: me && !who.includes(me) ? [] : items, products, cards: cards.filter((c) => who.includes(c.personId)), me, now, since, stateOf, live, allMine: true })
+  const entries = teamEntries({ items: me && !who.includes(me) ? [] : items, products, cards: cards.filter((c) => who.includes(c.personId)), me, now, since, stateOf, live, allMine: true, nameOf })
     .filter((e) => !e.item || e.message || (display.projects.length === 0 || display.projects.includes(e.item.product)))
     .filter((e) => keepsPrivacy(seen(e), display.privacy))
     .filter((e) => teamKeeps(e, { person: null, projectName: null }, display, now));

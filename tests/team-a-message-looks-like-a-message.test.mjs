@@ -118,7 +118,8 @@ describe('drawn', () => {
     // Your own page's board (w-05ff3d1438) is the one that asks for all of yours.
     // It asks through `boardColumns` (page-rules.ts), which the board draws.
     const rules = fs.readFileSync(new URL('../renderer/src/threads/page-rules.ts', import.meta.url), 'utf8');
-    expect(rules).toMatch(/teamEntries\(\{[^}]*allMine: true \}\)/);
+    // Teammates' names ride after it since w-920461cbe6, for the row's line.
+    expect(rules).toMatch(/teamEntries\(\{[^}]*allMine: true[^}]*\}\)/);
     expect(pages).toContain('boardColumns(');
   });
 });
