@@ -74,21 +74,21 @@ export function installBrowserBridge(): boolean {
 
   const bridge: Record<string, unknown> = {};
 
-  for (const [name, channel] of Object.entries(REQUEST_CHANNELS as Record<string, string>)) {
-    const keys = (WRAPPED_ARGS as Record<string, string[]>)[name];
+  for (const [name, channel] of Object.entries(REQUEST_CHANNELS)) {
+    const keys = WRAPPED_ARGS[name];
     bridge[name] = keys
       ? (...args: unknown[]) => ask(channel, Object.fromEntries(keys.map((k, i) => [k, args[i]])))
       : (payload?: unknown) => ask(channel, payload);
   }
 
-  for (const name of DESKTOP_ONLY as string[]) bridge[name] = () => null;
+  for (const name of DESKTOP_ONLY) bridge[name] = () => null;
 
   // The other direction. One event stream carries all eight channels, and each
   // `onSomething` is a subscription to its own name within it. The return value
   // is the unsubscribe function, because that is what preload.cjs returns and
   // the screen calls it on unmount.
   const listeners = new Map<string, Set<Push>>();
-  for (const [name, channel] of Object.entries(PUSH_CHANNELS as Record<string, string>)) {
+  for (const [name, channel] of Object.entries(PUSH_CHANNELS)) {
     bridge[name] = (fn: Push) => {
       const set = listeners.get(channel) ?? new Set<Push>();
       listeners.set(channel, set);

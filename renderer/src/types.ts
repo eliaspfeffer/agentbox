@@ -551,7 +551,12 @@ export interface AgentWork {
   by?: string;
 }
 
-export type AgentEvent = (AgentTurn & { kind?: undefined }) | AgentWork;
+// ONE SIDE OF THAT UNION, NAMED, because a type guard has to be able to say it
+// and `AgentTurn` on its own is not it: without `kind` ruled out, a work line
+// satisfies it too. item-thread.ts narrows with this (`isSaid`).
+export type AgentSaid = AgentTurn & { kind?: undefined };
+
+export type AgentEvent = AgentSaid | AgentWork;
 
 // What comes back when she opens one. `total` is every readable message in the
 // file and `omitted` is how many of them are not on screen: a session with 400

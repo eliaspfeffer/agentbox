@@ -34,7 +34,7 @@ import { changedFile, commandWork, isBookkeeping, plainCommand, saidCount, short
 import { said, traceLines } from './terminal';
 import type { TraceSession } from './notes';
 import { threadEvents, withRuns, type LedgerLine, type ThreadEvent } from './thread-history';
-import type { AgentEvent, AgentTurn, AgentWork } from './types';
+import type { AgentEvent, AgentSaid, AgentTurn, AgentWork } from './types';
 import { liftReplies } from './team/chat-threads';
 import type { UndoMark } from './undo-marks';
 
@@ -278,8 +278,19 @@ function withoutOpening(text: string): string | null {
   return rest.trim() ? rest : null;
 }
 
-function isSaid(node: AgentEvent): boolean {
+// A MESSAGE, AS OPPOSED TO A THING THE AGENT RAN. It says so to the compiler as
+// well as to the reader: eleven of the renderer's type errors were reads of
+// `.who` and `.text` sitting under this test, every one of them correct and
+// none of them provable, because the answer came back as a bare boolean
+// (w-a170ad72b8). A predicate costs nothing and makes a work line put where a
+// message goes an error here rather than an `undefined` on the screen.
+function isSaid(node: AgentEvent): node is AgentSaid {
   return node.kind !== 'work' && !!(node.text ?? '').trim();
+}
+
+/** The same test on a placed node, so the one above the cursor narrows too. */
+function placedIsSaid(p: Placed): p is Placed & { node: AgentSaid } {
+  return isSaid(p.node);
 }
 
 // Tool-call scaffolding that leaked into the prose, cut off it. The rule and
@@ -406,8 +417,11 @@ function collapseRepeats(placed: Placed[]): Placed[] {
   let prev = -1;
   for (let i = 0; i < placed.length; i += 1) {
     const here = placed[i];
-    if (!isSaid(here.node) || gone.has(i)) continue;
-    const last = prev >= 0 ? placed[prev] : null;
+    if (!placedIsSaid(here) || gone.has(i)) continue;
+    // `prev` only ever holds an index that passed the test above, so the guard
+    // here rules out nothing at runtime; it is how the compiler knows that.
+    const before = prev >= 0 ? placed[prev] : null;
+    const last = before && placedIsSaid(before) ? before : null;
     if (!last || last.node.who !== 'it' || here.node.who !== 'it') { prev = i; continue; }
 
     const a = flat(last.node.text ?? '');
