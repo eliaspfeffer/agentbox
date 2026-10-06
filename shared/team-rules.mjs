@@ -109,7 +109,12 @@ const A_TEAMMATE_MAY_SET = ['problem', 'progress', 'solution', 'blockedBy', 'blo
 // would be a teammate writing a field nothing there reads. It cannot start an
 // agent: `STARTS_A_RUN` above names the four fields that can, and a reaction
 // touches none of them, so a chip never puts the row in anybody's inbox.
-const IN_A_MESSAGE_ALSO = ['title', 'body', 'answer', 'people', 'status', 'react'];
+//
+// AND WHICH MESSAGE A REPLY ANSWERS (w-920461cbe6), for the same two reasons:
+// only a conversation draws a thread, and the mark rides beside an `answer`
+// this list already lets through. Without it a teammate's thread reply would
+// land in the middle of your chat instead of in the thread.
+const IN_A_MESSAGE_ALSO = ['title', 'body', 'answer', 'people', 'status', 'react', 'inReplyTo'];
 // AND THE LEVEL THE SENDER PICKED, ON THE OPENING LINE ALONE (w-7ba439c883).
 // A message now carries how urgent its sender thought it was, and that number
 // decides where it sits in the inbox it lands in, so it has to survive the

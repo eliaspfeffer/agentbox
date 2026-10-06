@@ -467,6 +467,9 @@ export interface AgentTurn {
   // one can wear chips: a message still on its way has not been written down
   // yet, and the one the ask was quoted from lives on another row.
   uid?: string;
+  // A REPLY IN A THREAD: the uid of the message it answers (w-920461cbe6).
+  // In a chat, `itemThread` lifts these out of the stream into `replies`.
+  inReplyTo?: string;
   // A CONTINUATION OF THE BLOCK ABOVE, not a new message. Shape B puts the
   // work between the messages, so a reply that stopped for a tool is drawn as
   // two blocks with the thing it ran between them. They are still one reply:
@@ -956,7 +959,7 @@ declare global {
       compact(p: { product: string; id: string }): Promise<{state: string; at: number}>;
       remoteControl(p: {product: string; id: string; action?: string}): Promise<{state: string; at: number; text?: string; url?: string; mayBeActive?: boolean} | null>;
       compactionStatus(p: {product: string; id: string}): Promise<{state: string; at: number} | null>;
-      answer(p: { product: string; id: string; answer?: string; status?: string; priority?: number; permissionMode?: string | null; model?: string | null; effort?: string | null; now?: boolean }): Promise<WorkItem>;
+      answer(p: { product: string; id: string; answer?: string; status?: string; priority?: number; permissionMode?: string | null; model?: string | null; effort?: string | null; now?: boolean; inReplyTo?: string }): Promise<WorkItem>;
       sendNow(p: { product: string; id: string }): Promise<{ ok: boolean; interrupted: boolean }>;
       setProductOrder(p: { order: string[] }): Promise<unknown>;
       setProductHidden(p: { product: string; hidden: boolean }): Promise<unknown>;

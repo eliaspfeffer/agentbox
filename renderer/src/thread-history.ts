@@ -49,6 +49,9 @@ export interface ThreadEvent {
   // THE LINE THIS CAME OFF, by its uid. A reaction is put on a message by this
   // name and no other (w-560647d4db); see LedgerLine.uid above for why.
   uid?: string;
+  // A REPLY IN A THREAD: the uid of the message it answers, off the same line
+  // (w-920461cbe6). The chat draws it in the thread's panel, not in the chat.
+  inReplyTo?: string;
   // Hers reads at full strength, an agent's is quiet. The same split the pane
   // already makes everywhere else.
   who: 'you' | 'agent';
@@ -193,6 +196,8 @@ export function threadEvents(lines: LedgerLine[], engine?: string | null): Threa
   let markAt = 0;
   let markBy: string | undefined;
   let markUid: string | undefined;
+  // And which message it answers, when the line is a reply in a thread.
+  let markReply: string | undefined;
   // YOUR LAST REPLY, read by the `runAt` branch. A reply lifts a snooze
   // (`replyClearsSchedule`, list-rules), and the app writes that a moment
   // after the answer, so it is part of the reply and not a second thing you
@@ -203,6 +208,7 @@ export function threadEvents(lines: LedgerLine[], engine?: string | null): Threa
     for (let k = markAt; k < events.length; k += 1) {
       if (markBy && !events[k].by) events[k].by = markBy;
       if (markUid && !events[k].uid) events[k].uid = markUid;
+      if (markReply && events[k].message && !events[k].inReplyTo) events[k].inReplyTo = markReply;
     }
   };
 
@@ -211,6 +217,8 @@ export function threadEvents(lines: LedgerLine[], engine?: string | null): Threa
     markAt = events.length;
     markBy = typeof line.by === 'string' ? line.by : undefined;
     markUid = typeof line.uid === 'string' ? line.uid : undefined;
+    const reply = line.patch?.inReplyTo;
+    markReply = typeof reply === 'string' && reply ? reply : undefined;
     const patch = line.patch ?? null;
     if (has(patch, 'label')) label = String(patch!.label ?? '');
     const mine = line.source === 'founder';
