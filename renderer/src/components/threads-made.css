@@ -10,8 +10,9 @@
 .made-list { border: 1px solid var(--line); border-radius: var(--radius); }
 /* The row holds the two presses. Its right-hand padding is all that stands
    between the state word (or the press that replaces it) and the list's edge,
-   so every row ends in the same place whichever of the two it carries. */
-.made-row { display: flex; align-items: center; min-height: 40px; padding-right: 14px; }
+   so every row ends in the same place whichever of the two it carries. 10px
+   rather than the 14 it opened with: "should be closer to the right side". */
+.made-row { display: flex; align-items: center; min-height: 40px; padding-right: 10px; }
 .made-row + .made-row { border-top: 1px solid var(--line); }
 .made-row:hover { background: var(--wash); }
 .made-open {
@@ -34,9 +35,15 @@
    press is the only coloured thing in it. Bordered rather than filled, because
    three proposals would otherwise be three solid blocks shouting over the
    titles they belong to, and the loudest thing here should stay the thread's
-   name. It fills in under the cursor. */
+   name. It fills in under the cursor.
+
+   TIGHT, AND HUNG 2px PAST THE WORDS: "feel as tho there's too much padding on
+   the approve button". The inside came down from 9px to 7, and the border sits
+   a touch outside the column the state words end at, because a box whose edge
+   lines up exactly with a column of text reads as standing further out than
+   the text does. Its letters stay inside that column; only its edge hangs. */
 .made-approve {
-  flex: none; margin-left: auto; padding: 4px 9px;
+  flex: none; margin-left: auto; margin-right: -2px; padding: 3px 7px;
   appearance: none; cursor: pointer; border-radius: 0;
   border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
   background: none; color: var(--accent);

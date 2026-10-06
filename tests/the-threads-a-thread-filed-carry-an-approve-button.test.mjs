@@ -189,4 +189,19 @@ describe('the press looks like a press', () => {
     // The reserved spacer is gone with the room it reserved.
     expect(css).not.toContain('made-approve-room');
   });
+
+  // "should be closer to the right side tho, feel as tho there's too much
+  // padding on the approve button". Three numbers carry that, and all three
+  // have to hold together or the column bends:
+  //
+  //   the row's right-hand padding, which is what the state words end at;
+  //   the chip's own padding, which was 9px and read as a gap inside a box;
+  //   and 2px of hang, so the chip's BORDER sits a touch past the words while
+  //   its letters stay inside them. A box whose edge lines up exactly with a
+  //   column of text always reads as further out than the text does.
+  it('is tight inside and close to the edge', () => {
+    expect(css).toMatch(/\.made-row \{[^}]*padding-right: 10px/);
+    expect(rule).toMatch(/padding: 3px 7px/);
+    expect(rule).toMatch(/margin-right: -2px/);
+  });
 });
