@@ -547,6 +547,18 @@ export function foldWorkItems(lines, now = Date.now()) {
     // are already in her ledger and will be there forever.
     const patch = line.heartbeat ? {} : line.patch;
 
+    // WHO SAID WHAT, AND WHERE, for a conversation between people
+    // (w-920461cbe6). Every person's message, kept in a list of its own because
+    // the fold below keeps only the newest answer, and a busy chat needs to know
+    // who spoke last in the chat itself and in each thread. Only a person's own
+    // words count (a line with a writer), and only rows with people on them keep
+    // the result (see the end of the fold).
+    const words = typeof patch.answer === 'string' && patch.answer !== WITHDRAWN ? patch.answer
+      : typeof patch.body === 'string' ? patch.body : null;
+    if (line.by && words && words.trim()) {
+      (item.said ??= []).push({ uid: line.uid ?? null, by: line.by, ts: line.ts, text: words.trim().slice(0, TALK_TEXT), inReplyTo: patch.inReplyTo ?? null, body: typeof patch.answer !== 'string' });
+    }
+
     for (const [field, value] of Object.entries(patch)) {
       // A REACTION IS ACCUMULATED, NOT HELD. Every other field below keeps one
       // value and the newest writer owns it; a reaction belongs to the person
@@ -600,9 +612,54 @@ export function foldWorkItems(lines, now = Date.now()) {
       delete item.reacts;
       if (chips) item.reactions = chips;
     }
+    if (item.said) {
+      const said = item.said;
+      delete item.said;
+      if (Array.isArray(item.people) && item.people.length) item.talk = talkOf(said);
+    }
   }
 
   return items;
+}
+
+// A reply taken back reads as this, and is nobody's news.
+const WITHDRAWN = '(withdrawn)';
+// How much of a message the record keeps: enough for a row's one line.
+const TALK_TEXT = 280;
+// How many of the newest messages the record keeps, in the chat and in each
+// thread. The counts it answers stop at your own newest word, which in a chat
+// you are part of is never this far back.
+const TALK_KEEP = 100;
+
+/**
+ * THE CHAT AND ITS THREADS, AS WHO SPOKE WHERE (w-920461cbe6): `chat` is the
+ * main conversation, oldest first, and `threads` the replies under each message
+ * they answer, with who wrote that message and its words. Pure bookkeeping for
+ * `whatWaits` (shared/team-rules.mjs) and the row's one line; the messages
+ * themselves are read off the ledger by the thread view, as before.
+ */
+function talkOf(said) {
+  const lines = [...said].sort((a, b) => a.ts - b.ts);
+  const chat = [];
+  const threads = {};
+  const parents = new Map();
+  const bodies = new Set();
+  for (const s of lines) {
+    // A rename that sends the same opening words again is not a new message.
+    if (s.body) { if (bodies.has(s.text)) continue; bodies.add(s.text); }
+    const said1 = { by: s.by, ts: s.ts, text: s.text };
+    const parent = s.inReplyTo ? parents.get(s.inReplyTo) : null;
+    if (parent) {
+      (threads[s.inReplyTo] ??= { by: parent.by, text: parent.text, replies: [] }).replies.push(said1);
+      continue;
+    }
+    // A reply to a message this chat does not hold is drawn in the chat, so it
+    // counts there too.
+    chat.push(said1);
+    if (s.uid) parents.set(s.uid, said1);
+  }
+  for (const t of Object.values(threads)) t.replies = t.replies.slice(-TALK_KEEP);
+  return { chat: chat.slice(-TALK_KEEP), threads };
 }
 
 /* -------------------------------- the thread ----------------------------- */
