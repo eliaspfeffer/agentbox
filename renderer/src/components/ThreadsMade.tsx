@@ -30,10 +30,17 @@ export interface MadeRow {
   approve?: boolean;
 }
 
-export function ThreadsMade({ rows, onOpen, onApprove, label }: {
+export function ThreadsMade({ rows, onOpen, onApprove, onReject, label }: {
   rows: MadeRow[];
   onOpen: (id: string) => void;
   onApprove?: (id: string) => void;
+  /**
+   * AND THE OTHER HALF OF THE DECISION (w-9cf2b43110). A proposal nobody
+   * answers waits in Later and brings this thread back a day later; rejecting
+   * it is what settles it and stops the asking. Drawn only under the cursor,
+   * because no is the rarer press and the row should read as one offer.
+   */
+  onReject?: (id: string) => void;
   label?: string;
 }) {
   if (!rows.length) return null;
@@ -67,6 +74,17 @@ export function ThreadsMade({ rows, onOpen, onApprove, label }: {
               {/* NAMED WITH THE THREAD IT WOULD START. Several rows in a list
                   each say "Approve", so the bare word tells a screen reader, and
                   a hovering cursor, nothing about which proposal it is. */}
+              {press && onReject && (
+                <button
+                  type="button"
+                  className="made-reject"
+                  aria-label={`Reject: ${r.title}`}
+                  title={`Reject: ${r.title}`}
+                  onClick={() => onReject(r.id)}
+                >
+                  No
+                </button>
+              )}
               {press && (
                 <button
                   type="button"

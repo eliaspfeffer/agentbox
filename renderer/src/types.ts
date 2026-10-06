@@ -782,7 +782,23 @@ export interface WorkspaceSettings {
    * of heavy commands at once somebody picked, null for Auto; `slotsAuto` is
    * what Auto is on this Mac; `now` is one sentence about right now, null while
    * it is off. Optional so an older payload still draws the page it drew. */
-  memoryGate?: { on: boolean; slots: number | null; slotsAuto: number; slotsMax: number; now: string | null };
+  /** Who decides how many agents run: Agentbox from this Mac's memory, or a
+   *  number somebody set. `agentsTotal` is what the whole Mac runs at once,
+   *  which is what the page shows; the per-account number is arithmetic nobody
+   *  is asked to do. w-e5225b62ba. */
+  agentsAuto?: boolean;
+  agentsTotal?: number;
+  agentsAutoTotal?: number;
+  agentsNudge?: number;
+  memoryGate?: {
+    on: boolean; slots: number | null; slotsAuto: number; slotsMax: number; now: string | null;
+    /** What the check has measured, for the card the page leads with. Every
+     *  field is null when it is not known, and the card leaves those out. */
+    reading?: {
+      heavy: number | null; waiting: number | null; pressure: string | null; usedPct: number | null;
+      asked: number | null; waited: number | null; refused: number | null;
+    };
+  };
   /**
    * STOP WHAT FINISHED AGENTS LEAVE RUNNING (main/leftovers.mjs). `now` is one
    * sentence about what is left right now, null while it is off. */

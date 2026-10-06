@@ -49,9 +49,13 @@ const ENTRIES: Entry[] = [
   { page: 'codex', label: 'Usage', anchor: 'usage', words: 'codex limits plan left remaining quota' },
   { page: 'codex', label: 'Signed in', anchor: 'accounts', words: 'codex account accounts login subscription add email' },
   { page: 'codex', label: 'Permission mode', anchor: 'permissions', words: 'codex permissions sandbox read only full access' },
-  { page: 'running', label: 'Agents at once', anchor: 'at-once', words: 'concurrent parallel sessions limit queue capacity' },
-  { page: 'running', label: 'Hold heavy work when memory is short', anchor: 'memory', words: 'ram tests builds slow' },
-  { page: 'running', label: 'Stop what finished agents leave running', anchor: 'memory', words: 'leftovers left behind dev servers background jobs processes cleanup kill ram' },
+  // The Memory group folded into the Agents card (w-e5225b62ba), so these three
+  // land on `at-once` together. An anchor naming a group that no longer exists
+  // is a search result that scrolls nowhere.
+  { page: 'running', label: 'How many run at once', anchor: 'at-once', words: 'agents concurrent parallel sessions limit queue capacity automatic' },
+  { page: 'running', label: 'Hold heavy work when memory is short', anchor: 'at-once', words: 'ram tests builds slow memory' },
+  { page: 'running', label: 'Stop programs agents leave behind', anchor: 'at-once', words: 'leftovers left running finished dev servers background jobs processes cleanup kill ram memory' },
+  { page: 'running', label: 'Something felt slow', anchor: 'at-once', words: 'slow fewer agents throttle struggling' },
   { page: 'running', label: 'Agents you started yourself', anchor: 'outside', words: 'terminal outside sessions inbox your own' },
   { page: 'instructions', label: 'Instructions for every agent', words: 'rules prompt claude.md how agents write to you' },
   { page: 'projects', label: 'Projects', words: 'order priority archive new project' },

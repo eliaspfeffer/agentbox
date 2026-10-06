@@ -204,13 +204,21 @@ describe('the account rows never tell anybody to get a second subscription', () 
 describe('the Agents page explains parallelism without teaching the multiplier', () => {
   const said = spoken(agentsPane);
 
-  it('says "Per account" only when a second account is already connected', () => {
-    expect(said).toMatch(/w\.accounts\.length > 1[\s\S]{0,160}?Per account/);
+  /* THE MULTIPLIER IS GONE RATHER THAN HIDDEN (w-e5225b62ba). These two used to
+     check that "Per account" appeared only once a second account existed, and
+     that one account got a plain number instead. Automatic answers for the
+     MACHINE now and main/machine.mjs shares that number out, so the page has no
+     per-account sentence left to get right in either case — which is the
+     strongest version of this file's rule, not a retreat from it. The number
+     shown does not move when an account is added, so there is nothing on the
+     screen from which a second subscription could be read as more capacity. */
+  it('never says "Per account" at all, because the number is the machine`s', () => {
+    expect(said).not.toMatch(/Per account/);
   });
 
-  it('gives one account a plain number instead', () => {
-    expect(said).toMatch(/Up to \$\{w\.sessionsAtOnce\} run together/);
-    expect(said).toMatch(/One runs at a time/);
+  it('never multiplies the number by the accounts in front of her', () => {
+    expect(said).not.toMatch(/w\.sessionsAtOnce \* w\.accounts\.length/);
+    expect(said).not.toMatch(/run together/);
   });
 
   it('keeps the sentence that says a smaller plan chose the number', () => {

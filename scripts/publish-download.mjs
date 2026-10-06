@@ -60,12 +60,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NAME } from '../shared/product-name.mjs';
+import { liveDownload } from './lib/live-download.mjs';
 
 const repo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = 'Astral-Agent/astral-releases';
 const ASSET = 'Astral-arm64.dmg';
 const FEED = 'latest-mac.yml';
-const DOWNLOAD = 'https://astral.ac/download';
+const DOWNLOAD = 'https://agentbox.ac/download';
 
 const argv = process.argv.slice(2);
 const publish = argv.includes('--publish');
@@ -169,11 +170,7 @@ function published() {
     'release', 'view', '--repo', REPO, '--json', 'tagName,assets',
   ], { encoding: 'utf8' });
   if (out.status !== 0) return null;
-  try {
-    const j = JSON.parse(out.stdout);
-    const asset = (j.assets ?? []).find((a) => a.name === ASSET);
-    return asset ? { tag: j.tagName, ...asset } : null;
-  } catch { return null; }
+  return liveDownload(out.stdout, ASSET);
 }
 
 const live = published();
@@ -205,7 +202,9 @@ const size = fs.statSync(dmg).size;
 const mine = md5(dmg);
 
 console.log(`\nThe website hands out ${DOWNLOAD} to ${REPO} latest, asset ${ASSET}`);
-console.log(`  on the website now   ${live.tag}, ${mb(live.size)}, uploaded ${live.updatedAt}, ${live.downloadCount} downloads`);
+console.log(live.missing
+  ? `  on the website now   nothing (${live.tag} has no ${ASSET}, so the download is broken)`
+  : `  on the website now   ${live.tag}, ${mb(live.size)}, uploaded ${live.updatedAt}, ${live.downloadCount} downloads`);
 console.log(`  about to go up       ${tag}, ${mb(size)}, built ${fs.statSync(dmg).mtime.toISOString()}`);
 console.log(`  md5 of the new dmg   ${mine}`);
 console.log(`\nAnd the two files that let an installed Agentbox update itself:`);
@@ -398,5 +397,5 @@ if (served !== version) {
   );
 }
 
-console.log(`\nThe download on astral.ac is now this build. md5 ${mine}, checked by fetching it.`);
+console.log(`\nThe download on agentbox.ac is now this build. md5 ${mine}, checked by fetching it.`);
 console.log(`Every Agentbox older than ${version} offers this on its next launch, and within six hours if it is left open.`);

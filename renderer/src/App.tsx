@@ -62,7 +62,7 @@ import { approvalReads } from './approval-card';
 // one it took went. Only the second is raised from here, because by the time
 // there is anything to confirm the card has closed.
 import { sentLine } from './compose-says';
-import { belongsInInbox, belongsInProgress, belongsOnTheRail, byRunningOrder, clipToSentence, hiddenUntil, maskedAncestors, notStarted, parkedByAgent, replyClearsSchedule, statusForReply, stoppable, threadMasked, withdrawReply } from './list-rules';
+import { belongsInInbox, belongsInProgress, belongsOnTheRail, byRunningOrder, clipToSentence, hiddenUntil, isProposal, maskedAncestors, notStarted, parkedByAgent, replyClearsSchedule, statusForReply, stoppable, threadMasked, threadsOwedAnAnswer, withdrawReply } from './list-rules';
 import { agentKey, agentRow, asksSomething, byRecency, listed as agentIsListed, onTheRail, railLine, reachesInbox, progressAfterReply, replyReaches, whereItRuns } from '../../shared/agents.mjs';
 import { opensATextField } from './keys';
 import { sidebarFits, useRoomyToggle, useWindowWidth } from './room';
@@ -1608,15 +1608,28 @@ export default function App() {
     [items, agentRows, troubleItem],
   );
 
+  // A THREAD WHOSE PROPOSALS HAVE BEEN WAITING A DAY (w-9cf2b43110). Later is
+  // where things are lost — "sometimes the tab later is not meant to be looked
+  // at" — so silence has a deadline, and what comes back is the THREAD rather
+  // than the agent-to-agent rows it filed. It comes back even if it was closed:
+  // filing a thread away with E answers nothing, and forgetting must cost
+  // nothing. Rejecting them all is what makes it stop.
+  const owedAnAnswer = useMemo(() => threadsOwedAnAnswer(items, now), [items, now]);
+
   const inboxCandidates = useMemo(() => items.filter((i) => {
     if (i.id === pendingId) return false; // action held in the grace window: already sent, as far as the inbox is concerned
     if (i.product && scope && i.product !== scope) return false;
+    if (owedAnAnswer.has(i.id)) return true;
     // The rule itself lives in list-rules.ts, pure and pinned by tests. What
     // is left here is the view's own business: the grace window, the clock,
     // the practice scope.
     const shared = teamInbox(i);
     if (shared === false) return false;
-    if (shared === true) return i.status !== 'done' && !(hiddenAt(i) > now);
+    // A PROPOSAL IS NO MORE YOURS TO READ IN A SHARED PROJECT than in your own
+    // (w-9cf2b43110). The team branch answers before the rule below does, so
+    // without this line the agent-to-agent rows came back the moment a project
+    // was shared with somebody.
+    if (shared === true) return i.status !== 'done' && !(hiddenAt(i) > now) && !isProposal(i);
     return belongsInInbox(i, { deliveredThrough, hiddenUntil: hiddenAt(i), now });
   }), [items, hiddenAt, scope, now, pendingId, teamInbox]);
 
@@ -1887,8 +1900,12 @@ export default function App() {
     (i: WorkItem) => (notStarted(i) ? Number.MAX_SAFE_INTEGER : hiddenAt(i)),
     [hiddenAt],
   );
+  // AND SINCE w-9cf2b43110 A FOURTH: what an agent PROPOSED and nobody has
+  // answered. Same shape as the third — written down, waiting on a person
+  // rather than a clock — so it sorts with them at the end, and it is out of
+  // the inbox, which is the whole point: "I only see things that need me."
   const snoozed = useMemo(() => [
-    ...items.filter((i) => (notStarted(i) || hiddenAt(i) > now)
+    ...items.filter((i) => (notStarted(i) || isProposal(i) || hiddenAt(i) > now)
       && i.status !== 'done'
       && (!scope || i.product === scope)),
     ...agentList.filter((r) => (r.runAt ?? 0) > now),
@@ -3137,7 +3154,10 @@ export default function App() {
     }, 'Closed: what is not running');
   }, [deferCommit, setTroubleClosedAt, troubleClosed, pushUndo]);
 
-  const markDone = useCallback(async (item: WorkItem) => {
+  // `stay` keeps the pane where it is, for the same reason `resolve` has one
+  // (w-9cf2b43110): the No beside a thread this one filed closes THAT row, and
+  // advancing would throw you off the thread you pressed from.
+  const markDone = useCallback(async (item: WorkItem, { stay }: { stay?: boolean } = {}) => {
     // AND DURING THE WALK, TWO OF ITS OWN ROWS SAY NO AND SAY WHY. One of them
     // is an agent stopped waiting on you, which is the move the walk is there
     // to teach people not to make, and closing it used to delete the beat that
@@ -3162,7 +3182,7 @@ export default function App() {
     await deferCommit(item, async () => {
       await api.answer({ product: item.product, id: item.id, status: 'done' });
       pushUndo({ label: `Reopened: ${clipToSentence(item.title, TOAST_TITLE)}`, undoes: `reopen “${clipToSentence(item.title, TOAST_TITLE)}”`, brings: item, undid, run: async () => { await api.answer({ product: item.product, id: item.id, status: 'open' }); } });
-    }, `Closed: ${clipToSentence(item.title, TOAST_TITLE)}`, undefined, undefined, undefined, undid);
+    }, `Closed: ${clipToSentence(item.title, TOAST_TITLE)}`, undefined, stay, undefined, undid);
   }, [deferCommit, closeAgentRow, closeTroubleRow, snap?.supervisor.spawnTrouble?.since, run, showToast, pushUndo]);
 
   const resolve = useCallback(async (item: WorkItem, { stay }: { stay?: boolean } = {}) => {
@@ -5351,6 +5371,13 @@ export default function App() {
                      from: the complaint was the trip, so a press that moved you
                      somewhere else would be the same trip with fewer steps. */
                   onApproveFiled={(i) => resolve(i, { stay: true })}
+                  /* AND SAYING NO IS THE CLOSE, NOT A SECOND KIND OF WRITE
+                     (w-9cf2b43110). "There is no decline" below still holds:
+                     this is Close This Task, reachable from the row it is
+                     about, so a rejected proposal is closed exactly as it
+                     would be from its own row — and a closed one is no longer
+                     a proposal, so the thread stops coming back. */
+                  onRejectFiled={(i) => markDone(i, { stay: true })}
                   onNotice={showToast}
                   /*
                    * What THIS row's agents really run as, so the reply footer

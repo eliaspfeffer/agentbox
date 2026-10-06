@@ -141,6 +141,32 @@ describe('the button, drawn in the list', () => {
     expect(none.match(/class="made-state/g)).toHaveLength(2);
   });
 
+  // THE OTHER HALF OF THE DECISION (w-9cf2b43110, second round). A proposal
+  // nobody answers now waits in Later and brings its thread back a day later,
+  // so there has to be a way to say no from the same row. It is the ordinary
+  // close — "there is no decline" in App.tsx still holds — and it is drawn
+  // quietly, under the cursor, because a list of three offers should not read
+  // as six buttons.
+  it('offers a No beside the press, named with its thread', () => {
+    const both = renderToStaticMarkup(React.createElement(ThreadsMade, {
+      rows, onOpen: () => {}, onApprove: () => {}, onReject: () => {},
+    }));
+    expect(both.match(/class="made-reject"/g)).toHaveLength(1);
+    expect(both).toContain('aria-label="Reject: Say why Send is off"');
+    expect(both).toContain('>No<');
+  });
+
+  it('draws no No on a row with nothing to approve', () => {
+    const none = renderToStaticMarkup(React.createElement(ThreadsMade, {
+      rows: rows.map(({ approve, ...r }) => r), onOpen: () => {}, onApprove: () => {}, onReject: () => {},
+    }));
+    expect(none).not.toContain('made-reject');
+  });
+
+  it('draws none at all where no rejection is wired, which is every other list', () => {
+    expect(html).not.toContain('made-reject');
+  });
+
   it('draws nothing at all when there are no rows', () => {
     expect(renderToStaticMarkup(React.createElement(ThreadsMade, { rows: [], onOpen: () => {} }))).toBe('');
   });
@@ -162,6 +188,11 @@ describe('where the press is wired', () => {
 
   it('hands the list the press, by the row', () => {
     expect(focus).toMatch(/onApprove=\{[^}]*onApproveFiled/);
+  });
+
+  it('says no with the ordinary close, from the thread that proposed it', () => {
+    expect(app).toMatch(/onRejectFiled=\{\(i\) => markDone\(i, \{ stay: true \}\)\}/);
+    expect(focus).toMatch(/onReject=\{onRejectFiled && rejectFiled\}/);
   });
 });
 
