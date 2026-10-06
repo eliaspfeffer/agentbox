@@ -25,7 +25,7 @@ import {
   coach, nextStep, nextTab, recentFolders, ring, runOf, shortPath, stepBack,
   type AgentFile, type Coach, type FirstRun, type Rect, type RecentFolder, type Step,
 } from '../onboarding';
-import { type AgentFolder, type Project } from '../agent-import-card';
+import { type AgentFolder, type Project, type SessionThread } from '../agent-import-card';
 import { ImportAgents } from './ImportAgents';
 import FolderPicker from './FolderPicker';
 import { PRACTICE_NAME, PRACTICE_ROWS, PRACTICE_TASK } from '../../../shared/first-run-practice.mjs';
@@ -1169,8 +1169,19 @@ function Finished({
   // draw. The new card reaches every folder on the Mac with agents in it, so a
   // Mac whose agents are all in ~/Desktop/dev/whatever now gets the offer
   // instead of being walked straight past it.
+  // Conversations are importable without any Claude agent files. In particular,
+  // a Codex-only Mac has no files in ~/.claude/agents. Wait for this read before
+  // deciding an empty finish card can be skipped.
+  const [threads, setThreads] = useState<SessionThread[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    import('../api').then(({ api }) => api.agentThreads())
+      .then((t) => { if (live) setThreads(t); })
+      .catch(() => { if (live) setThreads([]); });
+    return () => { live = false; };
+  }, []);
   const some = (!!found && anyAgents(found)) || !!folders?.some((f) => f.count > 0);
-  const card = finishCard(claude, { read: found !== null && folders !== null, some });
+  const card = finishCard(claude, { read: found !== null && folders !== null, some }, threads);
   // The two things the gate needs to remember: whether a search is running
   // right now, and whether one has already come back empty.
   const [checking, setChecking] = useState(false);

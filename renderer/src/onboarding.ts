@@ -1309,11 +1309,12 @@ export interface FinishCard {
 export function finishCard(
   claude: { missing: boolean },
   agents: { read: boolean; some: boolean },
+  threads: Array<{ imported?: boolean }> | null = [],
 ): FinishCard {
   if (claude.missing) {
     return { show: true, blocked: true, go: false, head: COPY.gateHead, line: COPY.missing };
   }
-  if (!agents.read) {
+  if (!agents.read || threads === null) {
     return { show: false, blocked: false, go: false, head: '', line: '' };
   }
   // NOTHING TO BRING IN IS NO CARD AGAIN (w-9f6975906c, 2026-10-06), which
@@ -1323,7 +1324,7 @@ export function finishCard(
   // setup. Codex, consulted on the round: "makes successful completion feel
   // like failed setup." The walk goes straight to the landing, and ⌘K still
   // has its import row for the day there is something to bring.
-  if (!agents.some) {
+  if (!agents.some && !threads.some((t) => !t.imported)) {
     return { show: false, skip: true, blocked: false, go: true, head: '', line: '' };
   }
   return { show: true, blocked: false, go: true, head: COPY.bringHead, line: COPY.agentsOffer };

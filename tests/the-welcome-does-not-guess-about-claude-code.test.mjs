@@ -61,7 +61,7 @@ describe('the welcome screen', () => {
     // now and it reaches every folder on the Mac, so the walk waits on that
     // scan as well as on the file read. The word is still the only thing that
     // decides `blocked`.
-    expect(walk).toMatch(/const card = finishCard\(claude, \{ read: found !== null && folders !== null, some \}\);/);
+    expect(walk).toMatch(/const card = finishCard\(claude, \{ read: found !== null && folders !== null, some \}, threads\);/);
     expect(walk).toMatch(/\{card\.blocked && \(/);
     // The old test of the old bug. `found` is gone from the prop entirely, so
     // there is no boolean left that a failed read can flip.
