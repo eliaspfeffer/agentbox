@@ -31,8 +31,10 @@ const publish = read('scripts/publish-download.mjs');
 // a repo or filename that drifts from it uploads to somewhere nobody reads.
 describe('where the download actually comes from', () => {
   it('is the asset the publish script writes to', () => {
-    expect(publish).toContain("const REPO = 'Astral-Agent/astral-releases'");
-    expect(publish).toContain("const ASSET = 'Astral-arm64.dmg'");
+    // Both now come from scripts/lib/live-download.mjs (2026-10-05), the one
+    // place the public release repo and the download's file name are written.
+    expect(publish).toContain('const REPO = RELEASE_REPO');
+    expect(publish).toContain('const ASSET = DOWNLOAD_ASSET');
     // The website moved to agentbox.ac on 2026-10-05; its /download redirect
     // points at the same repo and asset as astral.ac's did.
     expect(publish).toContain("const DOWNLOAD = 'https://agentbox.ac/download'");

@@ -5,9 +5,11 @@
 // on this Mac and stops, on purpose (its own header says so). The website's
 // download button is a redirect in the website repo's `vercel.json` to
 //
-//   github.com/Astral-Agent/astral-releases/releases/latest/download/Astral-arm64.dmg
+//   github.com/agentboxhq/agentbox-releases/releases/latest/download/Agentbox.dmg
 //
-// and NOTHING in a build touches that asset. Measured 2026-08-23 04:5x: the
+// (until 2026-10-05 it was Astral-Agent/astral-releases and Astral-arm64.dmg;
+// that repo is private, so its files 404 for every visitor, see
+// scripts/lib/live-download.mjs) and NOTHING in a build touches that asset. Measured 2026-08-23 04:5x: the
 // asset the button served was 135,629,579 bytes, uploaded 2026-08-21T19:02:20Z,
 // with an app.asar packed 2026-08-21 11:23, two days and every onboarding round
 // old. So notarising three times in a row could not have changed what she
@@ -31,9 +33,9 @@
 // existed. The app now asks GitHub on its own (main/updater.mjs), and for that
 // to answer anything a release has to carry THREE things, together:
 //
-//   Astral-arm64.dmg              what the website hands a stranger. Unchanged,
-//                                 and still called this because the /download
-//                                 redirect on the live site names it.
+//   Agentbox.dmg                  what the website hands a stranger, under the
+//                                 fixed name the /download redirect on
+//                                 agentbox.ac names.
 //   Agentbox-<v>-universal-mac.zip  what an installed Agentbox downloads. Squirrel
 //                                 swaps an .app bundle and CANNOT read a disk
 //                                 image, so a release carrying only a dmg fails
@@ -60,11 +62,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NAME } from '../shared/product-name.mjs';
-import { liveDownload } from './lib/live-download.mjs';
+import { liveDownload, noReleaseYet, RELEASE_REPO, DOWNLOAD_ASSET } from './lib/live-download.mjs';
 
 const repo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const REPO = 'Astral-Agent/astral-releases';
-const ASSET = 'Astral-arm64.dmg';
+const REPO = RELEASE_REPO;
+const ASSET = DOWNLOAD_ASSET;
 const FEED = 'latest-mac.yml';
 const DOWNLOAD = 'https://agentbox.ac/download';
 
@@ -169,7 +171,11 @@ function published() {
   const out = spawnSync('gh', [
     'release', 'view', '--repo', REPO, '--json', 'tagName,assets',
   ], { encoding: 'utf8' });
-  if (out.status !== 0) return null;
+  if (out.status !== 0) {
+    return noReleaseYet(out.stderr)
+      ? { tag: null, size: 0, updatedAt: null, downloadCount: 0, missing: true }
+      : null;
+  }
   return liveDownload(out.stdout, ASSET);
 }
 
@@ -203,7 +209,7 @@ const mine = md5(dmg);
 
 console.log(`\nThe website hands out ${DOWNLOAD} to ${REPO} latest, asset ${ASSET}`);
 console.log(live.missing
-  ? `  on the website now   nothing (${live.tag} has no ${ASSET}, so the download is broken)`
+  ? `  on the website now   nothing (${live.tag ? `${live.tag} has no ${ASSET}` : `${REPO} has no release yet`}, so the download is broken)`
   : `  on the website now   ${live.tag}, ${mb(live.size)}, uploaded ${live.updatedAt}, ${live.downloadCount} downloads`);
 console.log(`  about to go up       ${tag}, ${mb(size)}, built ${fs.statSync(dmg).mtime.toISOString()}`);
 console.log(`  md5 of the new dmg   ${mine}`);
