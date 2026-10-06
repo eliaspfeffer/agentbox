@@ -11,8 +11,14 @@ import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {expect,it} from 'vitest';
 import {WorkspaceNavigation} from '../renderer/src/components/WorkspaceNavigation';
+// A made-up person on a made-up team, so the corner row this checks the order
+// against is actually drawn. Since w-b59cbe3154 (2026-10-05) a Mac with nobody
+// signed in draws no corner at all, which is its own test:
+// the-sidebar-ends-at-settings-when-there-is-nobody-to-show.
+const me={id:'u-1',email:'ada@example.test',name:'Ada Lovelace',avatarUrl:null};
+const onATeam={configured:true,signedIn:true,me,team:{id:'t-1',name:'Northwind'},people:[me],cards:[],lastSyncAt:null,error:null};
 it.each([false,true])('keeps utility actions accessible, collapsed=%s',collapsed=>{
- const html=renderToStaticMarkup(createElement(WorkspaceNavigation,{view:'inbox',collapsed,onToggle(){},onView(){},onSearch(){},onCompose(){},onSettings(){},onInstructions(){},usage:createElement('div',{'data-usage':'live'})}));
+ const html=renderToStaticMarkup(createElement(WorkspaceNavigation,{view:'inbox',collapsed,onToggle(){},onView(){},onSearch(){},onCompose(){},onSettings(){},onInstructions(){},team:onATeam,usage:createElement('div',{'data-usage':'live'})}));
  const foot=html.slice(html.indexOf('workspace-bottom'));
  for(const label of ['Settings','Instructions']) expect(foot).toContain(`aria-label="${label}"`);
  // No Shortcuts row since 2026-09-26 (w-6c5534a58d).
