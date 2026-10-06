@@ -53,8 +53,8 @@ const settle = async (setup, engine) => { for (let i = 0; i < 400; i++) { const 
 
 describe('the commands are the tools\' own', () => {
   it('installs Claude Code with Anthropic\'s installer and Codex with OpenAI\'s', () => {
-    expect(installCommand('claude')).toEqual({ file: '/bin/bash', args: ['-c', 'curl -fsSL https://claude.ai/install.sh | bash'] });
-    expect(installCommand('codex')).toEqual({ file: '/bin/sh', args: ['-c', 'curl -fsSL https://chatgpt.com/codex/install.sh | sh'] });
+    expect(installCommand('claude')).toEqual({ file: '/bin/bash', args: ['-c', 'curl -fsSL https://claude.ai/install.sh | bash'] }); // public-check: allow
+    expect(installCommand('codex')).toEqual({ file: '/bin/sh', args: ['-c', 'curl -fsSL https://chatgpt.com/codex/install.sh | sh'] }); // public-check: allow
   });
   it('signs in with the subscription, never the API console', () => {
     expect(signInCommand('claude', '/b/claude')).toEqual({ file: '/b/claude', args: ['auth', 'login', '--claudeai'] });
@@ -74,7 +74,7 @@ describe('setting up a plan', () => {
     const s = await settle(setup, 'claude');
     expect(s.phase).toBe('ready');
     const lines = m.calls.map((c) => [c.file, ...c.args].join(' '));
-    expect(lines[0]).toBe('/bin/bash -c curl -fsSL https://claude.ai/install.sh | bash');
+    expect(lines[0]).toBe('/bin/bash -c curl -fsSL https://claude.ai/install.sh | bash'); // public-check: allow
     expect(lines).toContain('/Users/x/.local/bin/tool auth login --claudeai');
     // And the sign-in that was waiting on the browser is not left running.
     expect(m.calls.find((c) => c.args.includes('login')).killed).toBe(true);
