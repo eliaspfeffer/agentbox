@@ -1845,9 +1845,8 @@ export default function App() {
   // (`iSpokeLast`, w-57a202a968): it was on no tab at all.
   const done = useMemo(() => {
     const needsYou = new Set(inbox.map((i) => i.id));
-    const productOf = (i: WorkItem) => team?.products.get(i.product);
-    return items.filter((i) => (i.status === 'done' || iSpokeLast(i, productOf(i), team?.me ?? null))
-      && (!scope || i.product === scope) && !needsYou.has(i.id))
+    return items.filter((i) => !needsYou.has(i.id) && (!scope || i.product === scope)
+      && (i.status === 'done' || iSpokeLast(i, team?.products.get(i.product), team?.me ?? null)))
       .sort((a, b) => b.updatedAt - a.updatedAt);
   }, [items, scope, inbox, team]);
 
