@@ -116,7 +116,7 @@ import { BoxFilter } from './components/BoxFilter';
 import { itemPriority, moveProduct, placeScore } from '../../shared/rank.mjs';
 import { threadsMade, approvableFiled } from './threads-made';
 import { ChatAgentsContext, type ChatAgentsValue } from './team/ChatAgents';
-import { agentLinks, chatProjects, chatTranscript, taskBrief, taskTitle, withTask } from './team/agent-mentions';
+import { agentLinks, chatProjects, chatTaskSharing, chatTranscript, taskBrief, taskTitle, withTask } from './team/agent-mentions';
 import { isCleanRun, ruleIdOf, ruleLabel } from '../../shared/repeats.mjs';
 import { NAME, Name } from '../../shared/product-name.mjs';
 import { inMyInbox, isShared, heldByAPerson, runnerOf, iSpokeLast } from '../../shared/team-rules.mjs';
@@ -2728,9 +2728,9 @@ export default function App() {
       const made = await api.compose({
         product: project.slug, title: taskTitle(text), body: brief, engine: link.engine, start: 'now',
         ...(link.model ? { model: link.model } : {}), ...(link.effort ? { effort: link.effort } : {}),
-        // Seen by the people in the conversation, on a shared project; a
-        // project of your own keeps its own privacy.
-        ...(isShared(project) && people.length ? { visibility: 'people' as const, visibleTo: people } : {}),
+        // Seen by the people in the conversation and nobody else, whoever
+        // the project is shared with; a Just you project stays Just you.
+        ...chatTaskSharing(project, people),
       });
       if (made?.id) out = withTask(out, link, made.id);
     }
