@@ -457,41 +457,25 @@ const Group = ({ id, label, warn, children }: { id?: string; label?: string; war
   </div>
 );
 
-/** A choice between two or three words, built the way the stepper is: chips side
- *  by side, so it is the new-task card's control and not a new one. */
-function Seg<T extends string>({ label, value, options, onChange }: {
-  label: string; value: T; options: Array<{ value: T; label: string }>; onChange: (v: T) => void;
+/**
+ * THE MENU BEHIND "How many run at once": Automatic, then every number it could
+ * have been, all of them counted for the MACHINE.
+ *
+ * Automatic is first and carries the number it actually settled on, so the row
+ * answers the question without being opened. The numbers are the cap this page
+ * has always stored, which is per account, multiplied by the logins — so the
+ * menu offers only totals this Mac can really be set to, and picking one is
+ * exactly the write the stepper used to make.
+ */
+export function agentCountOptions(w: {
+  accounts?: unknown[]; agentsTotal?: number; capacity?: number; slotsMax?: number; sessionsAtOnce?: number;
 }) {
-  return (
-    <div className="set-seg" role="radiogroup" aria-label={label}>
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          role="radio"
-          aria-checked={o.value === value}
-          className={o.value === value ? 'on' : ''}
-          onClick={() => onChange(o.value)}
-        >{o.label}</button>
-      ))}
-    </div>
-  );
-}
-
-/** The rest of what a row promises, kept off the page until it is asked for.
- *  The words are unchanged; only where they sit has moved. */
-function Tell({ label, title, body }: { label: string; title: string; body: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button type="button" className="set-ghost" aria-expanded={open} onClick={() => setOpen(!open)}>{label}</button>
-      {open && (
-        <div className="set-tell" role="dialog" aria-label={title} onClick={() => setOpen(false)}>
-          <p>{body}</p>
-        </div>
-      )}
-    </>
-  );
+  const accounts = Math.max(1, w.accounts?.length ?? 1);
+  const auto = w.agentsTotal ?? w.capacity ?? 1;
+  const say = (n: number) => `${n} ${n === 1 ? 'agent' : 'agents'}`;
+  const options = [{ value: 'auto', label: `Automatic — ${say(auto)}` }];
+  for (let n = 1; n <= (w.slotsMax ?? 12); n++) options.push({ value: String(n), label: say(n * accounts) });
+  return options;
 }
 
 /**
@@ -1476,15 +1460,23 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
                     ? 'From this Mac’s memory, kept there as you add accounts or turn the memory check on.'
                     : `You set this. Automatic would run ${w.agentsAutoTotal ?? w.sessionsAtOnce} on this Mac.`}
               >
-                {w.agentsAuto && <span className="set-chose">{(w.agentsTotal ?? w.capacity)} {(w.agentsTotal ?? w.capacity) === 1 ? 'agent' : 'agents'}</span>}
-                {!w.agentsAuto && (
-                  <Stepper label="Agents at once" value={w.sessionsAtOnce} min={1} max={w.slotsMax ?? 12} onChange={(v) => setWorkspace('sessionsAtOnce', v)} />
-                )}
-                <Seg
+                {/* ONE DROPDOWN, NOT A CHOICE AND THEN A NUMBER (2026-10-05, her
+                    note). Automatic and every number it could be are the same
+                    question, so they are the same menu, and the number it
+                    settled on is read off the row without opening anything.
+
+                    EVERY OPTION IS A NUMBER FOR THE MACHINE, including the
+                    manual ones. The cap stored underneath is still per account,
+                    so the label multiplies it by the logins and the value is the
+                    per-account number — which keeps this page talking in the one
+                    unit it talks in everywhere else. */}
+                <Picker
                   label="How many run at once"
-                  value={w.agentsAuto ? 'auto' : 'manual'}
-                  options={[{ value: 'auto', label: 'Automatic' }, { value: 'manual', label: 'Set it myself' }]}
-                  onChange={(v) => setWorkspace('agentsAuto', v === 'auto')}
+                  value={w.agentsAuto ? 'auto' : String(w.sessionsAtOnce)}
+                  options={agentCountOptions(w)}
+                  onChange={(v) => (v === 'auto'
+                    ? setWorkspace('agentsAuto', true)
+                    : setWorkspace('sessionsAtOnce', Number(v)))}
                 />
               </Row>
             {/* HOLD HEAVY WORK WHEN MEMORY IS SHORT (w-3958c3753d). An agent
@@ -1528,23 +1520,26 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
                   one stops programs, and the person should agree to that by
                   name.
 
-                  THE POLICY IS STILL THERE, WORD FOR WORD, behind "What it
-                  stops" (w-e5225b62ba). As a description it was six lines of
-                  grey and the longest thing on the page, which is how a row
-                  nobody reads gets agreed to. A sentence that says what it does
-                  and a button that says the rest is the same promise, kept
-                  where it can actually be read. */}
+                  IT READS AS A SENTENCE NOW, AND THE BUTTON IS GONE
+                  (2026-10-05, her note). The label was "Stop what finished
+                  agents leave running", which she read back as "Stop what?
+                  Finish agents from running" — four verbs and no object, so the
+                  row was unparseable before the setting was even considered. And
+                  a "What it stops" button sitting beside the toggle "is a little
+                  strange": two controls where there is one decision, the second
+                  one named so vaguely she said she did not know what it meant.
+
+                  SO THE POLICY IS BACK IN THE ROW, in two sentences rather than
+                  six lines: what is stopped and when, then what never is. That
+                  is the whole promise, which is the part that must not be a
+                  surprise later, and it costs the row one line more than the
+                  button did. */}
               {w.leftovers && (
                 <Row
-                  label="Stop what finished agents leave running"
-                  desc={`Dev servers, previews and test runs an agent left behind, two hours after its run ends.${w.leftovers.now ? ` ${w.leftovers.now}` : ''}`}
+                  label="Stop programs agents leave behind"
+                  desc={`Dev servers, previews and test runs an agent started and left running are stopped two hours after its run ends, or ten minutes while memory is short. Never stopped: anything you started yourself, apps installed on this Mac, and what an agent was asked to keep.${twoEngines ? ' Codex agents’ programs are not found yet.' : ''}${w.leftovers.now ? ` ${w.leftovers.now}` : ''}`}
                 >
-                  <Tell
-                    label="What it stops"
-                    title="Stop what finished agents leave running"
-                    body={`Dev servers, previews, test runs and other background jobs an agent started and left behind are stopped two hours after its run ends, or ten minutes while memory is short, including what is already running when you turn this on. Never stopped: what an agent was asked to keep, apps installed on this Mac such as Docker Desktop, and anything you started yourself.${twoEngines ? ' Codex agents’ programs are not found yet.' : ''}`}
-                  />
-                  <Switch label="Stop what finished agents leave running" on={w.leftovers.on} onChange={(v) => setWorkspace('cleanupLeftovers', v)} />
+                  <Switch label="Stop programs agents leave behind" on={w.leftovers.on} onChange={(v) => setWorkspace('cleanupLeftovers', v)} />
                 </Row>
               )}
               {/* THE ONE LEVER NO READING REPLACES. She is sitting in front of

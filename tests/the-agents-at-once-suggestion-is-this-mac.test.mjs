@@ -121,9 +121,14 @@ describe('the suggestion stops nobody', () => {
   const pane = fs.readFileSync(path.join(root, 'renderer/src/components/Settings.tsx'), 'utf8');
 
   // THE CORRECTION, HELD IN THREE PLACES.
-  it('leaves the stepper the same range on every Mac', () => {
-    expect(pane).toContain('max={w.slotsMax ?? 12}');
+  /* The control is a dropdown since 2026-10-05 and the range is the length of
+     its menu, but the rule is the one it always was: the hardware SUGGESTS a
+     starting number and never shortens what a person may choose, so the list is
+     `slotsMax` on every Mac and never `slotsSuggested`. */
+  it('leaves the control the same range on every Mac', () => {
+    expect(pane).toContain('n <= (w.slotsMax ?? 12)');
     expect(pane).not.toContain('slotsSuggested ?? 12');
+    expect(pane).not.toMatch(/n <= .*slotsSuggested/);
   });
 
   it('does not clamp the write to the machine', () => {
