@@ -172,8 +172,10 @@ describe('3. there is a quiet way out, and it asks them to stay', () => {
     // walk's own 38px and the app is pushed down by exactly that height.
     const rule = css.slice(css.indexOf('.fr-out {'), css.indexOf('.fr-out:hover'));
     expect(rule).toMatch(/position: fixed/);
-    expect(rule).toMatch(/right: \d+px/);
-    expect(rule).toMatch(/top: 0/);
+    // Bottom left since 2026-10-05 (w-9f6975906c): top: 0 is the title bar
+    // band, where her clicks on it never landed.
+    expect(rule).toMatch(/left: \d+px/);
+    expect(rule).toMatch(/bottom: \d+px/);
     expect(rule).toMatch(/height: 38px/);
     // DIM, AND NOT SO DIM THAT SHE HAD TO BE TOLD IT WAS THERE. It was 0.45,
     // which over the dark photograph the walk wears measured 3.01:1 against the
