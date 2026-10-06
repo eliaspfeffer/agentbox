@@ -71,6 +71,16 @@ export function inMyInbox(item, product, me) {
   return runnerOf(item, product) === me;
 }
 
+// A CONVERSATION WHERE YOU SPOKE LAST IS DONE FOR YOU (w-57a202a968), until
+// the other person writes again and `inMyInbox` brings it back. Without it a
+// message you answered was on no tab and no column: out of your inbox by the
+// rule above, never In progress, and not Done because its status is not done.
+// Her words: "It's not supposed to leave the board; it's supposed to go in Done."
+export function iSpokeLast(item, product, me) {
+  if (!me || !product?.team?.direct || item?.status === 'done') return false;
+  return lastSpeaker(item) === me;
+}
+
 // A REPLY HANDS A PERSON-TO-PERSON ROW TO THE OTHER PERSON, so a conversation
 // goes back and forth between two inboxes instead of sitting in both. Returns
 // who it goes to, or null when a reply changes nothing about whose it is.

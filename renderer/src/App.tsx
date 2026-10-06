@@ -115,7 +115,7 @@ import { ChatAgentsContext, type ChatAgentsValue } from './team/ChatAgents';
 import { agentLinks, chatProjects, chatTranscript, taskBrief, taskTitle, withTask } from './team/agent-mentions';
 import { isCleanRun, ruleIdOf, ruleLabel } from '../../shared/repeats.mjs';
 import { NAME, Name } from '../../shared/product-name.mjs';
-import { inMyInbox, isShared, heldByAPerson, runnerOf } from '../../shared/team-rules.mjs';
+import { inMyInbox, isShared, heldByAPerson, runnerOf, iSpokeLast } from '../../shared/team-rules.mjs';
 import { Face, TeamContext, firstName, teamView } from './team/people';
 import { FaceHover } from './team/status';
 import { TeamPage } from './team/TeamPage';
@@ -1829,11 +1829,15 @@ export default function App() {
   // NOT A ROW THAT STILL NEEDS HER (2026-10-01): an agent's done on her own
   // thread waits in Needs you until she closes it, and Done counted it too,
   // so the tabs read "DONE 2 · ALL 2" with two rows still needing her.
+  // AND A MESSAGE YOU ANSWERED IS DONE FOR YOU until they write back
+  // (`iSpokeLast`, w-57a202a968): it was on no tab at all.
   const done = useMemo(() => {
     const needsYou = new Set(inbox.map((i) => i.id));
-    return items.filter((i) => i.status === 'done' && (!scope || i.product === scope) && !needsYou.has(i.id))
+    const productOf = (i: WorkItem) => team?.products.get(i.product);
+    return items.filter((i) => (i.status === 'done' || iSpokeLast(i, productOf(i), team?.me ?? null))
+      && (!scope || i.product === scope) && !needsYou.has(i.id))
       .sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [items, scope, inbox]);
+  }, [items, scope, inbox, team]);
 
   // Scheduled is the future inbox: everything waiting for its moment, soonest
   // first. The view only exists while something is in it. It holds two things

@@ -8,4 +8,5 @@ export function heldByAPerson(item: Row): boolean;
 export function mayRunHere(item: Row, product: ProductLike, me: string | null): boolean;
 export function inMyInbox(item: Row, product: ProductLike, me: string | null): boolean;
 export function lastSpeaker(item: Row): string | null;
+export function iSpokeLast(item: Row, product: ProductLike, me: string | null): boolean;
 export function handedOnByReply(item: Row, product: ProductLike, me: string | null): string | null;
