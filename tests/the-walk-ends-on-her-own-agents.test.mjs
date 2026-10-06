@@ -155,10 +155,11 @@ describe('where it sits in the walk', () => {
   // the half of this that is hers.
   it('is on the finish card, which is the last dot', () => {
     // Nineteen since 2026-10-01: who a thread is for, and the board, each became a beat of their own.
-    expect(N_BEATS).toBe(19);
+    // Sixteen since 2026-10-05 (w-9f6975906c): the three introduction slabs went.
+    expect(N_BEATS).toBe(16);
     expect(BEAT.done).toBe(N_BEATS);
     expect(BEAT.landed).toBe(N_BEATS);
-    expect(BEAT.answer).toBe(12);
+    expect(BEAT.answer).toBe(9);
     // There is no beat of its own left for it to sit on.
     expect(BEAT.agents).toBeUndefined();
   });

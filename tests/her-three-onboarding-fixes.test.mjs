@@ -28,7 +28,8 @@ describe('1. the introduction hands straight to the practice round', () => {
   it('goes from the last slab to the hand-off and from there into the practice round', () => {
     // `hand` is the hand-off card whose one button makes the practice project,
     // and `make` is the first beat inside it.
-    expect(nextStep('goal')).toBe('hand');
+    // No slab is in front of it since 2026-10-05 (w-9f6975906c): `name` is.
+    expect(nextStep('name')).toBe('hand');
     expect(nextStep('hand')).toBe('make');
     expect(IN_PRACTICE[0]).toBe('make');
   });
@@ -38,17 +39,19 @@ describe('1. the introduction hands straight to the practice round', () => {
       { step: 'name', folder: null, name: 'X', product: null, practice: null, examples: [], item: null, sentAt: null },
       { t: 'made', product: 'x' },
     );
-    expect(after.step).toBe('inbox');
+    // The introduction is only the hand-off since 2026-10-05 (w-9f6975906c).
+    expect(after.step).toBe('hand');
   });
 
   it('counts the walk it runs', () => {
     // A screen that quietly changes the count is a walk that lies about how
     // long it is. Seventeen since the theme step went with the themes
     // (w-9e434e8671).
-    expect(N_BEATS).toBe(19);
-    expect(BEAT.goal).toBe(6);
-    expect(BEAT.hand).toBe(7);
-    expect(BEAT.make).toBe(8);
+    // Sixteen since 2026-10-05 (w-9f6975906c): the three slabs at four to six went.
+    expect(N_BEATS).toBe(16);
+    expect(BEAT.name).toBe(3);
+    expect(BEAT.hand).toBe(4);
+    expect(BEAT.make).toBe(5);
   });
 
   it('gives every step a dot, in the order the walk runs, with none repeated out of place', () => {
@@ -204,8 +207,9 @@ describe('3. there is a quiet way out, and it asks them to stay', () => {
     expect(way).toMatch(/!practising\(run\)/);
     expect(app).toMatch(/\{run && \(\s*<WayOut/);
     // Which is exactly the ten beats the practice band is up for, and not
-    // one of the seven screens before them, nor the finish card.
-    for (const step of ['welcome', 'folder', 'name', 'inbox', 'away', 'goal', 'hand']) {
+    // one of the screens before them, nor the finish card. The three slabs
+    // left this list on 2026-10-05 (w-9f6975906c), with the walk.
+    for (const step of ['welcome', 'folder', 'name', 'hand']) {
       expect(IN_PRACTICE).not.toContain(step);
     }
     expect(IN_PRACTICE).not.toContain('done');

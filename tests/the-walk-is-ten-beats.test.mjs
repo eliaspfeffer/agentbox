@@ -31,8 +31,10 @@ describe('the ten beats, in her order', () => {
     // REACHED THROUGH THE INTRODUCTION NOW. Naming the project opens the first
     // slab, and the practice project is what opens the plus.
     const made = advance({ ...START, step: 'name' }, { t: 'made', product: 'p' });
-    expect(made.step).toBe('inbox');
-    const practising = advance({ ...made, step: 'hand' }, { t: 'practice', product: 'practice', examples: [] });
+    // Naming it opens the hand-off itself since 2026-10-05 (w-9f6975906c),
+    // because the three slabs that stood in front of it went.
+    expect(made.step).toBe('hand');
+    const practising = advance(made, { t: 'practice', product: 'practice', examples: [] });
     expect(practising.step).toBe('make');
     // w-ec62ab6b38 (2026-09-28): the plus is labelled New thread now, not New task.
     // AND THE TEAM HEADER'S NEW THREAD BUTTON AFTER IT (2026-10-01). That
@@ -52,12 +54,14 @@ describe('the ten beats, in her order', () => {
     // beat behind it. It is still late in the walk, which is the half of this
     // she asked for: "The Command K bar is not the best place to start."
     // Nineteen since 2026-10-01: who a thread is for, and the board, each became a beat of their own.
-    expect(BEAT.command).toBe(18);
+    // Sixteen since 2026-10-05 (w-9f6975906c), when the three slabs went.
+    expect(BEAT.command).toBe(15);
     // AND THE BEAT IN FRONT OF IT IS THE TOUR OF THE OTHER TWO TABS, added
     // 2026-08-24. ⌘K used to follow the empty inbox straight away; now the walk
     // shows where the work went first, so an empty inbox means something by the
     // time the palette comes up.
-    expect(BEAT.where).toBe(16);
+    // Down three on 2026-10-05 (w-9f6975906c), with the slabs.
+    expect(BEAT.where).toBe(13);
     // THE SIDEBAR NOTE BEAT IS GONE. It rang the project rail, which is no
     // longer drawn anywhere, so the beat drew nothing (w-ec62ab6b38, 2026-09-28).
     expect(BEAT.note).toBeUndefined();
@@ -78,7 +82,8 @@ describe('the ten beats, in her order', () => {
     // its own at the end; it is part of the card now, so there is no beat
     // after this one.
     // Nineteen since 2026-10-01: who a thread is for, and the board, each became a beat of their own.
-    expect(BEAT.done).toBe(19);
+    // Sixteen since 2026-10-05 (w-9f6975906c), when the three slabs went.
+    expect(BEAT.done).toBe(16);
     expect(BEAT.command).toBeLessThan(BEAT.done);
     expect(BEAT.agents).toBeUndefined();
   });
@@ -129,7 +134,8 @@ describe('the ten beats, in her order', () => {
 
   it('counts every beat it renders, and renders every beat it counts', () => {
     // Nineteen since 2026-10-01: who a thread is for, and the board, each became a beat of their own.
-    expect(N_BEATS).toBe(19);
+    // Sixteen since 2026-10-05 (w-9f6975906c), when the three slabs went.
+    expect(N_BEATS).toBe(16);
     for (const step of COACHED) expect(coach(step, 0)).not.toBeNull();
     expect(new Set(Object.values(BEAT)).size).toBe(N_BEATS);
     for (const step of COACHED) expect(forcedStep(step)).toBe(step);

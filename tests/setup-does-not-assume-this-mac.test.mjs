@@ -177,8 +177,9 @@ describe('opening the walk at a named step', () => {
 
   it('opens at a step this version really has', () => {
     for (const step of ['welcome', 'folder', 'name',
-      // The introduction, in front of the app since 2026-08-23.
-      'inbox', 'away', 'goal', 'hand',
+      // The introduction, in front of the app since 2026-08-23. Only the
+      // hand-off is left of it since 2026-10-05 (w-9f6975906c).
+      'hand',
       'make', 'task', 'working', 'open', 'answer',
       'clear', 'unblock', 'command', 'done', 'landed']) {
       expect(forcedStep(step)).toBe(step);
@@ -196,6 +197,11 @@ describe('opening the walk at a named step', () => {
     // it, because the practice project is the thing somebody would guess a step
     // was called and the step is `hand`.
     expect(forcedStep('practice')).toBe(null);
+    // And the three slabs, `inbox` among them, are gone again since 2026-10-05
+    // (w-9f6975906c), so a bookmark to one of them opens nothing.
+    expect(forcedStep('inbox')).toBe(null);
+    expect(forcedStep('away')).toBe(null);
+    expect(forcedStep('goal')).toBe(null);
     expect(forcedStep('')).toBe(null);
     expect(forcedStep(null)).toBe(null);
   });
