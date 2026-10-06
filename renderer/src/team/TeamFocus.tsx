@@ -80,8 +80,10 @@ export function TeamRouteStrip({ item }: { item: WorkItem }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!team || !teamHeld(item, team) || item.assignee !== team.me) return null;
-  // A message is talk, not a task (approved 2026-10-01): its page offers the
-  // one way to make work of it, "Hand it to an agent", and nothing else.
+  // A message is talk, not a task (approved 2026-10-01): work comes out of it
+  // only by @-mentioning an agent in the reply box, which works in the project
+  // its mention names. There is no line under the conversation offering to
+  // hand it all to an agent (taken out 2026-10-05), and nothing else here.
   if ((team.products.get(item.product) as { team?: { direct?: boolean } } | undefined)?.team?.direct) return null;
   // Once you have chosen to keep it, the choices go away.
   if (item.wrote?.assignee?.by === team.me) return null;
