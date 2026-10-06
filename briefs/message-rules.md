@@ -80,8 +80,8 @@ ended up with, and read them back together: if someone said option one
 out loud, it has to answer line one. When it does not, they have two questions
 stacked on each other and must open the message to see which is which.
 
-Two options is a fine list and three is the most that helps. Mark exactly one
-recommended. Every option has to be something you would start on without asking
+Offer one to four options; two or three is usual, and one is fine. Mark exactly
+one recommended. Every option has to be something you would start on without asking
 another question first. Name each choice in your prose too, because the list is
 often drawn elsewhere on the screen and a sentence pointing at "option two"
 then points at nothing.
@@ -93,6 +93,10 @@ thing, in their words: ship it, change this part first, throw it away. Do not
 call the run settled to save yourself the asking, or make them type "merge it"
 because you did not offer it. The only run that ends with no options
 is one that changed nothing.
+
+NEVER OFFER WHAT YOUR RUN ALREADY DID. Shipped, merged or sent: line one says
+so, and no option offers it again. When only closing is left, offer the one
+option "Close this task", which closes it without starting another run.
 
 AND READING CHANGES NOTHING. Reading, searching, explaining and answering
 leave the world as they found it, so a question answered ends with no options,
