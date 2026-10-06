@@ -64,6 +64,7 @@ import { artifactUrlTransform, isMediaPath, productPath, remarkArtifactPaths } f
 import { api } from '../api';
 import { draftKey, readDraft, saveDraft, clearDraft, readDraftAttachments, saveDraftAttachments, type SentDraft } from '../drafts';
 import { withQuote } from '../team/chat-quote';
+import { THREAD_WIDTH, THREAD_WIDTH_KEY, clampThreadWidth } from '../team/chat-threads';
 import { FormatBar } from '../team/FormatBar';
 import { OptionsOffer } from './OptionsOffer';
 import { foldedReply } from '../folded-reply';
@@ -646,6 +647,40 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
     ro.observe(pane);
     return () => ro.disconnect();
   }, []);
+  // A CHAT'S THREAD, OPEN IN THE PANEL BESIDE IT (w-920461cbe6): which one, by
+  // its message's uid, and how wide the panel was last dragged. A thread is not
+  // carried from one conversation to the next, and a document open beside the
+  // task closes it, because the pane is then too narrow for two columns.
+  const [openThread, setOpenThread] = useState<string | null>(null);
+  useEffect(() => { setOpenThread(null); }, [item.product, item.id]);
+  const [threadWant, setThreadWant] = useState<number>(() => {
+    const kept = Number(typeof localStorage === 'undefined' ? NaN : localStorage.getItem(THREAD_WIDTH_KEY));
+    return Number.isFinite(kept) && kept > 0 ? kept : THREAD_WIDTH.start;
+  });
+  const threadWidth = clampThreadWidth(threadWant, Number.isFinite(paneWidth) ? paneWidth : 1400);
+  const resizeThread = useCallback((width: number) => {
+    const held = clampThreadWidth(width, paneRef.current?.clientWidth ?? 1400);
+    setThreadWant(held);
+    try { localStorage.setItem(THREAD_WIDTH_KEY, String(held)); } catch { /* storage full or off */ }
+  }, []);
+  // ESC CLOSES THE THREAD FIRST, and only then means "leave this conversation".
+  // Taken at the window before anything else hears it, and left alone while a
+  // menu, or any box outside the thread you are typing in, has the key.
+  useEffect(() => {
+    if (!openThread) return undefined;
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const at = e.target as HTMLElement | null;
+      if (at?.closest?.('.chat-emoji, .prio-menu, .th-menu, [role="dialog"]')) return;
+      if (at?.closest?.('textarea, input, [contenteditable="true"]') && !at.closest('.chat-thread-panel')) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setOpenThread(null);
+    };
+    window.addEventListener('keydown', key, true);
+    return () => window.removeEventListener('keydown', key, true);
+  }, [openThread]);
+  useEffect(() => { if (openDoc) setOpenThread(null); }, [openDoc]);
   const [summaryOpen, toggleSummary] = useSummaryOpen(paneWidth);
   const summaryOffered = summarised && !openDoc;
   const summaryShown = summaryOffered && summaryOpen;
@@ -1426,6 +1461,19 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
                 onReply();
               }}
               onHandToAgent={onHandToAgent ? () => onHandToAgent(item) : undefined}
+              thread={direct ? {
+                open: openThread,
+                host: paneRef.current,
+                width: threadWidth,
+                onOpen: (uid) => setOpenThread(uid),
+                onClose: () => setOpenThread(null),
+                onResize: resizeThread,
+                // A REPLY IN A THREAD is an answer on this conversation like any
+                // other, so it reaches the same inboxes and syncs the same way;
+                // it only names the message it answers.
+                onSend: (uid, text) => api.answer({ product: item.product, id: item.id, answer: text, inReplyTo: uid })
+                  .catch(() => onNotice('That reply did not send. Try again.')),
+              } : undefined}
             />
           )}
 

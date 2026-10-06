@@ -150,6 +150,11 @@ export const WORK_ITEM_FIELDS = [
   // reads them back as `reactions` (see foldWorkItems); nothing ever reads a
   // bare `react` off an item.
   'react',
+  // A REPLY IN A THREAD (w-920461cbe6): the uid of the message line it answers,
+  // written on the same line as the reply's own `answer`. Like `react` it is a
+  // mark on ONE line rather than a value the row holds, so the fold skips it;
+  // the chat reads it per line (renderer/src/thread-history.ts).
+  'inReplyTo',
 ];
 
 // THE SUMMARY IS SHARED BETWEEN THE PERSON AND THE AGENT. Everywhere else the
@@ -432,6 +437,7 @@ function coerceField(field, value) {
       if (!on || !emoji) return undefined;
       return value.off === true ? { on, emoji, off: true } : { on, emoji };
     }
+    case 'inReplyTo': return shortId(value) ?? undefined;
     case 'visibility': return value === 'private' || value === 'team' || value === 'people' ? value : undefined;
     // An empty list is a real value: it is how the last chosen person comes
     // off a thread, and the thread then reaches nobody until she names one.
@@ -558,6 +564,9 @@ export function foldWorkItems(lines, now = Date.now()) {
         }
         continue;
       }
+      // WHICH MESSAGE A REPLY ANSWERS belongs to that reply's line alone. Held
+      // as a value, the row would carry the newest reply's parent forever.
+      if (field === 'inReplyTo') continue;
       const held = item.wrote[field];
       // There used to be an exception here, for machinery spending a one-off
       // permission mode over the founder's own grant. That field is not on the

@@ -467,6 +467,9 @@ export interface AgentTurn {
   // one can wear chips: a message still on its way has not been written down
   // yet, and the one the ask was quoted from lives on another row.
   uid?: string;
+  // A REPLY IN A THREAD: the uid of the message it answers (w-920461cbe6).
+  // In a chat, `itemThread` lifts these out of the stream into `replies`.
+  inReplyTo?: string;
   // A CONTINUATION OF THE BLOCK ABOVE, not a new message. Shape B puts the
   // work between the messages, so a reply that stopped for a tool is drawn as
   // two blocks with the thing it ran between them. They are still one reply:
@@ -779,7 +782,23 @@ export interface WorkspaceSettings {
    * of heavy commands at once somebody picked, null for Auto; `slotsAuto` is
    * what Auto is on this Mac; `now` is one sentence about right now, null while
    * it is off. Optional so an older payload still draws the page it drew. */
-  memoryGate?: { on: boolean; slots: number | null; slotsAuto: number; slotsMax: number; now: string | null };
+  /** Who decides how many agents run: Agentbox from this Mac's memory, or a
+   *  number somebody set. `agentsTotal` is what the whole Mac runs at once,
+   *  which is what the page shows; the per-account number is arithmetic nobody
+   *  is asked to do. w-e5225b62ba. */
+  agentsAuto?: boolean;
+  agentsTotal?: number;
+  agentsAutoTotal?: number;
+  agentsNudge?: number;
+  memoryGate?: {
+    on: boolean; slots: number | null; slotsAuto: number; slotsMax: number; now: string | null;
+    /** What the check has measured, for the card the page leads with. Every
+     *  field is null when it is not known, and the card leaves those out. */
+    reading?: {
+      heavy: number | null; waiting: number | null; pressure: string | null; usedPct: number | null;
+      asked: number | null; waited: number | null; refused: number | null;
+    };
+  };
   /**
    * STOP WHAT FINISHED AGENTS LEAVE RUNNING (main/leftovers.mjs). `now` is one
    * sentence about what is left right now, null while it is off. */
@@ -956,7 +975,7 @@ declare global {
       compact(p: { product: string; id: string }): Promise<{state: string; at: number}>;
       remoteControl(p: {product: string; id: string; action?: string}): Promise<{state: string; at: number; text?: string; url?: string; mayBeActive?: boolean} | null>;
       compactionStatus(p: {product: string; id: string}): Promise<{state: string; at: number} | null>;
-      answer(p: { product: string; id: string; answer?: string; status?: string; priority?: number; permissionMode?: string | null; model?: string | null; effort?: string | null; now?: boolean }): Promise<WorkItem>;
+      answer(p: { product: string; id: string; answer?: string; status?: string; priority?: number; permissionMode?: string | null; model?: string | null; effort?: string | null; now?: boolean; inReplyTo?: string }): Promise<WorkItem>;
       sendNow(p: { product: string; id: string }): Promise<{ ok: boolean; interrupted: boolean }>;
       setProductOrder(p: { order: string[] }): Promise<unknown>;
       setProductHidden(p: { product: string; hidden: boolean }): Promise<unknown>;

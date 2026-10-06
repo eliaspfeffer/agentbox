@@ -330,9 +330,9 @@ if (!noSign && fresh.length) {
   console.log('THE WEBSITE IS NOT UPDATED. This build wrote files on this Mac and stopped.');
   if (serving) {
     const days = Math.floor((Date.now() - Date.parse(serving.updatedAt)) / 86400000);
-    console.log(`astral.ac/download is still handing out ${(serving.size / 1e6).toFixed(1)} MB, uploaded ${serving.updatedAt}${days > 0 ? `, ${days} day${days === 1 ? '' : 's'} ago` : ''}.`);
+    console.log(`agentbox.ac/download is still handing out ${(serving.size / 1e6).toFixed(1)} MB, uploaded ${serving.updatedAt}${days > 0 ? `, ${days} day${days === 1 ? '' : 's'} ago` : ''}.`);
   } else {
-    console.log('astral.ac/download is handing out whatever was last uploaded to Astral-Agent/astral-releases.');
+    console.log('agentbox.ac/download is handing out whatever was last uploaded to Astral-Agent/astral-releases.');
   }
 
   // THE TWO FILES WITHOUT WHICH NOBODY WHO ALREADY HAS AGENTBOX EVER HEARS ABOUT
@@ -355,7 +355,7 @@ if (!noSign && fresh.length) {
   // update by comparing version numbers, so republishing the same number ships a
   // new app to strangers and nothing at all to the people who already have it.
   if (serving && version && String(serving.tag ?? '').replace(/^v/, '') === version) {
-    console.log(`\nWARNING: astral.ac is already serving ${version} and this build is also ${version}.`);
+    console.log(`\nWARNING: agentbox.ac is already serving ${version} and this build is also ${version}.`);
     console.log('  Publishing it would update nobody. Bump the version first:');
     console.log('    npm version patch --no-git-tag-version');
   }

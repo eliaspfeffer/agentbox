@@ -97,9 +97,14 @@ export function Reactions({ on, me, onReact }: {
  * a bar that vanished the moment the pointer moved into its own menu would be
  * unusable.
  */
-export function MessageActions({ onReact, onQuote, onHandToAgent }: {
+export function MessageActions({ onReact, onQuote, replyLabel = 'Reply', onHandToAgent }: {
   onReact: (emoji: string) => void;
-  onQuote: () => void;
+  // Absent inside a thread's panel, where the reply box is right there and a
+  // reply to a reply would be a thread inside a thread (w-920461cbe6).
+  onQuote?: () => void;
+  // "Reply in thread" where Reply opens the message's thread rather than
+  // quoting it.
+  replyLabel?: string;
   // Absent on a conversation where there is nothing to hand work to, which is
   // the single-person app: the two buttons left still stand.
   onHandToAgent?: () => void;
@@ -116,11 +121,13 @@ export function MessageActions({ onReact, onQuote, onHandToAgent }: {
           <path d="M12.5 1.8v3.4M10.8 3.5h3.4" />
         </svg>
       </button>
-      <button type="button" className="chat-act" title="Reply" aria-label="Reply" onClick={onQuote}>
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" aria-hidden="true">
-          <path d="M2 2.8h12v8.4H7.2L3.6 14v-2.8H2z" />
-        </svg>
-      </button>
+      {onQuote && (
+        <button type="button" className="chat-act" title={replyLabel} aria-label={replyLabel} onClick={onQuote}>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" aria-hidden="true">
+            <path d="M2 2.8h12v8.4H7.2L3.6 14v-2.8H2z" />
+          </svg>
+        </button>
+      )}
       {onHandToAgent && (
         <button type="button" className="chat-act chat-act-hand" title="Hand to an agent" aria-label="Hand to an agent" onClick={onHandToAgent}>
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" aria-hidden="true">

@@ -192,3 +192,99 @@
 .mention-field .v { color: var(--text-dim); }
 .mention-field:hover .v, .mention-field.cursor .v { color: var(--text); }
 .mention-field .car, .mention-field .chk { margin-left: auto; color: var(--text-faint); font-size: 11px; }
+
+/* ------------------------------- threads ----------------------------------
+   w-920461cbe6, the panel beside the chat, approved from the drawing
+   designs/w-920461cbe6/A-panel-beside-the-chat.png. Square and monochrome like
+   everything above. ./ThreadPanel.tsx and ./chat-threads.ts. */
+
+/* The line under a message with replies. No box, no colour: faces, a count in
+   the text colour, and when the last one came in, faint. It washes under the
+   pointer and while its thread is open, like the chat's other buttons. */
+.chat-thread-line {
+  grid-column: 2; justify-self: start; display: inline-flex; align-items: center; gap: 10px;
+  margin: 8px 0 0 -6px; padding: 4px 10px 4px 6px;
+  appearance: none; background: none; border: 0; border-radius: 0; cursor: pointer;
+  font: inherit; font-size: 13px; line-height: 18px; color: var(--text-dim);
+}
+.chat-thread-line:hover { background: var(--wash); }
+.chat-thread-line:focus-visible { outline: 1px solid var(--text-faint); outline-offset: 1px; }
+.chat-thread-faces { display: inline-flex; gap: 2px; }
+.chat-thread-faces .tm-av { width: 20px; height: 20px; line-height: 18px; font-size: 8px; }
+.chat-thread-n { color: var(--text); font-weight: 500; }
+.chat-thread-last { color: var(--text-faint); }
+
+/* The message whose thread is open, marked in the chat by a faint wash that
+   reaches past its edges, so the eye can go from the panel back to it. */
+.thread-block.is-thread-open > .chat-msg::before {
+  content: ''; position: absolute; inset: -10px -14px; z-index: -1; background: var(--wash);
+}
+.thread-block.is-thread-open > .chat-msg { z-index: 0; }
+
+/* WHERE IT SITS: on the right of the pane, the full height under the bar. The
+   chat and its reply box give up its width, the way they do for the summary
+   (../threads/summary.css), so the words narrow beside it rather than run under
+   it. The width is the pane's --chat-thread-w, which the drag edge sets. */
+.focus-pane[data-thread="open"] > .focus-scroll,
+.focus-pane[data-thread="open"] > .focus-dock { margin-right: var(--chat-thread-w); }
+.focus-pane[data-thread="open"] { --keep-inset: max(32px, calc((100% - var(--chat-thread-w) - var(--read-w)) / 2 + 32px)); }
+
+.chat-thread-panel {
+  position: absolute; top: 0; right: 0; bottom: 0; z-index: 2; box-sizing: border-box;
+  display: flex; flex-direction: column; min-width: 0;
+  border-left: 1px solid var(--line); border-radius: 0; background: none;
+}
+/* THE DRAG EDGE: an 8 point strip over the panel's left border, which shows a
+   brighter line under the pointer and while it is held. */
+.chat-thread-grip {
+  position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; z-index: 3; cursor: col-resize;
+}
+.chat-thread-grip::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background-color 90ms ease;
+}
+.chat-thread-grip:hover::after, .chat-thread-grip:focus-visible::after, body.chat-thread-dragging .chat-thread-grip::after { background: var(--line-strong); }
+.chat-thread-grip:focus-visible { outline: none; }
+/* While the edge is held, nothing under the pointer selects or changes cursor. */
+body.chat-thread-dragging { cursor: col-resize; user-select: none; }
+body.chat-thread-dragging * { cursor: col-resize !important; }
+
+.chat-thread-head {
+  flex: none; display: flex; align-items: center; justify-content: space-between;
+  height: 52px; padding: 0 14px 0 28px; border-bottom: 1px solid var(--line);
+}
+.chat-thread-title { font-size: 14.5px; font-weight: 500; color: var(--text); }
+.chat-thread-close {
+  display: grid; place-items: center; width: 28px; height: 28px; padding: 0;
+  appearance: none; background: none; border: 0; border-radius: 0; cursor: pointer; color: var(--text-faint);
+}
+.chat-thread-close:hover { background: var(--wash); color: var(--text); }
+.chat-thread-close:focus-visible { outline: 1px solid var(--text-faint); outline-offset: -1px; }
+.chat-thread-close svg { width: 14px; height: 14px; }
+
+.chat-thread-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 20px; padding: 24px 28px 20px;
+}
+.chat-thread-body .chat-day { margin: 2px 0 -2px; }
+
+/* The reply box, on the same line as the chat's and in the same plate. */
+.chat-thread-foot { flex: none; padding: 0 28px 24px; }
+.chat-thread-box {
+  display: flex; align-items: flex-end; gap: 8px;
+  background: var(--wash); border: 1px solid var(--line); border-radius: 0;
+  transition: border-color .18s, background .18s;
+}
+.chat-thread-box:focus-within { border-color: var(--line-strong); background: var(--surface); }
+.chat-thread-box textarea {
+  flex: 1 1 auto; min-width: 0; resize: none; box-sizing: border-box; min-height: 43px; max-height: 200px;
+  padding: 11px 0 11px 16px; border: 0; outline: none; background: none;
+  font: inherit; font-size: 14.5px; line-height: 1.45; color: var(--text);
+}
+.chat-thread-box textarea::placeholder { color: var(--text-faint); }
+.chat-thread-send {
+  flex: none; margin: 0 8px 8px 0; height: 27px; padding: 0 12px;
+  appearance: none; border: 1px solid var(--line-strong); border-radius: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 12.5px; color: var(--text);
+}
+.chat-thread-send:hover:not(:disabled) { background: var(--wash-strong); }
+.chat-thread-send:disabled { color: var(--text-faint); border-color: var(--line); cursor: default; }

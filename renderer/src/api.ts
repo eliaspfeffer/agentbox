@@ -447,7 +447,9 @@ export const api = {
   // keeps what it had; null clears it back to the engine's own choice.
   // `now` cuts the running agent's current step so this message is answered at
   // once instead of after it (main/claude-input.mjs `interrupt`).
-  async answer(p: { product: string; id: string; answer?: string; status?: string; priority?: number; permissionMode?: AnswerMode | null; model?: string | null; effort?: string | null; now?: boolean }): Promise<WorkItem | null> {
+  // `inReplyTo` is the uid of the message a reply in a thread answers
+  // (w-920461cbe6); main keeps it only in a conversation between people.
+  async answer(p: { product: string; id: string; answer?: string; status?: string; priority?: number; permissionMode?: AnswerMode | null; model?: string | null; effort?: string | null; now?: boolean; inReplyTo?: string }): Promise<WorkItem | null> {
     if (useFixtures) return null;
     return window.zero!.answer(p);
   },

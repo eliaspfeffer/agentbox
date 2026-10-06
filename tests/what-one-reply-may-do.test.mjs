@@ -683,6 +683,8 @@ describe('the wiring from the reply box is present in the source', () => {
   it('carries it through the bridge and into the store', () => {
     const ipc = fs.readFileSync('main/ipc.mjs', 'utf8');
     expect(ipc).toMatch(/zero:answer'[^)]*permissionMode/s);
-    expect(ipc).toContain('store.answerItem(product, id, { answer, status, priority, permissionMode, model, effort })');
+    // `inReplyTo` rides beside it since threads (w-920461cbe6): a reply in a
+    // thread is still this one call, naming the message it answers.
+    expect(ipc).toContain('store.answerItem(product, id, { answer, status, priority, permissionMode, model, effort, inReplyTo: thread })');
   });
 });

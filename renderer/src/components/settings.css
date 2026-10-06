@@ -184,6 +184,32 @@
 /* The sign in shell under the accounts, at the column's width. */
 .settings-screen[data-pane] .ac-adding { margin-top: 16px; }
 
+/* THE READING THE RUNNING PAGE LEADS WITH (w-e5225b62ba). Figures in the app's
+   own label voice — the small mono capitals the new-task card's TO and MODEL
+   wear — because these are measurements and not settings, and a row that reports
+   should not look like a row that asks. */
+.settings-screen[data-pane] .set-plate > .set-read { display: flex; gap: 30px; padding: 15px 0 13px; }
+.settings-screen[data-pane] .set-read > div { min-width: 0; }
+.settings-screen[data-pane] .set-read b {
+  display: block; font-size: 19px; font-weight: 600; letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums; color: var(--text);
+}
+.settings-screen[data-pane] .set-read span {
+  display: block; margin-top: 3px; font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); white-space: nowrap;
+}
+
+/* How much of the Mac's memory is gone, the app's own meter at the card's width.
+   It goes to the accent only once the check has something to do, so a calm Mac
+   is not painted as an alarm. */
+.settings-screen[data-pane] .set-plate > .set-bar-row { display: block; padding: 13px 0; }
+.settings-screen[data-pane] .set-bar {
+  display: block; width: 100%; height: 5px; border-radius: 2px;
+  background: var(--wash-strong); overflow: hidden;
+}
+.settings-screen[data-pane] .set-bar > i { display: block; height: 100%; background: var(--text-faint); transition: width 0.3s ease; }
+.settings-screen[data-pane] .set-bar > i.hot { background: var(--accent); }
+
 /* WHERE A SEARCH LANDED: the group it named, lit for a moment. */
 .settings-screen[data-pane] .set-found > .set-plate { animation: set-found 1.6s ease-out; }
 @keyframes set-found {

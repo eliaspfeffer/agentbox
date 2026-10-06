@@ -168,12 +168,24 @@ describe('the settings sentence about her plan', () => {
   // against a payload -- which is the only way to assert what she actually
   // reads. A `toContain` over source would pass on a sentence that is never
   // reachable, which is the shape of defect this whole slice is about.
+  /* THE ROW IS "How many run at once" NOW, AND ITS `desc` IS A CHOICE RATHER
+     THAN ONE TEMPLATE (w-e5225b62ba): Agentbox decides the number, so the
+     sentence has three cases — a plan that capped it, Automatic, and a number
+     somebody set. The plan case is unchanged in every way this file cares
+     about, so what is lifted changed and what is proved did not. Braces are
+     counted rather than searched for, because the expression now contains
+     several of its own. */
   const template = (() => {
-    const at = settings.indexOf('desc={`', settings.indexOf('label="Agents at once"'));
-    const start = at + 'desc={`'.length;
-    // The closing backtick of the template, which is followed by `}`.
-    const end = settings.indexOf('`}', start);
-    return settings.slice(start, end);
+    const at = settings.indexOf('desc={', settings.indexOf('label="How many run at once"'));
+    expect(at).toBeGreaterThan(-1);
+    const start = at + 'desc={'.length;
+    let depth = 1;
+    let i = start;
+    for (; i < settings.length && depth; i++) {
+      if (settings[i] === '{') depth++;
+      else if (settings[i] === '}') depth--;
+    }
+    return settings.slice(start, i - 1);
   })();
   /*
    * AND THE ENGINE COUNT IS LIFTED OUT OF THE FILE TOO, on the same terms and
@@ -197,7 +209,7 @@ describe('the settings sentence about her plan', () => {
   // shared/product-name.mjs rather than spelling it, and a template lifted out
   // of the file and run here has nothing else in scope.
   // eslint-disable-next-line no-new-func
-  const say = (w) => new Function('w', 'NAME', `${derivation}\nreturn \`${template}\`;`)(w, NAME);
+  const say = (w) => new Function('w', 'NAME', `${derivation}\nreturn (${template});`)(w, NAME);
 
   const pro = { sessionsAtOnceFromPlan: 'Pro', sessionsAtOnce: 1, accounts: [{}] };
 
@@ -207,7 +219,7 @@ describe('the settings sentence about her plan', () => {
   // about software she does not have.
   it('keeps its old words where there is only one coding agent', () => {
     expect(say({ ...pro, engineChoices: [{ id: 'claude' }] })).toBe(
-      `Your plan is Pro, so ${NAME} starts one at a time. Put it up whenever you like. The rest wait in line.`,
+      `Your plan is Pro, so ${NAME} starts one at a time.`,
     );
   });
 
@@ -223,14 +235,22 @@ describe('the settings sentence about her plan', () => {
   // Codex ones, under a line that has just said there is room for four.
   it('names claude code where there are two, so it cannot explain a codex cap', () => {
     expect(say({ ...pro, engineChoices: [{ id: 'claude' }, { id: 'codex' }] })).toBe(
-      `Your plan is Pro, so ${NAME} starts one Claude Code agent at a time. Put it up whenever you like. The rest wait in line.`,
+      `Your plan is Pro, so ${NAME} starts one Claude Code agent at a time.`,
     );
   });
 
   // THE CASE THAT MUST NOT MATCH: nobody's plan set the number, so there is no
   // plan sentence to qualify and a second engine adds nothing to this row.
   it('says nothing about a plan or an engine when she set the number herself', () => {
-    expect(say({ sessionsAtOnceFromPlan: null, sessionsAtOnce: 3, accounts: [{}], engineChoices: [{ id: 'claude' }, { id: 'codex' }] }))
-      .toBe('Up to 3 run together. The rest wait in line.');
+    const said = say({ sessionsAtOnceFromPlan: null, agentsAuto: false, agentsAutoTotal: 6, sessionsAtOnce: 3, accounts: [{}], engineChoices: [{ id: 'claude' }, { id: 'codex' }] });
+    expect(said).not.toMatch(/plan/i);
+    expect(said).not.toMatch(/Claude Code|Codex/);
+  });
+
+  // AND NOT WHEN AGENTBOX IS THE ONE DECIDING, which is the ordinary case now.
+  it('says nothing about a plan or an engine under Automatic', () => {
+    const said = say({ sessionsAtOnceFromPlan: null, agentsAuto: true, accounts: [{}], engineChoices: [{ id: 'claude' }, { id: 'codex' }] });
+    expect(said).not.toMatch(/plan/i);
+    expect(said).not.toMatch(/Claude Code|Codex/);
   });
 });
