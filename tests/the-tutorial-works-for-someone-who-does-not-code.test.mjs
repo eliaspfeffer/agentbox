@@ -77,10 +77,14 @@ describe('1. the walk is never a blank screen', () => {
     const named = coach('where', 0, { view: 'inbox', tabs, tabNames: TEAM_TAB_NAMES });
     // Tab, not ⌘2, since w-914b16eab6 (2026-10-02).
     expect(`${named.lead}${named.key}${named.tail}`).toBe('Press ⇥ or click In progress to see where it all went.');
-    const onward = coach('where', 0, { view: 'progress', tabs, tabNames: TEAM_TAB_NAMES });
     // Later, not Scheduled: the tab was renamed with "Add it to Later"
-    // (w-afb66e6661), and the walk names whatever the strip says.
+    // (w-afb66e6661), and the walk names whatever the strip says. The stop
+    // that sends her to Later is Done since 2026-10-06, when In progress
+    // became the tour's last stop.
+    const onward = coach('where', 0, { view: 'done', tabs: ['inbox', 'progress', 'done', 'snoozed'], tabNames: TEAM_TAB_NAMES });
     expect(onward.tail).toMatch(/^ or click Later /);
+    // And the last stop still names a click: any tab ends it.
+    expect(coach('where', 0, { view: 'progress', tabs, tabNames: TEAM_TAB_NAMES }).tail).toContain('click another tab');
     // The old layout's strip has its own words and gets no name.
     expect(coach('where', 0, { view: 'inbox', tabs }).tail).toBe(' to see where it all went.');
   });

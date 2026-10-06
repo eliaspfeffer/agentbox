@@ -17,7 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   ANCHOR, COACHED, BEAT, N_BEATS, RING_PAD_MAX, RING_PAD_MIN, TEXT_GAP, TEXT_MAX,
-  advance, coach, forcedStep, inboxCleared, ring, START, walkRows,
+  advance, coach, forcedStep, inboxCleared, ring, START, STEPS, walkRows,
 } from '../renderer/src/onboarding.ts';
 import { EXAMPLES, stampsFor } from '../shared/first-run-examples.mjs';
 import * as workItems from '../main/store/work-items.mjs';
@@ -35,7 +35,12 @@ describe('the ten beats, in her order', () => {
     // because the three slabs that stood in front of it went.
     expect(made.step).toBe('hand');
     const practising = advance(made, { t: 'practice', product: 'practice', examples: [] });
-    expect(practising.step).toBe('make');
+    // AND THE PRACTICE PROJECT OPENS ON THE LOOK AROUND SINCE 2026-10-06, two
+    // stops with a Next each, and the plus is the beat after them. Her words:
+    // "it just jumps to creating a new task without spending a second on the
+    // interface."
+    expect(practising.step).toBe('tour');
+    expect(STEPS.slice(STEPS.indexOf('tour'), STEPS.indexOf('make') + 1)).toEqual(['tour', 'tabs', 'make']);
     // w-ec62ab6b38 (2026-09-28): the plus is labelled New thread now, not New task.
     // AND THE TEAM HEADER'S NEW THREAD BUTTON AFTER IT (2026-10-01). That
     // layout draws no plus, and its button has no aria-label, so the first
@@ -55,13 +60,15 @@ describe('the ten beats, in her order', () => {
     // she asked for: "The Command K bar is not the best place to start."
     // Nineteen since 2026-10-01: who a thread is for, and the board, each became a beat of their own.
     // Sixteen since 2026-10-05 (w-9f6975906c), when the three slabs went.
-    expect(BEAT.command).toBe(15);
+    // Seventeen since 2026-10-06: the look around added two and To took one.
+    expect(BEAT.command).toBe(16);
     // AND THE BEAT IN FRONT OF IT IS THE TOUR OF THE OTHER TWO TABS, added
     // 2026-08-24. ⌘K used to follow the empty inbox straight away; now the walk
     // shows where the work went first, so an empty inbox means something by the
     // time the palette comes up.
-    // Down three on 2026-10-05 (w-9f6975906c), with the slabs.
-    expect(BEAT.where).toBe(13);
+    // Down three on 2026-10-05 (w-9f6975906c), with the slabs, and up one on
+    // 2026-10-06 with the look around.
+    expect(BEAT.where).toBe(14);
     // THE SIDEBAR NOTE BEAT IS GONE. It rang the project rail, which is no
     // longer drawn anywhere, so the beat drew nothing (w-ec62ab6b38, 2026-09-28).
     expect(BEAT.note).toBeUndefined();
@@ -83,7 +90,8 @@ describe('the ten beats, in her order', () => {
     // after this one.
     // Nineteen since 2026-10-01: who a thread is for, and the board, each became a beat of their own.
     // Sixteen since 2026-10-05 (w-9f6975906c), when the three slabs went.
-    expect(BEAT.done).toBe(16);
+    // Seventeen since 2026-10-06: the look around added two and To took one.
+    expect(BEAT.done).toBe(17);
     expect(BEAT.command).toBeLessThan(BEAT.done);
     expect(BEAT.agents).toBeUndefined();
   });
@@ -114,8 +122,14 @@ describe('the ten beats, in her order', () => {
     // the card does not invent one: Mark done is a row inside a menu behind a
     // three-dot button, and naming it would make this the longest line in the
     // walk. The mouse route on this beat is replying.
-    expect(coach('answer', 0).lead).toBe('Click the box below to reply, or press ');
-    expect(coach('answer', 0).key).toBe('E');
+    // AND IT SAYS WHAT TO REPLY WITH SINCE 2026-10-06: the answer offers to
+    // make the summary shorter, and a reply is now answered with that.
+    // AND R IS THE CAP, the app's own reply key (hers, 2026-10-06), with E
+    // the beat's second key.
+    expect(coach('answer', 0).lead).toBe('Press ');
+    expect(coach('answer', 0).key).toBe('R');
+    expect(coach('answer', 0).tail).toBe(' or click the reply box to ask for that, or E to mark it done.');
+    expect(coach('answer', 0).alt).toBe('E');
   });
 
   it('has no beat that says the walk is over while it carries on', () => {
@@ -135,7 +149,8 @@ describe('the ten beats, in her order', () => {
   it('counts every beat it renders, and renders every beat it counts', () => {
     // Nineteen since 2026-10-01: who a thread is for, and the board, each became a beat of their own.
     // Sixteen since 2026-10-05 (w-9f6975906c), when the three slabs went.
-    expect(N_BEATS).toBe(16);
+    // Seventeen since 2026-10-06: the look around added two and To took one.
+    expect(N_BEATS).toBe(17);
     for (const step of COACHED) expect(coach(step, 0)).not.toBeNull();
     expect(new Set(Object.values(BEAT)).size).toBe(N_BEATS);
     for (const step of COACHED) expect(forcedStep(step)).toBe(step);

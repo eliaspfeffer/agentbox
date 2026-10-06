@@ -53,7 +53,19 @@ export type Step =
   // the project hands straight to the tutorial now, and a walk saved on a slab
   // resumes at `hand` (`liveStep`).
   | 'hand'
-  | 'make' | 'who' | 'task' | 'working' | 'open' | 'answer'
+  // A LOOK AROUND BEFORE ANYTHING IS ASKED OF THEM (w-9f6975906c, 2026-10-06).
+  // Her words: "it's hard to understand the app as a whole because it just
+  // jumps to creating a new task without spending a second on the interface."
+  // Two stops on the real practice inbox with its example threads showing:
+  // `tour` rings the list, `tabs` rings the tabs. Each moves on with ↵ or Next.
+  // NOT CALLED `look`, because that was the retired theme picker and a walk
+  // saved there still resumes at `hand` (`liveStep`).
+  | 'tour' | 'tabs'
+  // THERE WAS A `who` BEAT HERE, which asked her to click To on the new thread
+  // card. It went on 2026-10-06 (w-9f6975906c), her words: "hitting 'to'
+  // doesn't matter because we're in single player mode so it's only ever 'to'
+  // the agent." A walk saved at `who` resumes at `task` (`liveStep`).
+  | 'make' | 'task' | 'working' | 'open' | 'answer'
   // THERE WAS A `note` BEAT HERE, pointing at the project rail's notes panel.
   // The rail is retired on every screen, so the beat drew no ring and no card
   // and only Enter moved it on: a silent screen in the middle of the tutorial.
@@ -64,7 +76,7 @@ export type Step =
 /**
  * HOW MANY BEATS THE WALK HAS. It stays because the walk still has a
  * length and the tests still hold it to one. */
-export const N_BEATS = 16;
+export const N_BEATS = 17;
 
 /**
  * WHICH BEAT EACH SCREEN IS. One pair shares one: `working` and `open` are one
@@ -82,28 +94,30 @@ export const BEAT: Record<Step, number> = {
   // The three introduction slabs were beats four to six until 2026-10-05
   // (w-9f6975906c). Everything after them came down three.
   hand: 4,
-  // WRITING ONE IS TWO BEATS SINCE 2026-10-01: the card opens, you see who it
-  // is to, then you send it. Everything after shifted by one.
-  make: 5, who: 6, task: 7,
-  working: 8, open: 8, answer: 9,
+  // The look around is two beats, the list and then the tabs (2026-10-06).
+  tour: 5, tabs: 6,
+  // WRITING ONE IS TWO BEATS AGAIN SINCE 2026-10-06: the card opens and you
+  // send it. The beat about who it is to went with single player.
+  make: 7, task: 8,
+  working: 9, open: 9, answer: 10,
   // `clear` closes the two that are finished and `unblock` answers the one that
   // is not, which is the difference the product exists to teach. AND THE THREE
   // WAYS A ROW LEAVES THE INBOX ARE THREE BEATS. `clear` closes the two that
   // are finished, `snooze` puts off the one that is real work and not for
   // today, and `unblock` answers the one an agent is stopped on. The rail's
   // note beat that sat at thirteen is gone with the rail.
-  clear: 10, snooze: 11, unblock: 12,
+  clear: 11, snooze: 12, unblock: 13,
   // AND BEAT FIFTEEN IS THE TOUR OF THE OTHER TWO TABS. It is one beat even
   // though it takes three presses of Tab, the same way `working` and `open`
   // share beat ten: it is one thing happening, which is somebody being shown
   // where the work they just did has gone.
-  where: 13,
+  where: 14,
   // AND THE BOARD IS THE BEAT AFTER THE TOUR (2026-10-01). The tour says where
   // the work went; the board is the same work laid out by what is happening to
   // it, which is the one view the walk never opened. The walk has to show the
   // view somebody uses to see what a whole team is up to, not only the tabs.
-  board: 14,
-  command: 15, done: 16, landed: 16,
+  board: 15,
+  command: 16, done: 17, landed: 17,
 };
 
 export interface FirstRun {
@@ -149,6 +163,13 @@ export interface FirstRun {
   /** When the example task was sent, so the line can change if it runs long. */
   sentAt: number | null;
   /**
+   * HOW MANY TIMES SHE HAS REPLIED TO HER OWN THREAD (w-9f6975906c, 2026-10-06).
+   *  Her words: "your first task doesn't let you actually reply but forces you
+   *  to do 'e'". The answer offers to make the summary shorter, so a reply is
+   *  answered: the thread goes back to work and comes back with the change,
+   *  the same two beats it took the first time. Absent means none. */
+  replies?: number;
+  /**
    * The three example rows of beat eight, once they are really in the store.
    *  Empty until her own first task is closed, which is what stages them. It
    *  used to be the agents screen that did it, and that screen is at the end of
@@ -193,6 +214,20 @@ export function tutorialRun(product: string | null): FirstRun {
  *
  *  It is a function rather than a branch inside the effect that calls it so the
  *  rule can be tested without a window, the same as `finishCard` above. */
+/**
+ * WHERE A REPLY TO HER OWN THREAD HAS GOT TO (2026-10-06), read off the two
+ *  stamps the ledger keeps rather than off the words. `replyWritten`: her reply
+ *  is in and nothing has answered it yet. `replyAnswered`: a result has been
+ *  written since her reply. A row with no reply on it is neither. */
+type Stamped = { wrote?: Record<string, { ts: number } | undefined> };
+const stamp = (it: Stamped, field: string) => it.wrote?.[field]?.ts ?? 0;
+export function replyWritten(it: Stamped): boolean {
+  return stamp(it, 'answer') > 0 && stamp(it, 'answer') >= stamp(it, 'result');
+}
+export function replyAnswered(it: Stamped): boolean {
+  return stamp(it, 'answer') > 0 && stamp(it, 'result') > stamp(it, 'answer');
+}
+
 export function afterCommand(run: { tutorial?: boolean } | null): 'done' | 'end' {
   return run?.tutorial ? 'end' : 'done';
 }
@@ -207,6 +242,9 @@ export type Event =
   | { t: 'made'; product: string }
   | { t: 'practice'; product: string; examples: string[]; backdrop?: string[] }
   | { t: 'sent'; item: string; at: number }
+  // She replied to her own thread on the beat that shows it, which sends it
+  // back to work exactly as sending it did.
+  | { t: 'replied'; at: number }
   | { t: 'answered' }
   | { t: 'staged'; examples: string[] }
   | { t: 'finish' };
@@ -256,9 +294,16 @@ export function advance(s: FirstRun, e: Event): FirstRun {
       // off the screen until the beat that clears them. The old walk staged
       // them mid-flight because they went into the person's own project and
       // could not be there a moment sooner than they were needed.
-      return { ...s, practice: e.product, examples: e.examples, backdrop: e.backdrop ?? [], step: 'make' };
+      // AND IT OPENS ON THE LOOK AROUND, NOT ON THE PLUS (2026-10-06).
+      return { ...s, practice: e.product, examples: e.examples, backdrop: e.backdrop ?? [], step: 'tour' };
     case 'sent':
       return { ...s, item: e.item, sentAt: e.at, step: 'working' };
+    case 'replied':
+      // Only from the beat where her own thread is open. Anywhere else a reply
+      // is the app's business and the walk stays where it is.
+      return s.step === 'answer' && s.item
+        ? { ...s, sentAt: e.at, replies: (s.replies ?? 0) + 1, step: 'working' }
+        : s;
     // AND IT DOES NOT OPEN ITSELF.
     case 'answered':
       return s.step === 'working' ? { ...s, step: 'open' } : s;
@@ -462,6 +507,8 @@ export const ANSWER_AFTER_MS = 2_000;
  *  down until it clears whatever is in the way, so with other rows in the list
  *  it is printed under somebody else's. Everything arrives when the walk ends,
  *  which is one render later. */
+const WITH_EXAMPLES: Step[] = ['tour', 'tabs', 'make', 'task', 'working', 'open', 'answer', 'clear', 'snooze', 'unblock'];
+
 export function walkRows<T extends { id: string }>(rows: T[], run: FirstRun | null): T[] {
   // NOTHING IS IN THE LIST UNTIL SHE PRESSES THE BUTTON. `landed` is the walk
   // over, and it is the first moment anything the app found on the machine is
@@ -479,8 +526,18 @@ export function walkRows<T extends { id: string }>(rows: T[], run: FirstRun | nu
   // examples the walk staged. Everything else the store has by now (the
   // directive that making the project composed, and the example task she has
   // already closed) stays out until the walk ends, one render later.
-  if (run.step === 'clear' || run.step === 'snooze' || run.step === 'unblock') {
-    const keep = new Set(run.examples);
+  // AND SINCE 2026-10-06 THE PRACTICE INBOX IS FULL FROM THE FIRST LOOK. The
+  // look around has to stand on an inbox with something in it, and once the
+  // examples have been shown, hiding them while she writes her first thread
+  // would be an inbox emptying itself for no reason. So from `look` to
+  // `unblock` the list holds the four examples, her own thread, and the
+  // practice team's running and scheduled work (never its waiting rows, which
+  // are for the board). Codex, consulted on the round: "Preserve those
+  // examples afterward; don't make the inbox mysteriously empty when creation
+  // begins."
+  if (WITH_EXAMPLES.includes(run.step)) {
+    const backdrop = (run.backdrop ?? []).filter((_, i) => PRACTICE_BACKDROP[i]?.state !== 'needs');
+    const keep = new Set([...(run.examples ?? []), run.item, ...backdrop].filter(Boolean) as string[]);
     return rows.filter((r) => keep.has(r.id));
   }
   // AND THE TOUR SEES HER OWN TASK TOO. Beat fifteen walks Inbox, In progress
@@ -741,6 +798,9 @@ export function beatRows(
   const there = new Set(rows.map((r) => r.id));
   const one = (id: string | null) => (id && there.has(id) ? [id] : []);
   if (step === 'clear') return clearIds(rows, run, waitingAt, laterAt);
+  // HER OWN THREAD, on the beat that opens it (2026-10-06). The examples share
+  // the list with it now, so ↵ aimed at one of them is the wrong row.
+  if (step === 'open') return one(run.item);
   if (step === 'snooze') return ctx.picking ? [] : one(laterId(run, laterAt));
   if (step === 'unblock') return ctx.opened ? [] : one(waitingId(run, waitingAt));
   return [];
@@ -990,6 +1050,9 @@ export const COPY = {
   handHead: 'This is the tutorial.',
   handLine: 'A practice project with a few example threads, and nothing you do in here is saved. Your own project is made already and it is waiting behind this.',
   handGo: 'Start the tutorial',
+  // The quiet second button under it (2026-10-06, hers: "Add a skip button,
+  // obviously a secondary button").
+  handSkip: 'Skip the tutorial',
 
   /* * THE QUIET WAY OUT, AND THE LINE THAT ASKS THEM TO STAY.
 
@@ -1204,6 +1267,8 @@ export interface FinishCard {
    * Whether a card is drawn at all. False in ONE state now: her Mac has not
    *  finished being read. */
   show: boolean;
+  /** Nothing to bring in, so the walk goes straight on to the landing. */
+  skip?: boolean;
   /** Whether Claude Code is standing in the way. */
   blocked: boolean;
   /** Whether the way into the inbox is drawn at all. */
@@ -1251,6 +1316,16 @@ export function finishCard(
   if (!agents.read) {
     return { show: false, blocked: false, go: false, head: '', line: '' };
   }
+  // NOTHING TO BRING IN IS NO CARD AGAIN (w-9f6975906c, 2026-10-06), which
+  // reverses 08-28 for the person it was drawn for. A brand new user finished
+  // the tutorial and was met with "No agents to bring across yet" and a
+  // ~/.claude/agents path: a successful walk ending on what reads as a failed
+  // setup. Codex, consulted on the round: "makes successful completion feel
+  // like failed setup." The walk goes straight to the landing, and ⌘K still
+  // has its import row for the day there is something to bring.
+  if (!agents.some) {
+    return { show: false, skip: true, blocked: false, go: true, head: '', line: '' };
+  }
   return { show: true, blocked: false, go: true, head: COPY.bringHead, line: COPY.agentsOffer };
 }
 
@@ -1297,6 +1372,21 @@ export interface Coach {
    * is one press and one cap, which is the whole card already, and a row of one
    * light would be a progress bar with one step. */
   caps?: number;
+  /**
+   * WHETHER THE CARD CARRIES ITS OWN NEXT BUTTON (2026-10-06). Only the look
+   * around has one: those two beats ask nothing of the app, so the card is the
+   * thing being pressed, by ↵ or by a click on the button. */
+  next?: boolean;
+  /**
+   * A SECOND KEY THE BEAT ALSO TAKES (2026-10-06), named in the sentence but
+   * not drawn as a cap. The first thread's answer takes R to reply and E to
+   * mark it done; with only one key allowed, R was answered as a wrong press. */
+  alt?: string;
+  /**
+   * ANY KEY MOVES ON (2026-10-06), her words: "i keep accidentally hitting these
+   * commands like making a new project in tutorial. it should just respond with
+   * any key to moving to the next step". Only the ⌘K list's half has it. */
+  anyKey?: boolean;
   /* * AND THERE IS NO `why` ANY MORE, WHICH IS THE TWO-LINE BUDGET (w-9a6ea066d6,
      2026-08-28). Four beats carried a third sentence under a hairline rule saying why the
      beat mattered.
@@ -1312,7 +1402,7 @@ export interface Coach {
 
 const say = (
   quiet: string, lead: string, key: string | null = null, tail = '',
-  extra: { caps?: number } = {},
+  extra: { caps?: number; next?: boolean; alt?: string; anyKey?: boolean } = {},
 ): Coach => ({ quiet, lead, key, tail, ...extra });
 
 /**
@@ -1412,20 +1502,43 @@ export function coach(
   //  sentence that was being guessed. See `nextTab`.
   ctx: {
     opened?: boolean; view?: string; picking?: boolean; left?: number; palette?: boolean;
+    /** Whether the page is drawn as the board, for the board beat's second half. */
+    board?: boolean;
     tabs?: readonly string[];
     /** The team strip's tab names, when that strip is what is drawn. */
     tabNames?: Readonly<Record<string, string>>;
     /** Whether this Mac is signed into a team, so the walk names people only then. */
     team?: boolean;
+    /** How many times she has replied to her own thread (`FirstRun.replies`). */
+    replies?: number;
   } = {},
 ): Coach | null {
   switch (step) {
+    // THE LOOK AROUND (2026-10-06). The idea is the loud line here, because
+    // there is nothing to press but Next: the inbox first, then the tabs.
+    // Codex's draft for the first was "Agents return threads here when work is
+    // ready or they need your help"; this says the same in her register.
+    case 'tour':
+      return say('This is your inbox. Each row is a thread, a job you gave an agent.',
+        'Threads come back here when they are done or need you.', '↵', '', { next: true });
+    // AND ALL FOUR TABS ARE NAMED HERE SINCE THE SECOND ROUND (2026-10-06):
+    // the tab tour after inbox zero went down to one press, so this is where
+    // Later and Done are said. "In progress is agents at work" read as broken
+    // grammar to a persona tester and is gone.
+    case 'tabs':
+      return say('Later is what you put off, and Done is what you finished.',
+        'Needs you is what waits on you. In progress is what agents are doing.', '↵', '', { next: true });
     case 'make':
       // "Thread", not task, the word since w-ec62ab6b38 (2026-09-28).
       // AND IT NAMES THE BUTTON AS WELL AS THE KEY (2026-10-01). Somebody who
       // has never used a keyboard shortcut reads "Press N" as a riddle; the
       // button is on the screen with those words on it.
-      return say('A thread is a job you hand to an agent.', 'Press ', 'N', ' or click New thread to write your first one.');
+      // AND THE QUIET LINE MOVED ON (2026-10-06): what a thread is was said
+      // two cards earlier, on the look around.
+      // AND IT DOES NOT SAY "WRITE" (round two): the card opens with the words
+      // already in it, and four persona testers and Codex all tripped on being
+      // told to write something that was written for them.
+      return say('Now send one of your own. This first one is written for you.', 'Press ', 'N', ' or click New thread.');
     /* * AND THE GREY LINE IS GONE FROM THIS BEAT.
     */
     /* * WHO THE THREAD IS FOR, which is the card's first line and was the
@@ -1450,11 +1563,10 @@ export function coach(
        key for To: the row is a button and that is the whole of how it opens.
        The loud line is therefore the click alone, with no cap, rather than a
        cap invented to keep the shape of the other cards. */
-    // THE PERSON HALF ONLY ON A TEAM (w-db6f5e331e): on a Mac with no team the
-    // list draws agents alone, and the public app does not mention a team.
-    case 'who':
-      return say(ctx.team ? 'Every thread goes to an agent, or to a person on your team.' : 'Every thread goes to an agent, and To is where you pick which one.',
-        'Click To at the top of the card to see who it can go to.');
+    // THE BEAT ABOUT TO IS GONE (2026-10-06): single player, so a thread only
+    // ever goes to an agent. Its two sentences were 'Every thread goes to an
+    // agent, and To is where you pick which one.' over 'Click To at the top of
+    // the card to see who it can go to.'
     // AND IT NAMES THE BUTTON TOO (2026-10-01). Same round and same reason as
     // `make` above: the card's own button is the thing the ring is round, and
     // ⌘↵ is the least guessable cap in the walk.
@@ -1469,6 +1581,9 @@ export function coach(
       return sinceSent >= SLOW_AFTER_MS
         ? say('Your agent is running.',
           'Still reading. A bigger project takes longer than this one, and the answer will be here when it comes.')
+        // HERS, WORD FOR WORD (tests/the-first-task-is-not-an-agent). Two persona
+        // testers read "a few seconds" as a promise about real work in round two
+        // (2026-10-06); that is noted for her and the sentence is not touched.
         : say('Your agent is running.', 'It comes back in a few seconds.');
     /* * THREE "IT"S AND NOT ONE NOUN.
     */
@@ -1476,7 +1591,7 @@ export function coach(
     // so clicking it is already allowed and already opens it; the card simply
     // had not said so.
     case 'open':
-      return say('Your agent worked on its own, and this row is what it sent back.',
+      return say(ctx.replies ? 'Your agent made the change and sent it back.' : 'Your agent worked on its own, and this row is what it sent back.',
         'Press ', '↵', ' or click the row to open it.');
     /* * AND THE REQUESTED SENTENCE.
 
@@ -1502,8 +1617,20 @@ export function coach(
     // Summary, which is two clicks behind a three-dot button, and naming it
     // would make this the longest line in the walk. The mouse route on this
     // beat is replying, which is the half somebody is here to learn.
+    // AND A REPLY IS ANSWERED NOW (2026-10-06), so the card says what to reply
+    // with: the answer offers to make the summary shorter. After a reply the
+    // thread is finished and closing it is the one move left.
     case 'answer':
-      return say('Every thread ends one of two ways.', 'Click the box below to reply, or press ', 'E', ' to close it.');
+      return ctx.replies
+        // "MARK IT DONE", NOT "CLOSE IT" (round two): the row's chip says Done,
+        // the tab says Done and the card said close, three words for one key
+        // to every persona tester. Done is the app's word (./done-word.ts).
+        ? say('It is shorter now, so this one is finished.', 'Press ', 'E', ' to mark it done.')
+        // R IS THE APP'S REPLY KEY, AND IT IS THE CAP (2026-10-06), hers: "it's
+        // actually R to reply". E rides as the beat's second key, so pressing
+        // it is still taken, and the box writes the reply in for her when it
+        // opens (App.tsx, PRACTICE_REPLY).
+        : say('Your agent finished, and offers to make it shorter.', 'Press ', 'R', ' or click the reply box to ask for that, or E to mark it done.', { alt: 'E' });
     // THE THREE ARE EXAMPLES AND THE CARD HAS TO SAY SO.
     //
     // The old line was 'Three of these are waiting on you.' over 'Clear them.
@@ -1554,7 +1681,7 @@ export function coach(
       return say(
         ctx.left === 1
           ? 'This one is finished too.'
-          : 'This one is finished. Z brings back anything you close.',
+          : 'This one is finished. Z brings back anything you mark done.',
         // AND THIS BEAT NAMES NO CLICK, WHICH IS THE ONE PLACE THE ROUND OF
         // 2026-10-01 COULD NOT GO. Every other beat now says what to click as
         // well as what to press, because every other beat rings something the
@@ -1576,7 +1703,8 @@ export function coach(
         // and Mark done is a row in the three-dot menu inside an opened thread
         // (threads/ThreadMenu.tsx). Until the app grows one, the honest card is
         // the key alone. Same for `snooze` below.
-        'Press ', 'E', ' to close it.',
+        // "Mark it done" since round two, the word on the row's own chip.
+        'Press ', 'E', ' to mark it done.',
         { caps: 2 },
       );
     /* * ---------------------------------------------------------------------
@@ -1640,8 +1768,11 @@ export function coach(
         ? say(
           // AND THE STRIP IS THE CLICK (2026-10-01). The ring is round the
           // strip of options, so the first of them is already clickable.
-          'Your agent gave you three answers to pick from.',
-          'Press ', '1', ' or click the first answer to send it.',
+          // AND IT SAYS WHERE THE ANSWER GOES (round two, 2026-10-06). "Send
+          // it" read to two persona testers as emailing their team; the
+          // answer goes to the agent and nowhere else.
+          'Pick one and the agent carries on with it. Nothing goes to anyone else.',
+          'Press ', '1', ' or click the first answer.',
         )
         /*
          * AND THE WARNING IS IN THE QUIET LINE.
@@ -1657,8 +1788,14 @@ export function coach(
         // LOST HERE. That warning has nowhere else to live now the third line
         // is gone, and tests/the-coaching-card-is-two-lines asserts "stopped
         // for good" is on this card.
+        // AND THE DANGER IS SAID WITHOUT THE ALARM (round two, 2026-10-06).
+        // "An agent is stopped here. Closing it leaves it stopped for good."
+        // read to all four persona testers as something having broken, and
+        // "for good" sat badly beside the card that had just said Z brings
+        // back anything you close. The danger is the same: done on this row
+        // leaves the agent waiting forever.
         : say(
-          'An agent is stopped here. Closing it leaves it stopped for good.',
+          'This agent is waiting on your answer, and marking it done leaves it stuck.',
           'Press ', '↵', ' or click the row to open it.',
         );
     // AND CLEARING THEM GOES STRAIGHT ON TO ⌘K. The finish card says the same
@@ -1754,17 +1891,27 @@ export function coach(
          running with an empty inbox behind it. The quiet line names the thing
          she is looking at and the screen makes the point better than the
          sentence did; five words carry what the sentence added. */
+      // AND IT IS THE LAST STOP SINCE ROUND TWO (2026-10-06). The look around
+      // names all four tabs before the first thread, so walking Later and Done
+      // again here was the same lesson twice: every persona tester and Codex
+      // called the five presses of Tab the longest stretch of the walk. One
+      // press, to the payoff, and the next press goes on.
       if (ctx.view === 'progress') {
         return say(
           'The agent you answered is here, working without you.',
-          'Press ', cap, sends,
+          // Any tab ends the beat from here, so the click is any tab.
+          'Press ', cap, ' or click another tab to go on.',
           // AND THE THIRD LINE IS FOLDED IN RATHER THAN DROPPED.
         );
       }
       if (ctx.view === 'done') {
+        // THE LAST STOP SAYS SO (2026-10-06). The next tab along is All, which
+        // is not a stop, so the press ends the tour wherever it lands and the
+        // sentence does not promise a tab.
+        const last = nextTab(ctx.tabs, ctx.view) === 'all';
         return say(
           'Everything you finished is kept here.',
-          'Press ', cap, sends,
+          'Press ', cap, last ? ' to go on.' : sends,
         );
       }
       // AND THIS IS THE ONE TAIL THAT IS NOT LOOKED UP, because it names no tab
@@ -1776,6 +1923,9 @@ export function coach(
       // told the goal, and the tutorial is the better place for it than the
       // intro. This is the moment she has just reached it, and the intro no
       // longer says it. The first sentence stays word for word in front of it.
+      // THE OPENING IS HERS, WORD FOR WORD (tests/the-walk-teaches-undo-snooze-
+      // and-notes). Three persona testers called "Great!" patronising in round
+      // two (2026-10-06); that is noted for her and the sentence is not touched.
       return say(
         'Great! Your inbox is now empty. That is inbox zero, and it is the goal.',
         'Press ', cap, `${or} to see where it all went.`,
@@ -1866,11 +2016,17 @@ export function coach(
        that) now flips list and board from the inbox, so the card reads like
        every other beat, the key and then the click. The beat still ends on
        the board being on the screen, which B reaches in one press. */
+    // AND IT HAS A SECOND HALF SINCE 2026-10-06: the board stays up under a
+    // card saying what it is, and B again goes back to the list, which ends
+    // the beat. See the effect in App.tsx for why.
     case 'board':
-      return say(
-        'The board is everything at once, in columns for what is happening to it.',
-        'Press ', 'B', ' or click View and filters, then Board.',
-      );
+      return ctx.board
+        ? say('This is the board: every thread, in columns for what is happening to it.',
+          'Press ', 'B', ' again to go back to the list.')
+        : say(
+          'The board shows everything at once, in columns.',
+          'Press ', 'B', ' or click View and filters, then Board.',
+        );
     /* * AND IT SAYS WHAT THE LIST IS RATHER THAN NAMING THE SCREEN. Then the one key
        that leaves, because esc is also what ends the walk.
     */
@@ -1884,9 +2040,17 @@ export function coach(
         // instead of closing the list. esc is not a shortcut anybody has to
         // remember, which is the whole worry this round is about: it is the key
         // every window on the Mac closes on.
+        // AND IT SAYS WHERE THE TUTORIAL LIVES WHILE THE LIST IS OPEN
+        // (2026-10-06), because that is the moment the word means something.
+        // AND ANY KEY OR CLICK FINISHES IT (2026-10-06), hers: "i keep
+        // accidentally hitting these commands like making a new project in
+        // tutorial. it should just respond with any key to moving to the next
+        // step". Nothing in the list runs while the walk is on it; the press
+        // closes the list and the walk goes on. "Type tutorial" says "later",
+        // because typing here now finishes rather than searches.
         ? say(
-          `Every command in ${NAME} is in this list.`,
-          'Press ', 'esc', ' to close it.',
+          `Every command in ${NAME} is in this list. Later, type tutorial here to take this again.`,
+          'Press any key to finish.', null, '', { anyKey: true },
         )
         // AND THE QUIET LINE ON THIS HALF IS NOT THE ONE THAT ROUND CUT. That
         // round emptied it, and it was right to: it said "Back at an empty
@@ -1895,7 +2059,16 @@ export function coach(
         // Wha the budget is two lines, the other half is only read if she
         // presses, and being told out loud on a call is what this exists to
         // stop.
+        // AND ONE INSTRUCTION, NOT TWO (2026-10-06). The loud line read "Press
+        // ⌘K or click the ⌘ button, or N for your first real thread": two
+        // different moves in one sentence, and a ⌘ button the default layout
+        // does not draw. N for a first thread is what the landing says.
         : say(
+          'Last one: every command is one key away.',
+          'Press ', '⌘K', ' to see them all.',
+        );
+      /* WHAT IT SAID UNTIL 2026-10-06:
+        say(
           'Everything you just did is one key away. So is this: type tutorial.',
           // ⌘K finds commands; N starts a thread. The old line read as if ⌘K
           // started one (a persona test, 2026-10-01).
@@ -1912,6 +2085,7 @@ export function coach(
           // (tests/the-coaching-card-is-two-lines.test.mjs).
           'Press ', '⌘K', ' or click the ⌘ button, or N for your first real thread.',
         );
+      */
     default:
       return null;
   }
@@ -2197,7 +2371,7 @@ export const HELD_EVENTS = ['pointerdown', 'mousedown', 'mouseup', 'click', 'dbl
 
 /* * * THE STEPS THAT ARE NOT A SCREEN.
 */
-export const COACHED: Step[] = ['make', 'who', 'task', 'working', 'open', 'answer', 'clear', 'snooze', 'unblock', 'where', 'board', 'command'];
+export const COACHED: Step[] = ['tour', 'tabs', 'make', 'task', 'working', 'open', 'answer', 'clear', 'snooze', 'unblock', 'where', 'board', 'command'];
 
 /**
  * What the tether points AT, per step, as a CSS selector into the real app.
@@ -2230,10 +2404,11 @@ export const ANCHOR: Partial<Record<Step, string[]>> = {
   // tutorial drew no card at all. A persona test sat on that blank screen for
   // over thirty seconds.
   make: ['button[aria-label="New thread"]', '.th-right button[data-hint="new-task"]', 'button.th-new'],
-  // THE CARD'S FIRST LINE, which is who the thread is for. The row is a button
-  // that opens the list of everyone it could go to, and that list is the whole
-  // of the beat.
-  who: ['.tc-card .tc-to-menu', '.tc-card .tc-word'],
+  // THE LOOK AROUND (2026-10-06): the list of threads, then the tabs over it,
+  // the same strips the tab tour rings.
+  tour: ['.list-pane .list', '.list-pane'],
+  tabs: ['.th-bar .tm-tabs', '.workspace-navigation .workspace-tabs', '.tabs'],
+  // `who` rang the card's To line until it went on 2026-10-06.
   // THE NEW THREAD CARD'S OWN SEND (2026-10-01). It was `.modal.compose
   // .dock-send`, the retired one-line card, which the walk kept for one round
   // after the rest of the app moved: "the tutorial is using the wrong
@@ -2628,6 +2803,9 @@ function liveStep(step: unknown, madeSomething: boolean): Step {
   // The retired theme picker. The introduction before it is done, so the walk
   // goes on from the hand-off into the practice project.
   if (step === 'look') return 'hand';
+  // The retired beat about who a thread is to. The card was open on it, so the
+  // walk goes on from the beat that sends it.
+  if (step === 'who') return 'task';
   // The three retired introduction slabs, for the same reason.
   if (step === 'inbox' || step === 'away' || step === 'goal') return 'hand';
   return madeSomething ? 'landed' : 'welcome';
@@ -2680,12 +2858,11 @@ export function restartFirstRun(store: Store): void {
 export const STEPS: Step[] = [
   'welcome', 'plan', 'folder', 'name',
   'hand',
-  // WHO IT IS TO SITS BETWEEN OPENING THE CARD AND SENDING IT (2026-10-01),
-  // because that is where it is on the card: To is its first line. The walk had
-  // no beat for it at all, and it needs one: picking who a thread is to, and
-  // that a thread can go to a person as well as to an agent, is the thing the
-  // walk was silent about.
-  'make', 'who', 'task', 'working', 'open', 'answer',
+  // THE LOOK AROUND, then writing one. The beat about who a thread is to sat
+  // between `make` and `task` from 2026-10-01 to 2026-10-06 and went with
+  // single player.
+  'tour', 'tabs',
+  'make', 'task', 'working', 'open', 'answer',
   'clear', 'snooze', 'unblock', 'where', 'board', 'command', 'done', 'landed',
 ];
 
@@ -2714,7 +2891,7 @@ export const SLAB_OF: Partial<Record<Step, number>> = {};
  *  NOT in here, because by then the practice project is gone and the inbox
  *  behind the card is their own. */
 export const IN_PRACTICE: Step[] = [
-  'make', 'who', 'task', 'working', 'open', 'answer', 'clear', 'snooze', 'unblock', 'where', 'board', 'command',
+  'tour', 'tabs', 'make', 'task', 'working', 'open', 'answer', 'clear', 'snooze', 'unblock', 'where', 'board', 'command',
 ];
 
 /** Whether the practice band is on the screen right now. */

@@ -62,13 +62,19 @@ describe('when it is on the screen', () => {
     for (const id of needs) expect(tour).not.toContain(id);
   });
 
-  it('nothing before the tour shows any of it', () => {
-    // THE CASE THAT MUST NOT MATCH. Beats thirteen to fifteen are about the
-    // staged rows alone, and a sixth row in the inbox there is a row the card
-    // never mentions.
-    for (const step of ['make', 'task', 'working', 'open', 'answer', 'clear', 'snooze', 'unblock']) {
-      for (const id of BACKDROP) expect(shown(step)).not.toContain(id);
+  // THE WORK BEING DONE AND THE WORK PUT OFF ARE THERE FROM THE LOOK AROUND
+  // SINCE 2026-10-06, whose second stop says "In progress is agents at work"
+  // and has to have some to point at. They are never in Needs you, so the
+  // beats that are about the inbox still see only their own rows there.
+  it('before the tour, shows the running and scheduled work and never the rows that need you', () => {
+    // THE CASE THAT MUST NOT MATCH. A row needing you in the inbox on the
+    // clearing beats is a row the card never mentions.
+    for (const step of ['tour', 'tabs', 'make', 'task', 'working', 'open', 'answer', 'clear', 'snooze', 'unblock']) {
+      for (const id of needs) expect(shown(step), step).not.toContain(id);
+      for (const id of rest) expect(shown(step), step).toContain(id);
     }
+    // And nothing at all before the practice project exists.
+    for (const id of BACKDROP) expect(shown('hand')).not.toContain(id);
   });
 
   it('the finish card still stands over an empty inbox', () => {

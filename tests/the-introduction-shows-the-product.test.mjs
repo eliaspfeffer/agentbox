@@ -145,7 +145,10 @@ describe('the walk teaches the goal', () => {
     // any time", which is a permission rather than a step, and a tester did
     // not know what to do with it.
     // w-ec62ab6b38 (2026-09-28): her word for a row is thread now, not task.
-    expect(said).toContain('first real thread');
+    // ON THE LANDING SINCE 2026-10-06, the last thing the walk says, rather
+    // than as a second instruction in the ⌘K card's one sentence.
+    expect(said).not.toMatch(/any time\.?$/);
+    expect(COPY.finishNext.join(' ').toLowerCase()).toContain('real thread');
     // AND THE HALF SHE SEES AFTER THE PRESS IS THE OTHER ROUND ON THIS CARD,
     // which stays: the card used to go off the screen the moment the palette
     // opened, so the beat that teaches ⌘K said nothing at the one moment
@@ -199,8 +202,10 @@ describe('the walk teaches the goal', () => {
     const listed = coach('unblock', 0);
     expect(listed.key).toBe('↵');
     const warns = `${listed.quiet}`.toLowerCase();
-    expect(warns).toContain('stopped');
-    expect(warns).toContain('stopped for good');
+    // Without the alarm since 2026-10-06 ("stopped for good" read as broken to
+    // four persona testers); the danger of marking it done is still the line.
+    expect(warns).toContain('waiting on your answer');
+    expect(warns).toContain('leaves it stuck');
     expect(listed.why).toBeUndefined();
     const opened = coach('unblock', 0, { opened: true });
     expect(opened.key).toBe('1');

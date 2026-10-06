@@ -30,8 +30,12 @@ describe('1. the introduction hands straight to the practice round', () => {
     // and `make` is the first beat inside it.
     // No slab is in front of it since 2026-10-05 (w-9f6975906c): `name` is.
     expect(nextStep('name')).toBe('hand');
-    expect(nextStep('hand')).toBe('make');
-    expect(IN_PRACTICE[0]).toBe('make');
+    // And the first beat inside it is the look around since 2026-10-06, two
+    // stops in front of the plus.
+    expect(nextStep('hand')).toBe('tour');
+    expect(nextStep('tour')).toBe('tabs');
+    expect(nextStep('tabs')).toBe('make');
+    expect(IN_PRACTICE[0]).toBe('tour');
   });
 
   it('leaves naming the project handing straight to the introduction', () => {
@@ -48,10 +52,13 @@ describe('1. the introduction hands straight to the practice round', () => {
     // long it is. Seventeen since the theme step went with the themes
     // (w-9e434e8671).
     // Sixteen since 2026-10-05 (w-9f6975906c): the three slabs at four to six went.
-    expect(N_BEATS).toBe(16);
+    // Seventeen since 2026-10-06: the look around at five and six, To gone.
+    expect(N_BEATS).toBe(17);
     expect(BEAT.name).toBe(3);
     expect(BEAT.hand).toBe(4);
-    expect(BEAT.make).toBe(5);
+    expect(BEAT.tour).toBe(5);
+    expect(BEAT.tabs).toBe(6);
+    expect(BEAT.make).toBe(7);
   });
 
   it('gives every step a dot, in the order the walk runs, with none repeated out of place', () => {
@@ -216,7 +223,8 @@ describe('3. there is a quiet way out, and it asks them to stay', () => {
     }
     expect(IN_PRACTICE).not.toContain('done');
     expect(IN_PRACTICE).not.toContain('landed');
-    expect(IN_PRACTICE[0]).toBe('make');
+    // The look around is the first of them since 2026-10-06.
+    expect(IN_PRACTICE[0]).toBe('tour');
     expect(IN_PRACTICE.at(-1)).toBe('command');
   });
 

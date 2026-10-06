@@ -68,9 +68,14 @@ export const PRACTICE_FLAG = 'practice';
 // and dead code. A persona test of an executive assistant found all of it
 // written for programmers. A meeting summary, a reply, a tidy list, a budget and a
 // date are work everybody on a team does, engineers included.
+// AND THE BODY IS WHAT A PERSON WOULD TYPE (2026-10-06). It read "Practice is a
+// pretend project, not your work and not Agentbox. This one is written for you
+// already.", which is the walk talking to her, and it was then drawn in her
+// own thread as a message from "You". The band over the window already says
+// none of it is hers.
 export const PRACTICE_TASK = {
   title: 'Add a summary to the Practice meeting notes.',
-  body: `Practice is a pretend project, not your work and not ${NAME}. This one is written for you already.`,
+  body: 'Keep it short: what we decided, and what is still open.',
 };
 
 /**
@@ -84,6 +89,21 @@ export const PRACTICE_TASK = {
  * THE REAL LEDGER.*/
 export const PRACTICE_ANSWER =
   'Done, and it is five lines at the top of the notes: three decisions and two open questions. Say the word and I will make it shorter.';
+
+/**
+ * AND WHAT COMES BACK WHEN SHE TAKES IT UP ON THAT (2026-10-06). The answer
+ *  above offers to make it shorter, so a reply is answered with the shorter
+ *  one, whatever the reply says: this is the practice project and nothing in
+ *  it reads her words. It is finished, so the next move is closing it. */
+/**
+ * AND THE REPLY ITSELF, WRITTEN IN FOR HER (2026-10-06), hers: "when they do
+ *  that or click the inbox have it auto-write something". It is in the reply
+ *  box when her first thread comes back, so R or a click opens it ready to send,
+ *  the same way the first thread's own words were ready in the card. */
+export const PRACTICE_REPLY = 'Make it shorter, please.';
+
+export const PRACTICE_REPLY_ANSWER =
+  'Shorter now: three lines at the top of the notes, one for what was decided, one for what is open, and one for who owns each open question.';
 
 /**
  * WHAT IS IN THE PRACTICE PROJECT'S SIDEBAR NOTE.

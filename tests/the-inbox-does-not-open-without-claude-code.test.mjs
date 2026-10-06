@@ -113,8 +113,10 @@ describe('the one Mac the walk will not let into the inbox', () => {
     // one: a Mac with no Claude Code is stopped whatever else is true of it.
     expect(finishCard({ missing: true }, { read: true, some: false }))
       .toMatchObject({ show: true, blocked: true, go: false });
+    // And with Claude Code and nothing to import, no card at all since
+    // 2026-10-06: the walk goes on to the landing.
     expect(finishCard({ missing: false }, { read: true, some: false }))
-      .toMatchObject({ show: true, blocked: false });
+      .toMatchObject({ show: false, skip: true, blocked: false });
     // And a Mac still being read is not drawn on at all.
     expect(finishCard({ missing: false }, { read: false, some: false }))
       .toMatchObject({ show: false, blocked: false });
