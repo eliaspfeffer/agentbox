@@ -146,6 +146,7 @@
       },
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",
+      "x64ArchFiles": "Contents/Resources/app.asar.unpacked/node_modules/node-pty/prebuilds/darwin-*/*",
       "target": [
         {
           "target": "dmg",
