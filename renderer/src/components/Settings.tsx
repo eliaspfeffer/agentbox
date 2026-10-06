@@ -473,7 +473,12 @@ export function agentCountOptions(w: {
   const accounts = Math.max(1, w.accounts?.length ?? 1);
   const auto = w.agentsTotal ?? w.capacity ?? 1;
   const say = (n: number) => `${n} ${n === 1 ? 'agent' : 'agents'}`;
-  const options = [{ value: 'auto', label: `Automatic — ${say(auto)}` }];
+  // NO DASH BETWEEN THE TWO HALVES. This read "Automatic — 6 agents" until she
+  // saw it on the screen: "looks quite bad". The app has refused em dashes in
+  // the words a person reads since `machineNote` was written, and a menu label
+  // is read exactly as a sentence is, so the rule covers it too. A bracket is
+  // what the rest of this file reaches for when a label carries a second fact.
+  const options = [{ value: 'auto', label: `Automatic (${say(auto)})` }];
   for (let n = 1; n <= (w.slotsMax ?? 12); n++) options.push({ value: String(n), label: say(n * accounts) });
   return options;
 }
