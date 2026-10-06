@@ -86,11 +86,16 @@ describe('the toast after an answer carries the same way in', () => {
     expect(app).toContain('`Option ${option.n} → ${item.productName}`, undefined, undefined, { product: item.product, id: item.id }');
   });
 
+  // The fourth argument here is `stay`, for the same reason it is on the
+  // approval above: the No beside a thread this one filed closes THAT row from
+  // the parent, and advancing would throw you off the thread you pressed from
+  // (w-9cf2b43110). Every other caller leaves it out. The fifth stays
+  // undefined, which is what this test is about.
   it('closing a row still says nothing but what happened', () => {
     // Closing, scheduling and priority are not answers: nothing starts on them
     // and there is nothing to go and watch, so those toasts stay plain.
     // The fifth argument, the way in, stays undefined; the last is only what
     // the thread says if a Z takes the close back (w-c78d1e1607).
-    expect(app).toContain('}, `Closed: ${clipToSentence(item.title, TOAST_TITLE)}`, undefined, undefined, undefined, undid);');
+    expect(app).toContain('}, `Closed: ${clipToSentence(item.title, TOAST_TITLE)}`, undefined, stay, undefined, undid);');
   });
 });

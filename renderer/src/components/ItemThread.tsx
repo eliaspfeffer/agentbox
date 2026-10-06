@@ -56,7 +56,7 @@ const REFRESH_MS = 8_000;
 // screen is the kind of drift this row exists to end.
 const THEM = 'The agent';
 
-export function ItemThread({ item, engine, session, opening, sending, filed = [], onOpenFiled, onApproveFiled, onOpenOrigin, onSendNow, md, clean, onOpenDoc, chat = false, onQuote, onHandToAgent }: {
+export function ItemThread({ item, engine, session, opening, sending, filed = [], onOpenFiled, onApproveFiled, onRejectFiled, onOpenOrigin, onSendNow, md, clean, onOpenDoc, chat = false, onQuote, onHandToAgent }: {
   item: WorkItem;
   // THE THREADS THIS ONE FILED, EACH ON THE TURN THAT FILED IT (w-2e13752a85).
   // They used to be one block under the whole conversation, which left the
@@ -67,6 +67,10 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
   onOpenFiled?: (id: string) => void;
   // The press that starts one, beside its name (w-9cf2b43110).
   onApproveFiled?: (id: string) => void;
+  // And the one that settles it without starting it: the ordinary close,
+  // reachable from the row it is about, which is what stops this thread
+  // coming back a day later (list-rules, `threadsOwedAnAnswer`).
+  onRejectFiled?: (id: string) => void;
   // IN A CHAT ONLY: put a message's words in the reply box as a quote, and turn
   // this conversation into work. The second was a line under the whole
   // conversation and is an action on one message now (w-560647d4db).
@@ -255,7 +259,7 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
   // `atFoot` and is drawn under the checkpoint, which is that turn's last word.
   const made = filedOnTurn(events, filed);
   const madeList = (rows: typeof filed) => (
-    <ThreadsMade rows={rows} label="Filed from this thread" onOpen={(id) => onOpenFiled?.(id)} onApprove={onApproveFiled} />
+    <ThreadsMade rows={rows} label="Filed from this thread" onOpen={(id) => onOpenFiled?.(id)} onApprove={onApproveFiled} onReject={onRejectFiled} />
   );
 
   // THE ANSWER, WHOLE, AT THE FOOT OF THE CONVERSATION.

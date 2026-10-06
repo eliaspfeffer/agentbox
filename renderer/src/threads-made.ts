@@ -61,7 +61,11 @@ export function approvableFiled(
   i: Pick<WorkItem, 'status' | 'kind' | 'labels' | 'answer'> & { start?: 'later' | 'now' },
   state: ThreadStateWord | null,
 ): boolean {
-  if (state !== 'waiting') return false;
+  // WAITING OR LATER, since w-9cf2b43110's second half: a proposal is no
+  // longer a row in Needs you, it waits in Later, and the press has to follow
+  // it there or the feature is gone the day the rule changed. Running, done
+  // and no-list-at-all are still refused, which is what the undo window needs.
+  if (state !== 'waiting' && state !== 'scheduled') return false;
   if (i.status !== 'open') return false;
   if (i.kind === 'question' || i.kind === 'review') return false;
   if ((i.labels ?? []).includes('founder')) return false;

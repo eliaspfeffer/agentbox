@@ -422,7 +422,7 @@ function ArtifactEmbed({ product, path, fallback, open, onOpen }: {
 // not the user's, and it is the part that was unnecessary. `filesFromRuns` stays,
 // because App.tsx still reads it to choose the design a card opens itself on.
 
-export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlot, inlineArtifacts, headerTarget, cornerHeaderTarget, crumbFrom, item, parent, blockedBy, filed = [], runningMode, engineChoice, runningEngine, codexModels, codexModelDefault, session, live, stoppable: stoppableIn, productDir, repoDir, selectedOption, interruptedFrom, onBackToInterrupted, returnedFromSnooze, scheduledUntil, scheduledByAgent, replyOpen, sending, stalled, openDoc, resumeAt, onScrolled, onOpenDoc, onRedeliver, onUnschedule, onClose, onResolve, onPick, onReply, onReplySend, onReplyClose, onStop, onRunNow, onReopen, onSnooze, onReveal, onOpenItem, onApproveFiled, onNotice, onHandToAgent, onAddPeople }: {
+export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlot, inlineArtifacts, headerTarget, cornerHeaderTarget, crumbFrom, item, parent, blockedBy, filed = [], runningMode, engineChoice, runningEngine, codexModels, codexModelDefault, session, live, stoppable: stoppableIn, productDir, repoDir, selectedOption, interruptedFrom, onBackToInterrupted, returnedFromSnooze, scheduledUntil, scheduledByAgent, replyOpen, sending, stalled, openDoc, resumeAt, onScrolled, onOpenDoc, onRedeliver, onUnschedule, onClose, onResolve, onPick, onReply, onReplySend, onReplyClose, onStop, onRunNow, onReopen, onSnooze, onReveal, onOpenItem, onApproveFiled, onRejectFiled, onNotice, onHandToAgent, onAddPeople }: {
   previewSample?: string;
   /**
    * A MESSAGE FROM A PERSON IS NOT WORK UNTIL SHE SAYS SO. The one line under
@@ -490,6 +490,10 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   // row itself, except that it does not take you off the thread you are
   // reading: that is the whole point of the press being here.
   onApproveFiled?: (item: WorkItem) => void;
+  // AND SAYING NO TO ONE (w-9cf2b43110): the ordinary close, from the row it
+  // is about. A proposal nobody answers brings this thread back a day later,
+  // so there has to be a way to settle one without starting it.
+  onRejectFiled?: (item: WorkItem) => void;
   // Said out loud when a file a worker named is not in this product. Nothing
   // else on the card can tell her a chip failed.
   onNotice: (text: string) => void;
@@ -588,6 +592,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   // The door into a thread this one filed, wherever that list ends up drawn.
   const openFiled = (id: string) => { const hit = filed.find((r) => r.id === id); if (hit) onOpenItem(hit.item); };
   const approveFiled = (id: string) => { const hit = filed.find((r) => r.id === id); if (hit) onApproveFiled?.(hit.item); };
+  const rejectFiled = (id: string) => { const hit = filed.find((r) => r.id === id); if (hit) onRejectFiled?.(hit.item); };
   // ONE REASON THERE IS NO REPLY BOX, and it is a box. There was not one. A
   // quiet session is not stuck on anything — it is sitting at its prompt,
   // listening — and a message written to it lands and is worked on, measured
@@ -1410,6 +1415,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
               filed={filed.map((r) => ({ ...r, at: r.item.createdAt ?? 0 }))}
               onOpenFiled={openFiled}
               onApproveFiled={onApproveFiled && approveFiled}
+              onRejectFiled={onRejectFiled && rejectFiled}
               // REPLY, AND HAND IT TO AN AGENT, both on the message rather than
               // under the conversation (w-560647d4db). Reply takes the same
               // road the review strip already takes into the reply box: write
@@ -1431,6 +1437,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
             label="Filed from this thread"
             onOpen={openFiled}
             onApprove={onApproveFiled && approveFiled}
+            onReject={onRejectFiled && rejectFiled}
           />
         )}
 
