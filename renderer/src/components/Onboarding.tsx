@@ -328,12 +328,14 @@ export function Cap({ cap, className }: { cap: string; className?: string }) {
  * the accompanying text was "the biggest weakness", so the quiet line says
  * where you are and the loud line says the one thing to press, and neither has
  * to do the other's job. */
-function Card({ say, beat, pointed, knock = 0, onNext }: {
+function Card({ say, beat, pointed, knock = 0, onNext, onSkip }: {
   say: Coach;
   /**
    * WHAT NEXT DOES, on the two look-around cards (2026-10-06). ↵ does the same
    * and never reaches the app, where it would open whichever row is selected. */
   onNext?: () => void;
+  /** The quiet way past this one card, drawn on every coaching card. */
+  onSkip?: () => void;
   /**
    * HOW MANY STRAY CLICKS THE WALK HAS ANSWERED ON THIS BEAT, from `Ringed`.
    *  It rides into the same counter a wrong KEY bumps, so the cap answers a
@@ -503,6 +505,10 @@ function Card({ say, beat, pointed, knock = 0, onNext }: {
          remain; `coach` in onboarding.ts names them one by one.
        */}
       {say.caps && say.key ? <Lights of={say.caps} cap={say.key} left={beat?.length} /> : null}
+      {/* THE WAY PAST THIS ONE CARD (2026-10-06), hers: "a very subtle little
+          button on each card that allows you to skip it". Small, dim, in the
+          card's corner, so the instruction stays the thing to read. */}
+      {onSkip ? <button type="button" className="fr-skip-step" onClick={onSkip}>Skip this step</button> : null}
     </>
   );
 }
@@ -807,11 +813,13 @@ function adriftAt(): { x: number; y: number; w: number } {
 
 function Ringed({
   selector, boundsSel, underSel, makesRoom, say, beside, besideRing, besideOf, beat, pointed,
-  hold, also, onNext,
+  hold, also, onNext, onSkip,
 }: {
   selector: string[]; boundsSel?: string; underSel?: string; say: Coach;
   /** The look around's Next. See `Card`. */
   onNext?: () => void;
+  /** The quiet "Skip this step". See `Card`. */
+  onSkip?: () => void;
   /**
    * THE LIST OPENS A GAP RATHER THAN THE CARD LEAVING ITS RING. See
    *  `makeRoom` above for the measurements. This is set on the beats that ring
@@ -1025,7 +1033,7 @@ function Ringed({
           className="fr-tether fr-adrift"
           style={{ left: adrift.x, top: adrift.y, maxWidth: adrift.w }}
           role="status"
-        ><Card say={say} beat={beat} pointed={pointed} knock={knock} onNext={onNext} /></p>
+        ><Card say={say} beat={beat} pointed={pointed} knock={knock} onNext={onNext} onSkip={onSkip} /></p>
       </>
     );
   }
@@ -1087,7 +1095,7 @@ function Ringed({
               : Math.max(240, Math.min(TEXT_MAX + 60, window.innerWidth - besideLeft(geo, besideOf) - 200)),
           }}
           role="status"
-        ><Card say={say} beat={beat} pointed={pointed} knock={knock} onNext={onNext} /></p>
+        ><Card say={say} beat={beat} pointed={pointed} knock={knock} onNext={onNext} onSkip={onSkip} /></p>
       ) : (
         <p
           ref={cardRef}
@@ -1096,7 +1104,7 @@ function Ringed({
             ? { left: geo.text.x, top: geo.text.y, maxWidth: geo.text.w }
             : { right: geo.text.right, top: geo.text.y, maxWidth: geo.text.w }}
           role="status"
-        ><Card say={say} beat={beat} pointed={pointed} knock={knock} onNext={onNext} /></p>
+        ><Card say={say} beat={beat} pointed={pointed} knock={knock} onNext={onNext} onSkip={onSkip} /></p>
       )}
     </>
   );
@@ -1751,12 +1759,14 @@ function Statement({ head, line, go, onNext, skip, onSkip }: {
 export function Onboarding({
   run, claude, home, opened, waiting, later, picking, palette, board, replying, view, tabs, products = [],
   beat, pointed,
-  onEvent, onStep, onSkipToApp, onPractice, onDone, onFiled, onProjectMade, onRecheck, onLeave, onShut,
+  onEvent, onStep, onSkipToApp, onPractice, onDone, onFiled, onProjectMade, onRecheck, onLeave, onShut, onSkipStep,
 }: {
   /** Skip the tutorial from its hand-off page, into her own project. */
   onLeave?: () => void;
   /** Shut whatever is open over the app; the ⌘K beat's any-key press. */
   onShut?: () => void;
+  /** The quiet "Skip this step" on every coaching card (2026-10-06). */
+  onSkipStep?: () => void;
   run: FirstRun;
   /**
    * EVERY PROJECT THE APP HAS. The last card files into one, so it needs the
@@ -2338,6 +2348,8 @@ export function Onboarding({
         // plus. Read off the walk's one order like every other Next.
         // AND ON THE ⌘K LIST ANY PRESS SHUTS IT, which is what ends that beat.
         onNext={say.next ? () => go(run.step) : say.anyKey ? onShut : undefined}
+        // EVERY CARD CAN BE SKIPPED (2026-10-06), quietly: see `skipStep`.
+        onSkip={onSkipStep}
       />
     );
   }

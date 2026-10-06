@@ -170,6 +170,14 @@ export interface FirstRun {
    *  the same two beats it took the first time. Absent means none. */
   replies?: number;
   /**
+   * PRACTICE ROWS A SKIPPED STEP TOOK OFF THE SCREEN (2026-10-06). Hers: "make
+   *  sure there's a way to bypass each step... because we keep getting stuck
+   *  here and losing those users." Skipping a beat about rows hides those rows
+   *  rather than acting on them, so the beat's own "is it over" check sees them
+   *  gone and the walk goes on exactly as if they had been dealt with. They are
+   *  practice rows and the project is archived at the end. */
+  hidden?: string[];
+  /**
    * The three example rows of beat eight, once they are really in the store.
    *  Empty until her own first task is closed, which is what stages them. It
    *  used to be the agents screen that did it, and that screen is at the end of
@@ -237,6 +245,42 @@ export function walkMayOpen(run: { step: Step; item: string | null }, id: string
   if (run.step === 'open' || run.step === 'answer') return !!run.item && id === run.item;
   if (run.step === 'unblock') return !!waiting && id === waiting;
   return false;
+}
+
+/**
+ * WHAT "SKIP THIS STEP" DOES TO THE WALK (2026-10-06), hers: "make sure there's
+ *  a way to bypass each step, for instance, a very subtle little button on each
+ *  card that allows you to skip it". Pure, so every beat's answer is tested.
+ *
+ *  A beat about rows hides them (`FirstRun.hidden`) and stays put: the beat's
+ *  own "are they gone" check then moves it on, the same way it does when she
+ *  deals with them, so nothing downstream learns a second path. Every other
+ *  beat moves to the next one. Her own thread's five beats all go to the
+ *  clearing beat with her thread hidden, because each of them waits on a
+ *  thread that may not exist yet. `command` answers null: ending the walk is
+ *  App.tsx's, the same way the palette closing ends it.
+ */
+export function skipStep(
+  run: FirstRun,
+  rows: { id: string }[],
+  waitingAt: number,
+  laterAt: number,
+): FirstRun | null {
+  const hide = (ids: (string | null | undefined)[]) => ({
+    ...run, hidden: [...(run.hidden ?? []), ...ids.filter((x): x is string => !!x)],
+  });
+  switch (run.step) {
+    case 'tour': return stepTo(run, 'tabs');
+    case 'tabs': return stepTo(run, 'make');
+    case 'make': case 'task': case 'working': case 'open': case 'answer':
+      return { ...hide([run.item]), step: 'clear' };
+    case 'clear': return hide(clearIds(rows, run, waitingAt, laterAt));
+    case 'snooze': return hide([laterId(run, laterAt)]);
+    case 'unblock': return hide([waitingId(run, waitingAt)]);
+    case 'where': return stepTo(run, 'board');
+    case 'board': return stepTo(run, 'command');
+    default: return null;
+  }
 }
 
 export function afterCommand(run: { tutorial?: boolean } | null): 'done' | 'end' {
@@ -525,6 +569,11 @@ export function walkRows<T extends { id: string }>(rows: T[], run: FirstRun | nu
   // over, and it is the first moment anything the app found on the machine is
   // hers to see.
   if (!run || run.step === 'landed') return rows;
+  // AND A ROW A SKIPPED STEP TOOK OFF IS OFF FOR THE REST OF THE WALK.
+  if (run.hidden?.length) {
+    const gone = new Set(run.hidden);
+    rows = rows.filter((r) => !gone.has(r.id));
+  }
   // AND THE FINISH CARD STANDS OVER AN EMPTY INBOX, because that is what it
   // says. Those two rows were Claude Code sessions already running on her Mac,
   // which Agentbox finds by itself and which have nothing to do with the import
