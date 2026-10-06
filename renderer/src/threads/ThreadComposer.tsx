@@ -31,6 +31,7 @@
 
 import { PriorityIcon } from '../components/Priority';
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { PRACTICE_TASK } from '../../../shared/first-run-practice.mjs';
 import type { Product, WorkItem } from '../types';
 import type { Engine } from '../../../shared/engines.mjs';
 import { ENGINES } from '../../../shared/engines.mjs';
@@ -340,7 +341,12 @@ export function ThreadComposer({
   /* ------------------------------- send --------------------------------- */
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const message = threadMessage(text, person ? [] : attachments);
+  // THE TUTORIAL'S SEND CAN NEVER BE A DEAD END (w-9f6975906c, 2026-10-05).
+  // Her screenshot: the tutorial's card open with an empty box, so Send stayed
+  // off and she was stuck for fifteen minutes. If the practice text did not
+  // arrive, Send sends it anyway.
+  const typed = !text.trim() && scripted && !person ? `${PRACTICE_TASK.title}\n\n${PRACTICE_TASK.body}` : text;
+  const message = threadMessage(typed, person ? [] : attachments);
   const refusal = person ? null : practiceRefusal(product, { scripted: !!scripted });
   // The other reason Send can be off: there is no project to send to at all
   // (w-f8d123be62). It gets a line in the bar rather than a tooltip, because
