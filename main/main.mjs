@@ -33,6 +33,7 @@ import { createUpdater } from './updater.mjs';
 import { createSourceUpdater } from './source-updater.mjs';
 import { installNotifier } from './notify.mjs';
 import { DOC_SCHEMES, DocGrants, docPath } from './doc-scheme.mjs';
+import { quietTheFramesScrollbars } from './frame-scrollbars.mjs';
 import { IMG_SCHEMES, imgPath, mediaResponse, mediaType, servable } from './img-scheme.mjs';
 import { hotWindowVerdict, storeHasWork } from './dev-window.mjs';
 import { writeHeldThenReload } from './write-before-reload.mjs';
@@ -887,6 +888,10 @@ async function createWindow() {
   window.webContents.on('will-attach-webview', (_e, webPreferences) => {
     webPreferences.autoplayPolicy = 'document-user-activation-required';
   });
+
+  // A page in the pane hides its scrollbar until you scroll, like the app's own
+  // (frame-scrollbars.mjs). Without it, a mouse on macOS gets a white track.
+  quietTheFramesScrollbars(window.webContents);
 
   // Escape must ALWAYS leave the junk browser, even when the guest page has
   // focus and would otherwise swallow the key. Intercept it below the page.
