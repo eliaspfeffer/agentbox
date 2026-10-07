@@ -17,8 +17,11 @@ import { applyTaskShape, resolveTaskShape, TASK_SHAPE_KEY } from './task-shape';
 // only way a crash in the window reaches anyone. Name, message and stack and
 // nothing else: the main process scrubs them before they touch disk, and the
 // window is never trusted to decide what is safe to say.
+// The report is a promise, and a try/catch does not see it fail: a report that
+// could not be delivered came back as an unhandled rejection, which this same
+// listener reported, in a loop. So its failure is swallowed where it happens.
 const sendCrash = (name: string, message: string, stack: string) => {
-  try { window.zero?.crash?.({ name, message, stack }); } catch {}
+  try { Promise.resolve(window.zero?.crash?.({ name, message, stack })).catch(() => {}); } catch {}
 };
 window.addEventListener('error', (e) => {
   sendCrash(e.error?.name ?? 'Error', e.error?.message ?? String(e.message ?? ''), e.error?.stack ?? '');

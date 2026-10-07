@@ -287,6 +287,25 @@ export function afterCommand(run: { tutorial?: boolean } | null): 'done' | 'end'
   return run?.tutorial ? 'end' : 'done';
 }
 
+/**
+ * WHETHER ENDING THIS WALK IS "FIRST RUN FINISHED" (2026-10-06). It was on the
+ *  approved list for seven weeks and never sent, so nobody could say how many
+ *  new installs got through setup. Walked to the end counts; the quiet way out
+ *  is not finishing, and the tutorial re-run from ⌘K is not a first run. */
+export function finishedTheFirstRun(run: { tutorial?: boolean } | null, { practised }: { practised: boolean }): boolean {
+  return !!run && practised && !run.tutorial;
+}
+
+/**
+ * WHICH SETUP STEP TO COUNT, by its number in `BEAT` (2026-10-06), so the
+ *  steps where new people stop can be seen. Null for the tutorial re-run, which
+ *  is not setup, and for `landed`, which is the end and is counted as
+ *  `first_run_finished` instead. */
+export function setupStepCount(run: { step: Step; tutorial?: boolean } | null): number | null {
+  if (!run || run.tutorial || run.step === 'landed') return null;
+  return BEAT[run.step] ?? null;
+}
+
 export type Event =
   | { t: 'start' }
   | { t: 'folder'; path: string }
