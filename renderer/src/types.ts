@@ -973,6 +973,7 @@ declare global {
   interface Window {
     zero?: {
       snapshot(): Promise<Snapshot>;
+      olderItems?(p: { offset: number; limit: number }): Promise<{ items: WorkItem[]; more: boolean }>;
       crash?(p: { name: string; message: string; stack: string }): Promise<unknown>;
       // A count. The name is checked against the approved list in the main
       // process, which attaches everything else; nothing from this side rides along.

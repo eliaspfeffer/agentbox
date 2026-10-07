@@ -348,6 +348,11 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     }
   });
 
+  // The Done and All tabs' next page of finished threads the snapshot's 8 MB
+  // read left out, asked for as she scrolls to their foot (main/store.mjs).
+  ipcMain.handle('zero:older-items', (_e, { offset = 0, limit = 50 } = {}) =>
+    store.listOlderItems({ offset: Number(offset) || 0, limit: Math.min(Number(limit) || 50, 200) }));
+
   ipcMain.handle('zero:snapshot', () => {
     const now = Date.now();
     const items = store.listItems(now);

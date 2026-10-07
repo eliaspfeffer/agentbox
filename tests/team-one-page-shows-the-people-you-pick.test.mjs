@@ -88,7 +88,8 @@ describe('teammateRows: their threads, under the tab they belong to', () => {
     expect(rows('progress', ['p-maya'])).toEqual(['b']);
     expect(rows('snoozed', ['p-maya'])).toEqual(['c']);
     expect(rows('done', ['p-maya'])).toEqual(['d']);
-    expect(rows('all', ['p-maya'])).toEqual(['a', 'b', 'c']);
+    // All is every thread, finished ones included, since 2026-10-07.
+    expect(rows('all', ['p-maya'])).toEqual(['a', 'b', 'c', 'd']);
   });
   it('only the people picked, never a hidden card, never your own card twice', () => {
     expect(rows('inbox', [ME, 'p-maya', 'p-theo']).sort()).toEqual(['a', 'e']);

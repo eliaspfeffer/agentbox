@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('zero', {
   terminal: (payload) => ipcRenderer.invoke('zero:terminal', payload),
   agentUpdate: (payload) => ipcRenderer.invoke('zero:agent-update', payload),
   snapshot: () => ipcRenderer.invoke('zero:snapshot'),
+  olderItems: (payload) => ipcRenderer.invoke('zero:older-items', payload),
   dashboard: (slug) => ipcRenderer.invoke('zero:dashboard', slug),
   commandCatalog: (payload) => ipcRenderer.invoke('zero:command-catalog', payload),
   remoteControl: (payload) => ipcRenderer.invoke('zero:remote-control', payload),
