@@ -31,7 +31,8 @@ const KIND_LABEL={html:'Design',image:'Picture',markdown:'Document',code:'Code'}
 /** Every file a message names, as small tiles side by side. */
 export function MessageFiles({look,product,paths,revision,openDoc,onOpen}:{look:TileLook;product:string;paths:string[];revision:number;openDoc?:string|null;onOpen:(path:string)=>void}) {
   if (!paths.length) return null;
-  return <div className="message-files" data-look={look} aria-label="Files">
+  const ticks=typeof localStorage!=='undefined' ? localStorage.getItem('zero.frameTicks') ?? undefined : undefined;
+  return <div className="message-files" data-look={look} data-ticks={ticks} aria-label="Files">
     {paths.map(path=><MessageFile key={path} look={look} product={product} path={path} revision={revision} open={openDoc===path} onOpen={()=>onOpen(path)}/>)}
   </div>;
 }
