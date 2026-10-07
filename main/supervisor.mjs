@@ -145,6 +145,9 @@ const DIGEST_MIN_MS = 12 * 3_600_000;
 // invariant is self-healing, which without this would mean re-spawning every
 // fifteen seconds against whatever made the first attempt fail.
 const DIGEST_RETRY_MS = 30 * 60_000;
+// How long a row the namer could not name waits before it is asked about again,
+// so it cannot hold the rows behind it (nameTheRows).
+const NAME_RETRY_MS = 10 * 60_000;
 // A spawn that exits faster than this did no real work (limit hit, bad flag,
 // untrusted workspace); consecutive fast exits back spawning off exponentially.
 const FAST_EXIT_MS = 45_000;
@@ -2612,20 +2615,57 @@ export class Supervisor {
    * binary, a bad exit, a timeout or a reply that is not a name, and `nameItem`
    * treats '' as a no-op. A row that cannot be named keeps her own title, which
    * is what every row in her store had before this existed.
+   *
+   *   A MISS WAITS TEN MINUTES. Newest first with no memory of a failure meant
+   *   one row that could not be named was picked again every tick, and every
+   *   row behind it waited for good (tests/a-row-is-named-on-an-account-that-has-room).
    */
-  nameTheRows(items) {
-    if (this._naming) return;
+  nameTheRows(items, now = Date.now()) {
+    if (this._naming) return undefined;
+    this._nameMisses ??= new Map();
+    const key = (i) => `${i.product}:${i.id}`;
     const next = items
-      .filter((i) => wantsName(i))
+      .filter((i) => wantsName(i) && !(now - (this._nameMisses.get(key(i)) ?? -Infinity) < NAME_RETRY_MS))
       .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0];
-    if (!next) return;
+    if (!next) return undefined;
     this._naming = true;
-    nameRow(next, { claudeBin: this.config?.claudeBin, codexBin: this.config?.codexBin, engine: this._homeEngine() })
+    return this._askSmall((opts) => nameRow(next, opts))
       .then((label) => {
-        if (label) this.store.nameItem(next.product, next.id, label);
+        if (!label) { this._nameMisses.set(key(next), now); return; }
+        this._nameMisses.delete(key(next));
+        this.store.nameItem(next.product, next.id, label);
       })
       .catch((e) => console.warn('zero: could not name a row:', e.message))
       .finally(() => { this._naming = false; });
+  }
+
+  /**
+   * ONE SMALL-MODEL QUESTION, ASKED ON AN ACCOUNT THAT HAS ROOM.
+   *
+   * The namer and the message sorter used to spawn with the app's own
+   * environment, which bills the default Claude account and nothing else. On
+   * 2026-10-06 that account hit its weekly limit; agents moved to the second
+   * account and the namer did not, so every call died in two seconds and no
+   * row was named for a day.
+   *
+   * So the Claude accounts are tried in turn, the ones not resting first, and
+   * the first answer wins. Each is asked once, so a Mac with every account at
+   * its limit costs one call per account and then waits for the next pass. The
+   * environment is a worker's (`_workerEnv`), so no API key from the app's own
+   * shell reaches the call. Codex keeps its one login, as before.
+   */
+  async _askSmall(ask) {
+    const engine = this._homeEngine();
+    const opts = { claudeBin: this.config?.claudeBin, codexBin: this.config?.codexBin, engine };
+    if (engine === 'codex') return ask(opts);
+    const env = this._workerEnv(engine);
+    const all = this._profilesFor(engine);
+    const healthy = new Set(this._healthyProfiles());
+    for (const profile of [...all.filter((p) => healthy.has(p)), ...all.filter((p) => !healthy.has(p))]) {
+      const answer = await ask({ ...opts, env: profile === 'default' ? env : { ...env, CLAUDE_CONFIG_DIR: profile } });
+      if (answer) return answer;
+    }
+    return '';
   }
 
   /**
@@ -2656,7 +2696,7 @@ export class Supervisor {
   }
 
   _askPriority(latest) {
-    return sortMessage(latest, { claudeBin: this.config?.claudeBin, codexBin: this.config?.codexBin, engine: this._homeEngine() });
+    return this._askSmall((opts) => sortMessage(latest, opts));
   }
 
   sayItOnEveryStrandedRow(items, now = Date.now()) {

@@ -208,8 +208,14 @@ export function nameRow(item, opts = {}) {
  * through `clean`. The same promise as `nameRow` and for the same reason: ''
  * for every failure, never a throw. Shared with the message sorter
  * (main/message-priority.mjs).
+ *
+ * `env` is which account the call bills. Without one it inherits the app's own
+ * environment, which is always the default Claude account: when that account
+ * hit its weekly limit on 2026-10-06 every call died in two seconds and no row
+ * was named for a day, while agents ran on the second account. The supervisor
+ * passes one per account and walks them (`_askSmall` in main/supervisor.mjs).
  */
-export function askSmallModel(prompt, clean, { claudeBin, codexBin = null, engine = 'claude', model = NAME_MODEL, timeoutMs = NAME_TIMEOUT_MS } = {}) {
+export function askSmallModel(prompt, clean, { claudeBin, codexBin = null, engine = 'claude', model = NAME_MODEL, timeoutMs = NAME_TIMEOUT_MS, env } = {}) {
   return new Promise((resolve) => {
     const bin = engine === 'codex' ? codexBin : claudeBin;
     if (!bin) return resolve('');
@@ -219,6 +225,7 @@ export function askSmallModel(prompt, clean, { claudeBin, codexBin = null, engin
         // Somewhere that is nobody's project. A naming call must not pick up a
         // CLAUDE.md, a settings file or a hook from whatever folder it lands in.
         cwd: '/tmp',
+        ...(env ? { env } : {}),
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch {
