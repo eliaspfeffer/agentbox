@@ -1,8 +1,8 @@
 import { RemoteControl } from './RemoteControl';
 import {DirectReview} from './DirectReview';
-import {MessageFiles, type FileLook} from './MessageFiles';
+import {MessageFiles, type TileLook} from './MessageFiles';
 // PROPOSAL SWITCH, w-9ed13d72b3: comes out once one look is picked.
-const fileLook = (typeof localStorage !== 'undefined' ? localStorage.getItem('zero.fileCards') : null) as FileLook | null;
+const fileLook = (typeof localStorage !== 'undefined' ? localStorage.getItem('zero.fileCards') : null) as TileLook | null;
 import {reviewLabEnabled, reviewContextDraft} from '../review-lab';
 import { sourceReference } from '../source-reference.mjs';
 import { TaskTerminal } from './TaskTerminal';
