@@ -4,6 +4,38 @@
  * 180px box. */
 export type Glance = {title:string|null;line:string|null;blocks:{heading:boolean;text:string}[]};
 
+type Reader = {
+  readDoc:(p:{product:string;src:string})=>Promise<{ok:boolean;text?:string}>;
+  codeChange:(p:{product:string;src:string})=>Promise<{ok:boolean;change?:unknown}>;
+  resolveDoc:(p:{product:string;src:string})=>Promise<{ok:boolean}>;
+};
+
+/** Whether a file a message names opens at all, and what it says. `null`
+ * means no tile: in w-9ed13d72b3 three bare names from another repository
+ * each drew a 200px box saying "Preview unavailable". */
+export async function glanceFile(reader:Reader, product:string, path:string):Promise<Glance|null> {
+  const kind = kindOf(path);
+  try {
+    if (kind === 'markdown' || kind === 'html') {
+      const r = await reader.readDoc({product, src:path});
+      return r.ok ? fileGlance(r.text ?? '', kind) : null;
+    }
+    if (kind === 'code') {
+      const r = await reader.codeChange({product, src:path});
+      return r.ok && r.change ? {title:'Code changes', line:null, blocks:[]} : null;
+    }
+    const r = await reader.resolveDoc({product, src:path});
+    return r.ok ? {title:null, line:null, blocks:[]} : null;
+  } catch {
+    return null;
+  }
+}
+
+function kindOf(path:string) {
+  const clean = path.split(/[?#]/)[0] ?? '';
+  return /\.html?$/i.test(clean) ? 'html' : /\.(md|markdown)$/i.test(clean) ? 'markdown' : /\.change$/i.test(clean) ? 'code' : 'other';
+}
+
 export function fileGlance(text:string, kind:'markdown'|'html'|string|null = 'markdown'):Glance {
   return kind === 'html' ? htmlGlance(text) : markdownGlance(text);
 }

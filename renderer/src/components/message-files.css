@@ -1,55 +1,27 @@
-/* The files a message names, as small tiles side by side. Square, on the
-   app's own lines and mono labels, like the panes around them. */
+/* The files a message names, as small framed tiles side by side
+   (w-9ed13d72b3). No box: the window's L-shaped corner marks, shorter and
+   tucked onto the picture's own corners, in the plain line colour. */
 .message-files {display:grid;gap:10px;width:100%;max-width:680px;margin:12px 0 20px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));}
 .message-files:empty {display:none;}
-.message-file {position:relative;display:flex;flex-direction:column;min-width:0;font:inherit;color:var(--text);text-align:left;cursor:pointer;padding:0;background:var(--wash);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;}
-.message-file:hover,.message-file[aria-pressed="true"] {border-color:var(--line-strong);background:var(--wash-strong,var(--wash));}
-.message-file-kind {font:10px/14px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--text-faint);white-space:nowrap;}
-.message-file-name {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:17px;color:var(--text-dim);}
-.message-file-title {display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;line-height:18px;color:var(--text);}
-.message-file-line {display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;line-height:17px;color:var(--text-faint);}
-.message-file-face {position:relative;display:block;height:104px;overflow:hidden;background:var(--doc-page,var(--surface));border-bottom:1px solid var(--line);}
+.message-file {position:relative;display:flex;flex-direction:column;min-width:0;font:inherit;color:var(--text);text-align:left;cursor:pointer;padding:0;background:none;border:0;}
+.message-file-face {position:relative;display:block;height:104px;background:var(--doc-page,var(--surface));}
+.message-file-face > :not(.tick) {overflow:hidden;}
 .message-file-face .retained-preview {display:block;height:100%;}
 .message-file-face .artifact-thumbnail {width:100%;height:100%;aspect-ratio:auto;max-height:none;border:0;border-radius:0;}
 .message-file-face .artifact-thumbnail iframe {opacity:1!important;filter:none;}
-.message-file-foot {display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;}
+.message-file .tick {position:absolute;z-index:1;width:8px;height:8px;border:0 solid var(--line-strong);}
+.message-file .tick.tl {top:0;left:0;border-top-width:1px;border-left-width:1px;}
+.message-file .tick.tr {top:0;right:0;border-top-width:1px;border-right-width:1px;}
+.message-file .tick.bl {bottom:0;left:0;border-bottom-width:1px;border-left-width:1px;}
+.message-file .tick.br {bottom:0;right:0;border-bottom-width:1px;border-right-width:1px;}
+.message-file:hover .tick,.message-file[aria-pressed="true"] .tick {border-color:var(--text-faint);}
+.message-file:focus-visible .tick {border-color:var(--text-dim);}
+.message-file-foot {display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0 0;}
+.message-file-name {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:17px;color:var(--text-dim);}
+.message-file-kind {font:10px/14px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--text-faint);white-space:nowrap;}
 
 /* A document as a small page: its title and opening lines, set as text. */
 .message-file-page {display:flex;flex-direction:column;gap:3px;height:100%;padding:10px 12px;overflow:hidden;-webkit-mask-image:linear-gradient(180deg,#000 70%,transparent);mask-image:linear-gradient(180deg,#000 70%,transparent);}
 .message-file-page b {font-size:12px;font-weight:500;line-height:16px;color:var(--text);margin-bottom:2px;}
 .message-file-page em {font-style:normal;font-size:10px;font-weight:500;line-height:14px;color:var(--text-dim);margin-top:3px;}
 .message-file-page span {font-size:10px;line-height:14px;color:var(--text-faint);}
-
-/* Index card: no picture, the file's own name for itself and what it says. */
-.message-files[data-look="card"] .message-file {gap:4px;padding:11px 12px 10px;}
-.message-files[data-look="card"] .message-file-kind {margin-bottom:2px;}
-.message-files[data-look="card"] .message-file-name {margin-top:auto;padding-top:6px;font:11px/15px var(--mono);color:var(--text-faint);}
-
-/* Strip: a square picture beside the words, two to a row. */
-.message-files[data-look="strip"] {grid-template-columns:repeat(auto-fill,minmax(300px,1fr));}
-.message-files[data-look="strip"] .message-file {flex-direction:row;align-items:stretch;}
-.message-files[data-look="strip"] .message-file-face {flex:none;width:112px;height:76px;border-bottom:0;border-right:1px solid var(--line);}
-.message-files[data-look="strip"] .message-file-page {padding:7px 8px;gap:1px;}
-.message-files[data-look="strip"] .message-file-page b {font-size:9px;line-height:12px;}
-.message-files[data-look="strip"] .message-file-page em,.message-files[data-look="strip"] .message-file-page span {font-size:8px;line-height:11px;}
-.message-files[data-look="strip"] .message-file-text {display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0;padding:8px 12px;}
-
-/* Frame: no box, small L-shaped corner marks around the picture, like the
-   window's own but closer in and quieter. */
-.message-files[data-look="frame"] {--tick-len:10px;--tick-off:6px;--tick-ink:var(--skin-tick,var(--line-strong));}
-.message-files[data-look="frame"][data-ticks="tucked"] {--tick-len:8px;--tick-off:0px;--tick-ink:var(--line-strong);}
-.message-files[data-look="frame"][data-ticks="close"] {--tick-len:6px;--tick-off:3px;--tick-ink:var(--line);}
-.message-files[data-look="frame"][data-ticks="hairline"] {--tick-len:9px;--tick-off:0px;--tick-ink:var(--line-strong);}
-.message-files[data-look="frame"][data-ticks="two"] {--tick-len:8px;--tick-off:3px;--tick-ink:var(--line-strong);}
-.message-files[data-look="frame"] .message-file {background:none;border:0;overflow:visible;}
-.message-files[data-look="frame"] .message-file-face {margin:var(--tick-off);border:0;overflow:visible;}
-.message-files[data-look="frame"] .message-file-face > :not(.tick) {overflow:hidden;}
-.message-files[data-look="frame"][data-ticks="hairline"] .message-file-face {outline:1px solid color-mix(in srgb,var(--line) 45%,transparent);}
-.message-files[data-look="frame"] .tick {position:absolute;z-index:1;width:var(--tick-len);height:var(--tick-len);border:0 solid var(--tick-ink);}
-.message-files[data-look="frame"] .tick.tl {top:calc(-1 * var(--tick-off));left:calc(-1 * var(--tick-off));border-top-width:1px;border-left-width:1px;}
-.message-files[data-look="frame"] .tick.tr {top:calc(-1 * var(--tick-off));right:calc(-1 * var(--tick-off));border-top-width:1px;border-right-width:1px;}
-.message-files[data-look="frame"] .tick.bl {bottom:calc(-1 * var(--tick-off));left:calc(-1 * var(--tick-off));border-bottom-width:1px;border-left-width:1px;}
-.message-files[data-look="frame"] .tick.br {bottom:calc(-1 * var(--tick-off));right:calc(-1 * var(--tick-off));border-bottom-width:1px;border-right-width:1px;}
-.message-files[data-look="frame"][data-ticks="two"] .tick.tr,.message-files[data-look="frame"][data-ticks="two"] .tick.bl {display:none;}
-.message-files[data-look="frame"] .message-file:hover .tick,.message-files[data-look="frame"] .message-file[aria-pressed="true"] .tick {border-color:var(--text-faint);}
-.message-files[data-look="frame"] .message-file-foot {padding:7px 0 0;}

@@ -1,8 +1,6 @@
 import { RemoteControl } from './RemoteControl';
 import {DirectReview} from './DirectReview';
-import {MessageFiles, type TileLook} from './MessageFiles';
-// PROPOSAL SWITCH, w-9ed13d72b3: comes out once one look is picked.
-const fileLook = (typeof localStorage !== 'undefined' ? localStorage.getItem('zero.fileCards') : null) as TileLook | null;
+import {MessageFiles} from './MessageFiles';
 import {reviewLabEnabled, reviewContextDraft} from '../review-lab';
 import { sourceReference } from '../source-reference.mjs';
 import { TaskTerminal } from './TaskTerminal';
@@ -1560,8 +1558,11 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
           that already linked it. Measured on w-d161451598: one path,
           three drawings, 34px. Tidy drops that line and keeps the frame, which
           is still what draws the document when it is NOT already open. */}
-      {inlineArtifacts && fileLook && <MessageFiles look={fileLook} product={product} paths={previewPaths} revision={item.updatedAt} openDoc={openDoc} onOpen={path => onOpenArtifact?.(path, 'beside')} />}
-      {inlineArtifacts && !fileLook && <div className="artifact-entry-list" aria-label="Attachments">{previewPaths.map(path =>
+      {/* THE FILES A MESSAGE NAMES ARE SMALL FRAMED TILES (w-9ed13d72b3), and
+          a file nothing can read gets none. The big review card below is
+          only the review lab's sample now. */}
+      {inlineArtifacts && !previewSample && <MessageFiles product={product} paths={previewPaths} revision={item.updatedAt} openDoc={openDoc} onOpen={path => onOpenArtifact?.(path, 'beside')} />}
+      {inlineArtifacts && previewSample && <div className="artifact-entry-list" aria-label="Attachments">{previewPaths.map(path =>
         <DirectReview key={path} product={product} path={path} revision={item.updatedAt} open={openDoc === path}
           onOpen={()=>onOpenArtifact?.(path, 'beside')}
           onAddContext={reviewLabEnabled(api.isFixtures,location.search) ? action=>{
