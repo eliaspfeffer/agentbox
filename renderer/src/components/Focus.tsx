@@ -1,5 +1,8 @@
 import { RemoteControl } from './RemoteControl';
 import {DirectReview} from './DirectReview';
+import {MessageFiles, type FileLook} from './MessageFiles';
+// PROPOSAL SWITCH, w-9ed13d72b3: comes out once one look is picked.
+const fileLook = (typeof localStorage !== 'undefined' ? localStorage.getItem('zero.fileCards') : null) as FileLook | null;
 import {reviewLabEnabled, reviewContextDraft} from '../review-lab';
 import { sourceReference } from '../source-reference.mjs';
 import { TaskTerminal } from './TaskTerminal';
@@ -1557,7 +1560,8 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
           that already linked it. Measured on w-d161451598: one path,
           three drawings, 34px. Tidy drops that line and keeps the frame, which
           is still what draws the document when it is NOT already open. */}
-      {inlineArtifacts && <div className="artifact-entry-list" aria-label="Attachments">{previewPaths.map(path =>
+      {inlineArtifacts && fileLook && <MessageFiles look={fileLook} product={product} paths={previewPaths} revision={item.updatedAt} openDoc={openDoc} onOpen={path => onOpenArtifact?.(path, 'beside')} />}
+      {inlineArtifacts && !fileLook && <div className="artifact-entry-list" aria-label="Attachments">{previewPaths.map(path =>
         <DirectReview key={path} product={product} path={path} revision={item.updatedAt} open={openDoc === path}
           onOpen={()=>onOpenArtifact?.(path, 'beside')}
           onAddContext={reviewLabEnabled(api.isFixtures,location.search) ? action=>{

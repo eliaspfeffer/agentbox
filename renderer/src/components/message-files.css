@@ -1,0 +1,41 @@
+/* The files a message names, small enough to read past. */
+.message-files {width:100%;max-width:680px;margin:12px 0 20px;}
+.message-files:empty {display:none;}
+.message-file {font:inherit;color:var(--text);text-align:left;cursor:pointer;background:none;border:0;padding:0;}
+.message-file:focus-visible {outline:2px solid var(--text-dim);outline-offset:2px;}
+.message-file-glyph {width:14px;height:14px;flex:none;color:var(--text-faint);}
+.message-file-name {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* Rows: one bordered list, one line per file. */
+.message-files[data-look="rows"] {border:1px solid var(--line);border-radius:6px;overflow:hidden;}
+.message-files[data-look="rows"] .message-file {display:flex;align-items:center;gap:12px;width:100%;padding:9px 14px 9px 10px;}
+.message-files[data-look="rows"] .message-file + .message-file {border-top:1px solid var(--line);}
+.message-files[data-look="rows"] .message-file:hover,
+.message-files[data-look="rows"] .message-file[aria-pressed="true"] {background:color-mix(in srgb,var(--text) 4%,transparent);}
+.message-file-icon,.message-file-thumb {flex:none;width:48px;height:32px;border-radius:3px;border:1px solid var(--line);display:grid;place-items:center;overflow:hidden;background:color-mix(in srgb,var(--text) 3%,transparent);}
+.message-file-thumb .artifact-thumbnail {width:48px;height:32px;aspect-ratio:auto;border:0;}
+.message-file-thumb .artifact-thumbnail iframe {opacity:1!important;}
+.message-file-text {display:flex;flex-direction:column;min-width:0;flex:1;}
+.message-file-title {font-size:13px;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.message-file-line {font-size:12px;line-height:17px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.message-file-open {width:14px;height:14px;flex:none;color:var(--text-faint);opacity:0;}
+.message-file:hover .message-file-open,.message-file:focus-visible .message-file-open {opacity:1;}
+
+/* Chips: one wrapping line of names. */
+.message-files[data-look="chips"] {display:flex;flex-wrap:wrap;gap:6px;}
+.message-files[data-look="chips"] .message-file {display:inline-flex;align-items:center;gap:7px;max-width:260px;padding:5px 10px 5px 8px;font-size:12px;line-height:18px;color:var(--text-dim);border:1px solid var(--line);border-radius:5px;background:color-mix(in srgb,var(--text) 3%,transparent);}
+.message-files[data-look="chips"] .message-file:hover,
+.message-files[data-look="chips"] .message-file[aria-pressed="true"] {color:var(--text);border-color:var(--line-strong);}
+
+/* Tiles: small cards side by side, a picture or the file's own first words. */
+.message-files[data-look="tiles"] {display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;}
+.message-files[data-look="tiles"] .message-file {display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:color-mix(in srgb,var(--text) 2%,transparent);}
+.message-files[data-look="tiles"] .message-file:hover,
+.message-files[data-look="tiles"] .message-file[aria-pressed="true"] {border-color:var(--line-strong);}
+.message-file-face {height:96px;overflow:hidden;padding:10px 12px;border-bottom:1px solid var(--line);}
+.message-file-face:has(.retained-preview,.artifact-thumbnail) {padding:0;}
+.message-file-face .artifact-thumbnail {width:100%;height:96px;aspect-ratio:auto;border:0;}
+.message-file-face .artifact-thumbnail iframe {opacity:1!important;}
+.message-file-face strong {display:block;font-size:12px;font-weight:500;line-height:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.message-file-face p {margin:4px 0 0;font-size:11px;line-height:16px;color:var(--text-faint);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+.message-file-foot {display:flex;align-items:center;gap:7px;padding:7px 10px;font-size:12px;line-height:17px;color:var(--text-dim);min-width:0;}
