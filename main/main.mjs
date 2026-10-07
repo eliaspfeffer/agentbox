@@ -603,6 +603,11 @@ async function createWindow() {
     },
   });
 
+  // THE MENU IS A BAR INSIDE THE WINDOW on Linux and Windows. On macOS it is
+  // the system menu, so it stays. The menu itself stays everywhere: the Ctrl
+  // chords are bound to it, and taking the menu out would take them with it.
+  if (process.platform !== 'darwin') window.setMenuBarVisibility(false);
+
   // WHICH PICTURE SET THIS WINDOW IS ON, and a shout when it changes.
   // main/screen-detail.mjs has the rule and the reasoning; this is the wiring.
   // The initial answer rides bootInfo rather than being pushed, for the same
