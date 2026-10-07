@@ -8,7 +8,7 @@
 // (tests/team-one-page-shows-the-people-you-pick.test.mjs).
 import type { Person, Product, ThreadCard, WorkItem } from '../types';
 import { priorityIdOf } from '../priority';
-import { byPriority, conversationSlugs, finishedAt, rowSharing, type Display, type Ranked } from './page-rules';
+import { conversationSlugs, order, rowSharing, type Display, type Ranked } from './page-rules';
 
 const KEY = 'threads.people';
 
@@ -98,7 +98,8 @@ const TAB_STATE: Record<Tab, (s: ThreadCard['state']) => boolean> = {
   progress: (s) => s === 'running',
   snoozed: (s) => s === 'scheduled',
   done: (s) => s === 'done',
-  all: (s) => s !== 'done',
+  // Everything, finished threads included (w-fda2165ec6).
+  all: () => true,
 };
 
 const startOfDay = (now: number) => { const t = new Date(now); t.setHours(0, 0, 0, 0); return t.getTime(); };
@@ -139,15 +140,16 @@ export type MixedRow = { item: WorkItem; card?: undefined } | { card: ThreadCard
  * finished, newest first; a card says only when it last changed, so that
  * stands in for it.
  */
-export function mergeRows(mine: WorkItem[], theirs: ThreadCard[], sort: Display['sort'] | 'done', rank: { order: string[]; products: Product[] } = { order: [], products: [] }): MixedRow[] {
-  const updated = sort !== 'priority';
+// ON ALL (`tab`, w-fda2165ec6) the same order as your rows: open ahead of
+// finished, and a finished card by when it last changed.
+export function mergeRows(mine: WorkItem[], theirs: ThreadCard[], sort: Display['sort'] | 'done', rank: { order: string[]; products: Product[] } = { order: [], products: [] }, tab?: string): MixedRow[] {
   const slugOf = new Map(rank.products.map((p) => [p.name, p.slug]));
-  const ranked = (c: ThreadCard): Ranked => ({ priority: c.priority, updatedAt: c.updatedAt, product: slugOf.get(c.project ?? '') ?? null });
-  const by = byPriority(rank.order, conversationSlugs(rank.products));
-  const cards = theirs.slice().sort((a, b) => (updated ? b.updatedAt - a.updatedAt : by(ranked(a), ranked(b))));
-  const ahead = (c: ThreadCard, i: WorkItem) => (updated
-    ? c.updatedAt > (sort === 'done' ? finishedAt(i) : i.updatedAt)
-    : by(ranked(c), i) < 0);
+  const ranked = (c: ThreadCard): Ranked => ({ priority: c.priority, updatedAt: c.updatedAt, product: slugOf.get(c.project ?? '') ?? null, status: c.state === 'done' ? 'done' : undefined });
+  const by = sort === 'done'
+    ? order({ sort: 'updated' }, 'done')
+    : order({ sort }, tab, rank.order, conversationSlugs(rank.products));
+  const cards = theirs.slice().sort((a, b) => by(ranked(a), ranked(b)));
+  const ahead = (c: ThreadCard, i: WorkItem) => by(ranked(c), i) < 0;
   const out: MixedRow[] = [];
   let k = 0;
   for (const i of mine) {

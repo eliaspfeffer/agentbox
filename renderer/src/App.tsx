@@ -113,6 +113,7 @@ import {
 } from './onboarding';
 import { priorityCommands, priorityIdOf, priorityLabelOf, type PriorityId } from './priority';
 import { runNowCommands } from './run-now';
+import { withOlder } from './older-threads';
 import { NO_FILTER, filterBox, filterMenu, filterTags, isFiltering, toggleFilter, clearFilterPart, type BoxFilter as BoxFilterState, type FilterPart, type Harness } from './box-filter';
 import { BoxFilter } from './components/BoxFilter';
 import { itemPriority, moveProduct, placeScore } from '../../shared/rank.mjs';
@@ -1535,7 +1536,25 @@ export default function App() {
   // toward launch" under Active agents. A count and a rail line are the same
   // promise broken more quietly. Everything comes back the moment the walk ends,
   // which is one render later; walkRows in ./onboarding says the rest.
-  const items = walkRows(snap?.items ?? [], run);
+  // OLD FINISHED THREADS, A PAGE AT A TIME (w-fda2165ec6). The snapshot reads
+  // a ledger's last 8 MB, which left 155 of Astral's finished threads on no
+  // tab. Her call: "if you're scrolling or whatever more should populate as
+  // needed". The foot of Done and All asks for the next page (`onEnd` on the
+  // List); `withOlder` says how a page meets the snapshot. `olderMore` is null
+  // until the first answer, and false once there is nothing left to ask for.
+  const [older, setOlder] = useState<WorkItem[]>([]);
+  const [olderMore, setOlderMore] = useState<boolean | null>(null);
+  const olderAsking = useRef(false);
+  const loadOlder = useCallback(() => {
+    if (olderAsking.current || olderMore === false) return;
+    olderAsking.current = true;
+    api.olderItems(older.length)
+      .then((page) => { setOlder((had) => [...had, ...page.items]); setOlderMore(page.more); })
+      .catch(() => setOlderMore(false))
+      .finally(() => { olderAsking.current = false; });
+  }, [older.length, olderMore]);
+  const itemsWithOlder = useMemo(() => withOlder(snap?.items ?? [], older), [snap?.items, older]);
+  const items = walkRows(itemsWithOlder, run);
 
   /* --------------------- her agents, as rows in her list ------------------- */
   // EVERY CLAUDE CODE AGENT ON HER MACHINE THAT AGENTBOX DID NOT START. They are
@@ -1682,9 +1701,29 @@ export default function App() {
   // nothing. Rejecting them all is what makes it stop.
   const owedAnAnswer = useMemo(() => threadsOwedAnAnswer(items, now), [items, now]);
 
+  // AND THAT ROW READS AS WORKING, because it is: the app itself is reading the
+  // folder. There is no session behind it, so the supervisor cannot report one,
+  // and the alternative is the word she saw and reported, which was "queued"
+  // under a sentence saying it was running. The row it applies to is the walk's
+  // own and no other.
+  const runningRows = useMemo(() => {
+    const real = snap?.supervisor.running ?? [];
+    if (run?.step !== 'working' || !run.item) return real;
+    return [{ itemId: run.item, product: run.product ?? '', startedAt: run.sentAt ?? Date.now(), tail: [] }, ...real];
+  }, [snap?.supervisor.running, run?.step, run?.item, run?.product, run?.sentAt]);
+  // THE THREADS AN AGENT IS ON RIGHT NOW: the turning mark (threads/Pages.tsx),
+  // and what keeps a thread in In progress and out of Needs you, whatever its
+  // status says, until its session exits (w-bc976fd247). Up here because every
+  // list below reads it.
+  const liveIds = useMemo(() => new Set(runningRows.map((r) => r.itemId)), [runningRows]);
+
   const inboxCandidates = useMemo(() => items.filter((i) => {
     if (i.id === pendingId) return false; // action held in the grace window: already sent, as far as the inbox is concerned
     if (i.product && scope && i.product !== scope) return false;
+    // An agent is working on it right now: In progress, whatever it says
+    // (`live` in list-rules, w-bc976fd247). Ahead of every branch here,
+    // the team ones included, because none of them can see a session.
+    if (liveIds.has(i.id)) return false;
     if (owedAnAnswer.has(i.id)) return true;
     // The rule itself lives in list-rules.ts, pure and pinned by tests. What
     // is left here is the view's own business: the grace window, the clock,
@@ -1697,7 +1736,7 @@ export default function App() {
     // was shared with somebody.
     if (shared === true) return i.status !== 'done' && !(hiddenAt(i) > now) && !isProposal(i);
     return belongsInInbox(i, { deliveredThrough, hiddenUntil: hiddenAt(i), now });
-  }), [items, hiddenAt, scope, now, pendingId, teamInbox]);
+  }), [items, hiddenAt, scope, now, pendingId, teamInbox, liveIds]);
 
   // EVERY PLACE SHE CAN SEE A ROW, which is what the thread mask reads. A row
   // that left the inbox because she answered it has not left her: it is in In
@@ -1714,9 +1753,9 @@ export default function App() {
     if (i.id === pendingId) return false;  // an action in flight holds nothing hidden
     if (i.product && scope && i.product !== scope) return false;
     return belongsOnTheRail(i, {
-      deliveredThrough, hiddenUntil: hiddenAt(i), deferredUntil: dueAt(i), now,
+      deliveredThrough, hiddenUntil: hiddenAt(i), deferredUntil: dueAt(i), now, live: liveIds.has(i.id),
     });
-  }), [items, pendingId, scope, dueAt, hiddenAt, deliveredThrough, now]);
+  }), [items, pendingId, scope, dueAt, hiddenAt, deliveredThrough, now, liveIds]);
 
   // WHAT MATTERS MOST, ONE COPY, read by every list that claims to be in an
   // order. A product's place in her running order is worth a hundred item
@@ -1918,7 +1957,7 @@ export default function App() {
       if (isDirect(snap?.products.find((p) => p.slug === i.product))) return false;
       // A task you gave a teammate is moving, for you, until it is done.
       if (team && heldByAPerson(i) && isShared(team.products.get(i.product))) return i.status !== 'done';
-      return belongsInProgress(i, { deferredUntil, now });
+      return belongsInProgress(i, { deferredUntil, now, live: liveIds.has(i.id) });
     }),
     ...agentList.filter((r) => r.agent && progressAfterReply(r.agent, now, agentMode)),
     // IN THE ORDER THEY WILL RUN IN, which is the one thing this list is for.
@@ -1931,19 +1970,21 @@ export default function App() {
     // Same score as the inbox and as the supervisor, so the top of this list is
     // what the fleet takes next. Recency only breaks a tie now.
   ].sort(byRunningOrder(score)),
-  [items, agentList, agentMode, scope, pendingId, dueAt, score, now, team, teamProgress]);
+  [items, agentList, agentMode, scope, pendingId, dueAt, score, now, team, teamProgress, liveIds]);
 
   // NOT A ROW THAT STILL NEEDS HER (2026-10-01): an agent's done on her own
   // thread waits in Needs you until she closes it, and Done counted it too,
   // so the tabs read "DONE 2 · ALL 2" with two rows still needing her.
   // AND A MESSAGE YOU ANSWERED IS DONE FOR YOU until they write back
   // (`iSpokeLast`, w-57a202a968): it was on no tab at all.
+  // AND NOT ONE AN AGENT IS STILL ON: done written, session not yet exited, is
+  // In progress until it does (w-bc976fd247).
   const done = useMemo(() => {
     const needsYou = new Set(inbox.map((i) => i.id));
-    return items.filter((i) => !needsYou.has(i.id) && (!scope || i.product === scope)
+    return items.filter((i) => !needsYou.has(i.id) && !liveIds.has(i.id) && (!scope || i.product === scope)
       && (i.status === 'done' || iSpokeLast(i, team?.products.get(i.product), team?.me ?? null)))
       .sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [items, scope, inbox, team]);
+  }, [items, scope, inbox, team, liveIds]);
 
   // Scheduled is the future inbox: everything waiting for its moment, soonest
   // first. The view only exists while something is in it. It holds two things
@@ -2114,19 +2155,22 @@ export default function App() {
   // it reads every project and every tab on purpose.
   // ALL (the team version, approved 2026-10-01): every open thread of yours,
   // whatever it is waiting on, as one list.
-  // ALL IS EVERYTHING OPEN, YOUR CONVERSATIONS INCLUDED. A conversation whose
-  // turn is the other person's is in no other tab (it is not running and it
-  // does not need you), so without this a message you just answered vanished
-  // from the Inbox altogether.
-  const allOpen = useMemo(() => {
+  // YOUR CONVERSATIONS INCLUDED. A conversation whose turn is the other
+  // person's is in no other tab (it is not running and it does not need you),
+  // so without this a message you just answered vanished from the Inbox
+  // altogether.
+  // AND DONE INCLUDED (w-fda2165ec6, 2026-10-07): "done and all don't contain
+  // most of my tasks". All held open threads only, about 40 of her 1,339.
+  // page-rules.ts `order` puts the open ones first and the finished after.
+  const allRows = useMemo(() => {
     const seenIds = new Set<string>();
     const talking = items.filter((i) => !i.agent && i.status !== 'done' && isDirect(snap?.products.find((p) => p.slug === i.product)));
-    return [...inbox, ...progress, ...snoozed, ...talking].filter((i) => (seenIds.has(i.id) ? false : (seenIds.add(i.id), true)));
-  }, [inbox, progress, snoozed, items, snap?.products]);
+    return [...inbox, ...progress, ...snoozed, ...talking, ...done].filter((i) => (seenIds.has(i.id) ? false : (seenIds.add(i.id), true)));
+  }, [inbox, progress, snoozed, done, items, snap?.products]);
   const wholeBox = view === 'inbox' ? inbox
     : view === 'snoozed' ? snoozed
       : view === 'progress' ? progress
-        : view === 'all' ? allOpen
+        : view === 'all' ? allRows
           : done;
   const shownBox = useMemo(() => filterBox(wholeBox, boxFilter), [wholeBox, boxFilter]);
   // THE DISPLAY MENU'S FILTERS AND SORT, on top of the box (approved
@@ -2207,7 +2251,7 @@ export default function App() {
     [withOthers, cards, view, picked, team?.me, inboxDisplay, snap?.products, now],
   );
   const mixedRows = useMemo(
-    () => (withOthers ? mergeRows(displayedBox, theirRows, view === 'done' ? 'done' : inboxDisplay.sort, { order: projectOrder, products: snap?.products ?? [] }) : null),
+    () => (withOthers ? mergeRows(displayedBox, theirRows, view === 'done' ? 'done' : inboxDisplay.sort, { order: projectOrder, products: snap?.products ?? [] }, view) : null),
     [withOthers, displayedBox, theirRows, inboxDisplay.sort, view, projectOrder, snap?.products],
   );
   // A teammate's thread opens as their card, over the page, and Back returns here.
@@ -2257,18 +2301,6 @@ export default function App() {
     () => (modal === 'filter' ? filterMenu(wholeBox.filter((i) => !isTroubleRow(i) && !isUpdateRow(i)), boxFilter, snap?.products ?? []) : null),
     [modal, wholeBox, boxFilter, snap?.products],
   );
-  // AND THAT ROW READS AS WORKING, because it is: the app itself is reading the
-  // folder. There is no session behind it, so the supervisor cannot report one,
-  // and the alternative is the word she saw and reported, which was "queued"
-  // under a sentence saying it was running. The row it applies to is the walk's
-  // own and no other.
-  const runningRows = useMemo(() => {
-    const real = snap?.supervisor.running ?? [];
-    if (run?.step !== 'working' || !run.item) return real;
-    return [{ itemId: run.item, product: run.product ?? '', startedAt: run.sentAt ?? Date.now(), tail: [] }, ...real];
-  }, [snap?.supervisor.running, run?.step, run?.item, run?.product, run?.sentAt]);
-  // THE THREADS AN AGENT IS ON RIGHT NOW: the turning mark (threads/Pages.tsx).
-  const liveIds = useMemo(() => new Set(runningRows.map((r) => r.itemId)), [runningRows]);
   // ONE RULE FOR WHERE A THREAD SITS, THE TABS' OWN (2026-10-01: the board
   // said Running for queued work the tab did not). Needs you wins, then
   // In progress, Later and Done, exactly as the tabs list them.
@@ -3014,7 +3046,7 @@ export default function App() {
     const tasks = items
       .filter((i) => i.product === slug && i.id !== pendingId)
       .filter((i) => belongsOnTheRail(i, {
-        deliveredThrough, hiddenUntil: hiddenAt(i), deferredUntil: dueAt(i), now,
+        deliveredThrough, hiddenUntil: hiddenAt(i), deferredUntil: dueAt(i), now, live: liveIds.has(i.id),
       }))
       .map((i) => ({
         key: i.id,
@@ -3033,7 +3065,7 @@ export default function App() {
         open: () => openAgent(a.pid),
       }));
     return [...tasks, ...sessions].sort((x, y) => y.at - x.at);
-  }, [railItem?.product, items, snap?.agents, pendingId, deliveredThrough, hiddenAt, dueAt, now, markSeen, openAgent]);
+  }, [railItem?.product, items, snap?.agents, pendingId, deliveredThrough, hiddenAt, dueAt, now, markSeen, openAgent, liveIds]);
 
   // (legal/privacy.html, 5.1). One place, on the id changing, rather than a
   // call beside each of the dozen things that open a task: a count added at
@@ -4072,8 +4104,8 @@ export default function App() {
     // that the row goes back to her inbox, and there is no row: the session
     // belongs to whatever started it, and Agentbox killing somebody's terminal
     // is not a thing this build does.
-    (item: WorkItem) => !item.agent && stoppable(item, { deferredUntil: dueAt(item), now }),
-    [dueAt, now],
+    (item: WorkItem) => !item.agent && stoppable(item, { deferredUntil: dueAt(item), now, live: liveIds.has(item.id) }),
+    [dueAt, now, liveIds],
   );
 
   // Resume: `ids` for the rows she ticked, null for everything stranded.
@@ -5589,7 +5621,7 @@ export default function App() {
                     paused: snap.supervisor.paused,
                     running: snap.supervisor.running.length,
                     capacity: snap.supervisor.capacity,
-                    inProgress: belongsInProgress(focused, { deferredUntil: dueAt(focused), now }),
+                    inProgress: belongsInProgress(focused, { deferredUntil: dueAt(focused), now, live: liveIds.has(focused.id) }),
                     // A run ended on this row and wrote nothing down. The pane
                     // says so wherever the row is sitting, which is why this one
                     // fact is read above the In progress test in live-line.
@@ -5620,7 +5652,7 @@ export default function App() {
                       progress: (mineShown ? shownCount(progress) : 0) + theirCount('progress'),
                       snoozed: (mineShown ? shownCount(snoozed) : 0) + theirCount('snoozed'),
                       done: (mineShown ? shownCount(done) : 0) + theirCount('done'),
-                      all: (mineShown ? shownCount(allOpen) : 0) + theirCount('all'),
+                      all: (mineShown ? shownCount(allRows) : 0) + theirCount('all'),
                     }}
                     needs={team ? needsWord(picked, team.me) : undefined}
                     onView={(next) => { setView(next as View); setSelected(0); setMultiSel(new Set()); }}
@@ -5652,6 +5684,9 @@ export default function App() {
                   personCell={personCell}
                   onOpenCard={openTeammateCard}
                   selectedCard={keyCard ? cardSel : null}
+                  // The next page of old finished threads, at the foot of the
+                  // two tabs that hold them (w-fda2165ec6).
+                  onEnd={search === null && olderMore !== false && (view === 'done' || view === 'all') ? loadOlder : undefined}
                   items={list}
                   // Results are grouped and stamped like the inbox, whatever
                   // tab she opened search from. Scheduled would otherwise label
@@ -5940,7 +5975,7 @@ export default function App() {
                 session: snap.supervisor.running.find((r) => r.itemId === target.id) ?? null,
                 queued: snap.supervisor.queued,
                 runNow: snap.supervisor.runNow,
-                inProgress: belongsInProgress(target, { deferredUntil: dueAt(target), now }),
+                inProgress: belongsInProgress(target, { deferredUntil: dueAt(target), now, live: liveIds.has(target.id) }),
               }, () => { setModal(null); void runNow(target); }),
               { id: 'done', label: target.agent ? DONE.verb : `${DONE.verb} Task`, keyHint: 'E', run: () => { setModal(null); markDone(target); } },
               { id: 'reply', label: 'Reply', keyHint: 'R', run: () => { open(); setModal('reply'); } },

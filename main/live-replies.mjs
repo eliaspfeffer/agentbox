@@ -4,6 +4,34 @@
 // neither an out-of-order response nor a rejected input reorders the history.
 import { NAME } from '../shared/product-name.mjs';
 import { TURN_CLOSED } from './claude-input.mjs';
+// WHAT A WORKER IS TOLD WHEN THEY TYPE AT IT WHILE IT IS STILL WORKING.
+//
+// The other half of `replyBrief` in supervisor.mjs, which frames a reply handed
+// to a session that has already finished. This one frames a reply steered into
+// a session that is mid-turn, and it exists because that framing was missing:
+// bare words arrived, the agent noted them and carried on, and a question typed
+// into "Add to it while it works" was marked read and never answered
+// (w-ac7f0c0cbb). The brief that session is holding tells it its last message
+// is the result, so without this it has every reason to save the answer for an
+// ending the person is not waiting through.
+//
+// Their words go LAST, as in `replyBrief`: the newest thing they said is the
+// newest thing in its context, and nothing of ours is written after it.
+export function liveReplyBrief(answer) {
+  return [
+    'This arrived in your thread just now, while you work, and they are watching',
+    'for a reply. Do what it asks. If it asks you anything, or says it did not',
+    'hear back, answer it in your very next message, in a sentence or two, before',
+    'you go back to what you were doing: the sentences you write while you work',
+    'are what they read, so an answer saved for the end reads as no answer at all.',
+    'Then carry on.',
+    '',
+    'What they said:',
+    '',
+    answer,
+  ].join('\n');
+}
+
 export function submitReply(supervisor, payload, commit) {
   const { product, id, answer, status, permissionMode, now = false } = payload;
   const key = JSON.stringify([product, id]);
@@ -18,7 +46,10 @@ export function submitReply(supervisor, payload, commit) {
     if (!live) return;
     if (permissionMode != null) throw Error('A running turn keeps its current permissions. Stop it before sending with a different permission mode.');
     if (answer.trimStart().startsWith('/') && !session.remoteIdle) throw Error('Wait for the current turn to finish before running a slash command.');
-    const taken = session.child.steer(answer);
+    // A held Remote Control conversation is sitting idle rather than working,
+    // and the slash commands it takes stop being commands once prose is wrapped
+    // round them. Both reach it exactly as typed.
+    const taken = session.child.steer(session.remoteIdle ? answer : liveReplyBrief(answer));
     // SENT NOW: her words go in line first, then the step is cut, in the same
     // tick, so the cut turn's result can never close the input ahead of them.
     // A cut that fails leaves the message waiting its turn, which is still sent.

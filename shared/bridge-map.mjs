@@ -15,6 +15,8 @@ export const REQUEST_CHANNELS = {
   terminal: 'zero:terminal',
   agentUpdate: 'zero:agent-update',
   snapshot: 'zero:snapshot',
+  // The next page of old finished threads, at the foot of Done and All.
+  olderItems: 'zero:older-items',
   dashboard: 'zero:dashboard',
   commandCatalog: 'zero:command-catalog',
   remoteControl: 'zero:remote-control',
