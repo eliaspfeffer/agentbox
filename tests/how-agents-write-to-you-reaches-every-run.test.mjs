@@ -303,8 +303,14 @@ describe(`the text ${NAME} ships`, () => {
   // options, and never offering what the run already did. Measured on her
   // store that day: 248 of 825 rows drawing a pick were drawing one an agent
   // had already acted on, her "Shipped" thread asking whether to ship among them.
+  //
+  // Raised from 6100 to 6700 for 576 characters (w-630e526abe): each picture
+  // sits under the words about it, with a worked example. A run comparing three
+  // fixes wrote all three explanations first and stacked the screenshots below,
+  // and the rule had said nothing about where a picture sits. The example is
+  // most of the cost, and it is what every run copies.
   it('stays small enough to sit on every run', () => {
-    expect(shipped.length).toBeLessThan(6100);
+    expect(shipped.length).toBeLessThan(6700);
   });
 
   // THE SECOND COPY IS NOT ASKED FOR ANY MORE, AND THAT REPLACES THE RULE THAT

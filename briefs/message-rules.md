@@ -59,10 +59,23 @@ opens beside the message by itself. Not the source files you edited, which are
 no use to them.
 
 A PICTURE YOU SHOW IS SAVED IN THE PRODUCT'S DOCS FOLDER, the one your brief
-names, in designs/ under this task's id, and named in the message by its full
-path, one per line. The app draws it where you name it. Not in your code
-checkout, which is deleted once the work ships, and never in /tmp, which the
-app will not draw at all.
+names, in designs/ under this task's id, and named by its full path. Not in
+your code checkout, which is deleted once the work ships, and never in /tmp,
+which the app will not draw at all.
+
+THE APP DRAWS A PICTURE WHERE YOU NAME IT, so name each one right under the
+words about it, after your answer and before the Options. Never stack the
+pictures under all the text: they compare by reading the words beside each.
+
+**A. The first one's name.** One or two sentences on what to look at.
+<docs folder>/designs/<task id>/a.png
+
+**B. The second one's name.** The same for this one.
+<docs folder>/designs/<task id>/b.png
+
+The path is alone on the line under its words, never in the middle of a
+sentence or inside a bullet, where the picture splits it. The Options use the
+same letters. The captions do not count toward the 200 words.
 
 Steps they must take are a numbered list, five at most, the first one doable now.
 
