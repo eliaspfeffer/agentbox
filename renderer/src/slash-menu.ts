@@ -134,35 +134,42 @@ function commandsFor(claudeCode: boolean, nativeNames: string[]): ClaudeCommand[
 const NATIVE_DESCRIPTION = 'Run this Claude Code command';
 
 /**
- * WHETHER ENTER ON THIS ROW WAITS FOR HER WORDS rather than running it.
+ * WHETHER PICKING THIS ROW WAITS FOR SEND rather than running it. Every
+ *  command does, and no mode does (a mode is a value, not a message).
  *
  *  Typing /loop and pressing Return used to start a loop with nothing to loop
- *  on. A command that wants words is completed into the box with its space,
- *  she writes them, and Send runs it, the way a terminal does. Two kinds want
- *  words: the session's own commands (skills like /loop, whose arguments we
- *  cannot read, so they are treated as wanting them), and ours whose hint is a
- *  required `<...>` (/fork, /rename). `/compact`'s hint is angle-bracketed but
- *  says "optional", and a bare /model, /usage or /context answers on its own,
- *  so those still run on Enter (w-5d1ad29efa). */
+ *  on (w-2c8ef9ed9e). The first fix sorted commands into ones that want words
+ *  and ones that do not, and asked to be "a generalist solution for all
+ *  commands" instead. Sorting cannot be made general: the session's own
+ *  commands arrive as bare names, so which of them want words is not something
+ *  this app can read, and a guess that is wrong once starts an agent. So one
+ *  rule, the terminal's: picking a command puts it in the box, she writes
+ *  whatever it takes, and Send runs it. What answers the old "Enter on /usage
+ *  did nothing" (w-5d1ad29efa) is the box saying it is holding the command and
+ *  that Send runs it (`commandBeingWritten`, drawn in Focus.tsx). */
 export function enterWaitsForWords(row: SlashRow): boolean {
-  if (row.kind !== 'command') return false;
-  if (row.cmd.description === NATIVE_DESCRIPTION) return true;
-  const hint = row.cmd.argumentHint ?? '';
-  return hint.startsWith('<') && !/optional/i.test(hint);
+  return row.kind === 'command';
 }
 
 /**
  * THE COMMAND THE BOX IS HOLDING while she writes its words, or null.
  *
  *  Only once she has typed past the word: until the space, the menu is open and
- *  says it. Only a command Enter would have waited on, because one that runs on
- *  Enter is never left sitting in the box. */
+ *  says it. */
 export function commandBeingWritten(text: string, claudeCode: boolean, nativeNames: string[]): ClaudeCommand | null {
   const m = text.match(/^\/([a-z][a-z0-9:_-]*)\s/i);
   if (!m) return null;
   const word = m[1].toLowerCase();
-  const cmd = commandsFor(claudeCode, nativeNames).find(c => c.name === word || c.aliases.includes(word));
-  return cmd && enterWaitsForWords({ kind: 'command', cmd }) ? cmd : null;
+  return commandsFor(claudeCode, nativeNames).find(c => c.name === word || c.aliases.includes(word)) ?? null;
+}
+
+/**
+ * WHAT THE BOX SAYS FAINTLY AFTER A COMMAND before she has written anything:
+ *  what it takes, if it takes anything, and that Send runs it. */
+export function holdingHint(cmd: ClaudeCommand): string {
+  if (cmd.description === NATIVE_DESCRIPTION) return 'what it should do, then ⌘↵';
+  const hint = cmd.argumentHint?.replace(/^[<[]|[>\]]$/g, '');
+  return hint ? `${hint}, then ⌘↵` : '⌘↵ to run';
 }
 
 /**

@@ -39,7 +39,7 @@ import {
 /*
  * THE ROW'S TWO WORDS COME FROM `rowSays` NOW, not from six constants pulled
    apart here. One list, one row shape (w-23a7b3f568, 2026-08-27). */
-import { commandBeingWritten, enterWaitsForWords, rowKey, rowSays, slashRows, type SlashRow } from '../slash-menu';
+import { commandBeingWritten, enterWaitsForWords, holdingHint, rowKey, rowSays, slashRows, type SlashRow } from '../slash-menu';
 import { commandDraft } from '../../../shared/claude-commands.mjs';
 import { CompactionResult, runCompaction, runCommand } from './CompactionResult';
 import { codexCommand, COMPACTION_COPY } from '../../../shared/codex-commands.mjs';
@@ -2341,47 +2341,20 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
    *  A MODE sets a value and empties the box, because it is a thing she is
    *  saying about the message she is about to write.
    *
-   *  A COMMAND RUNS. Enter on it sends it, the same beat, with no second key.
+   *  A COMMAND IS PUT IN THE BOX AND WAITS FOR SEND, every one of them, the
+   *  way a terminal does (w-2c8ef9ed9e). Enter on /loop used to start a loop
+   *  with nothing to loop on. Picking a command, by Enter, Tab or a click,
+   *  writes it with its trailing space; she adds whatever it takes; Send runs
+   *  it. slash-menu.ts `enterWaitsForWords` says why it is every command
+   *  rather than a list.
    *
-   * IT USED TO ONLY FILL THE BOX, and that was wrong, and it is the row this
-   * change is on. Measured in the running app before the change
-   * (`scripts/probe-a-slash-command-on-enter.mjs`): Enter left `/usage ` in the
-   * box, closed the menu, and sent nothing. A second Enter typed a newline.
-   * Only Cmd+Enter ever sent, so the one key anybody presses on a highlighted
-   * menu row did nothing she could see.
-   *
-   *  The old reasoning was that half of the eight take an argument she still has
-   *  to type, and that is true and it is what TAB is for now. Tab completes the
-   *  command into the box with its trailing space and waits; Enter runs it. That
-   *  is Claude Code's own division of the same two keys, so there is nothing new
-   *  to learn, and typing `/model opus` by hand still works because the space
-   *  closes the menu and Cmd+Enter still sends.
-   *
-   *  A command bare is never destructive and usually still answers: measured
-   *  against 2.1.251 on 2026-08-29, `/model` prints the current model and its
-   *  usage line, `/effort` and `/goal` print theirs, `/mcp` prints the server
-   *  count, and `/usage` and `/context` print the tables she is asking for.
-   *
-   * Nothing is announced by a run, because the answer itself arrives in the
-   * thread on this row within a few seconds, which is the confirmation. */
-  const pickRow = (row: SlashRow, how: 'run' | 'fill' = 'run') => {
+   *  Enter on a command ran it from w-5d1ad29efa until then, because Enter
+   *  that only filled the box looked like a dead key: `/usage ` appeared, the
+   *  menu closed, nothing else moved. What answers that now is the faint words
+   *  after the caret saying what the command takes and that ⌘↵ runs it. */
+  const pickRow = (row: SlashRow) => {
     if (row.kind === 'mode' || row.kind === 'codexMode') { pickMode(row.mode); return; }
-    /*
-     * A COMMAND THAT WANTS WORDS WAITS FOR THEM (w-2c8ef9ed9e). Enter on /loop
-       used to start a loop with nothing to loop on. Now it fills the box and
-       Send runs it, the way a terminal does. It once ran so that Enter on /fork
-       would not look like a dead key; what answers that now is the box saying
-       which command it is holding (`commandBeingWritten`). slash-menu.ts says
-       which commands wait. */
-    if (how === 'fill' || enterWaitsForWords(row)) { setText(commandDraft(row.cmd)); ref.current?.focus(); return; }
-    if (providerCommand(`/${row.cmd.name}`, runningEngine ?? 'claude-code')?.route !== 'claude') { void send(`/${row.cmd.name}`); return; }
-    /*
-     * The box is emptied AND the command is handed to `send` by hand. Both,
-       because they answer two different questions: the box has to stop showing
-       a command that has already gone, and the send cannot wait a render for
-       state React has not applied yet. */
-    setText('');
-    send(`/${row.cmd.name}`);
+    if (enterWaitsForWords(row)) { setText(commandDraft(row.cmd)); ref.current?.focus(); }
   };
   // TYPING IT STRAIGHT THROUGH. Somebody who already knows the word does not
   // want a menu; they want to type /auto and a space and carry on writing the
@@ -2452,7 +2425,7 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
       {holding && /^\/\S+\s*$/.test(text) && (
         <div className="dock-ghost" style={{ top: ref.current?.offsetTop ?? 0 }} aria-hidden>
           <span className="dock-ghost-typed">{text.endsWith(' ') ? text : `${text} `}</span>
-          {holding.argumentHint === '[arguments]' ? 'what it should do' : holding.argumentHint?.replace(/^[<[]|[>\]]$/g, '')}, then ⌘↵
+          {holdingHint(holding)}
         </div>
       )}
       {/* AGENTS IN A CONVERSATION (w-7b9cb8636a): the @ menu, a mention's
@@ -2505,14 +2478,13 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
             if (e.key === 'ArrowDown') { e.preventDefault(); setSlashAt((i) => (i + 1) % menuRows.length); return; }
             if (e.key === 'ArrowUp') { e.preventDefault(); setSlashAt((i) => (i - 1 + menuRows.length) % menuRows.length); return; }
             /*
-             * ENTER RUNS THE ROW AND TAB COMPLETES IT, which is the whole of
-               w-5d1ad29efa. They used to be the same key doing the same thing,
-               and that thing was "fill the box", so Enter on `/usage` showed her
-               nothing. On a MODE row both still set the mode: a mode is not a
-               message and there is nothing to run. */
+             * ENTER AND TAB BOTH PICK THE ROW, and neither sends: a command
+               goes into the box and waits for Send, a mode is set (pickRow).
+               ⌘↵ falls through to Send, so `/usage` typed out and sent still
+               runs in one key. */
             if ((e.key === 'Enter' && !e.metaKey && !e.ctrlKey) || e.key === 'Tab') {
               e.preventDefault();
-              pickRow(menuRows[slashAt] ?? menuRows[0], e.key === 'Tab' ? 'fill' : 'run');
+              pickRow(menuRows[slashAt] ?? menuRows[0]);
               return;
             }
             if (e.key === 'Escape') {
