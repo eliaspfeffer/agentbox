@@ -163,6 +163,13 @@ const record = (repoPath, folder) => registered(repoPath).find((w) => w.path ===
 /**
  * The folder this task works in, made if it is not there yet. those
  * sessions keep running exactly where they ran before.
+ *
+ * `how` SAYS WHICH OF THE TWO WAYS MADE IT: `clone` for the block-sharing copy,
+ * `checkout` for the ordinary one, `kept` for a folder that was already there.
+ * It is reported because the two ways are not equally good and a test that only
+ * checks the RESULT cannot tell them apart: the clone could break for good and
+ * every assertion about the folder's contents would still pass. Codex made that
+ * point reviewing this file on 2026-10-07 and it was right.
  */
 export function ensureTaskFolder(dir, id, { pid = process.pid, dependencies = true } = {}) {
   const name = safeTaskName(id);
@@ -173,7 +180,7 @@ export function ensureTaskFolder(dir, id, { pid = process.pid, dependencies = tr
 
   if (fs.existsSync(folder) && record(root, folder)) {
     lock(root, folder, pid);
-    return { path: folder, branch: record(root, folder)?.branch ?? branch, created: false };
+    return { path: folder, branch: record(root, folder)?.branch ?? branch, created: false, how: 'kept' };
   }
 
   // A registration whose directory somebody deleted by hand would refuse the
@@ -191,10 +198,31 @@ export function ensureTaskFolder(dir, id, { pid = process.pid, dependencies = tr
   const staging = buildingFolderPath(root, name);
   clearUnfinished(root, staging);
 
-  const branchExists = tryGit(root, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`]).ok;
+  const hasBranch = () => tryGit(root, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`]).ok;
+  const branchExists = hasBranch();
   const from = branchExists ? branch : baseRef(root);
+  let how = 'clone';
   if (!cloneCheckout(root, staging, branch, from, branchExists)) {
-    const add = branchExists
+    how = 'checkout';
+    // THE BRANCH IS ASKED ABOUT AGAIN, AND THAT IS NOT BELT AND BRACES.
+    //
+    // The clone's first act is `worktree add --no-checkout -b`, which CREATES
+    // the branch; the copy and the verification come after. So a clone that
+    // got past its own door and then failed has left the branch behind, on
+    // purpose: `clearUnfinished` keeps it, because a branch outlives every
+    // folder and may already carry commits.
+    //
+    // Reusing the answer from before the clone is how that became the worst
+    // failure in this file. `-b` a second time is refused ("a branch named ...
+    // already exists"), this function throws, and main/supervisor.mjs catches
+    // the throw in two places and hands the session the SHARED CHECKOUT with
+    // nothing but a console line. One recoverable copy failure, and two agents
+    // are editing the same files. Found 2026-10-07 reviewing with Codex
+    // (w-5952e6de3e); the trigger is reproduced in
+    // tests/a-task-whose-first-attempt-failed-still-gets-its-own-folder.
+    //
+    // ATTACH, NEVER `-B` AND NEVER RESET. Whatever is on that branch is work.
+    const add = hasBranch()
       ? tryGit(root, ['worktree', 'add', staging, branch])
       : tryGit(root, ['worktree', 'add', '-b', branch, staging, baseRef(root)]);
     if (!add.ok) throw Error(`Could not make a folder for ${name}: ${add.out}`);
@@ -211,7 +239,7 @@ export function ensureTaskFolder(dir, id, { pid = process.pid, dependencies = tr
   }
 
   lock(root, folder, pid);
-  return { path: folder, branch, created: true };
+  return { path: folder, branch, created: true, how };
 }
 
 /**
