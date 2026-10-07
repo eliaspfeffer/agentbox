@@ -20,7 +20,7 @@ import {
 import { messageLine, messagePriority, rowSharing, sharePatch } from './page-rules';
 import { facesOnButton, peopleWorthADot, togglePicked, whoseWord } from './people-rules';
 import { stopKey } from './walk-rules';
-import { cardClickIntent, cardsUnder, marqueeBox, marqueeMarks, toggleMark, type Box } from './board-select';
+import { cardClickIntent, cardsUnder, clickMarks, marqueeBox, marqueeMarks, type Box } from './board-select';
 import { shownToPeople } from '../../../shared/thread-cards.mjs';
 import { api } from '../api';
 import './pages.css';
@@ -599,6 +599,9 @@ export function InboxBoard({ items, products, display, now, onOpenItem, stateOf,
   const isSelected = (e: BoardEntry) => (e.card
     ? selectedCard === stopKey({ card: e.card })
     : !selectedCard && !!e.item && !!selected && e.item.id === selected.id && e.item.product === selected.product);
+  // The card you are on, if it is one of yours on this board: the first Shift-
+  // or ⌘-click takes it into the pick (board-select.ts `clickMarks`).
+  const cursorId = !selectedCard && selected && columns.some((c) => c.rows.some((r) => !!r.item && isSelected(r))) ? selected.id : null;
   // The keyboard's card stays on the screen as J, K and the arrows move it,
   // and only when it moves, so a refresh never scrolls the board out from
   // under the pointer. Before the frame is drawn, not after: after, a card
@@ -707,14 +710,18 @@ export function InboxBoard({ items, products, display, now, onOpenItem, stateOf,
         {/* ⌘- or Shift-click adds the card to the pick or takes it away
             (board-select.ts); a plain click opens it, as before. A teammate's
             card is never picked: no bulk command can act on their thread. */}
+        {/* While anything is picked a card is filled or plain, never just
+            outlined: the keyboard's edge beside the fill read as "not picked"
+            on a card that was (w-2e3819913c, 2026-10-07). */}
         {rows.map((e) => {
           const pick = !!e.item && !!onMark;
           const on = pick && !!marked?.has(e.item!.id);
-          return <button type="button" key={e.key} className={`th-card${isSelected(e) ? ' selected' : ''}${on ? ' picked' : ''}`}
+          const edge = isSelected(e) && !marked?.size;
+          return <button type="button" key={e.key} className={`th-card${edge ? ' selected' : ''}${on ? ' picked' : ''}`}
           {...(pick ? { 'data-board-id': e.item!.id, 'aria-pressed': on } : {})}
           onClick={(ev) => {
             if (pick && cardClickIntent({ shift: ev.shiftKey, meta: ev.metaKey, ctrl: ev.ctrlKey }) === 'toggle') {
-              onMark!(toggleMark(marked ?? new Set(), e.item!.id));
+              onMark!(clickMarks(marked ?? new Set(), e.item!.id, cursorId));
               return;
             }
             if (e.item) onOpenItem(e.item); else if (e.card) onOpenCard?.(e.card);

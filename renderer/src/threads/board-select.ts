@@ -20,6 +20,16 @@ export function toggleMark(marks: ReadonlySet<string>, id: string): Set<string> 
   return next;
 }
 
+/** What a Shift- or ⌘-click leaves picked. The first one also takes the card
+ *  you were on, as the list's Shift+J takes the row you are on: without it you
+ *  open a card, Shift-click three more, and the one you started from is left
+ *  out (w-2e3819913c, "I would assume the middle one is not selected, but it
+ *  should be"). After that it only toggles, so a card taken out stays out. */
+export function clickMarks(marks: ReadonlySet<string>, id: string, cursor: string | null): Set<string> {
+  if (marks.size) return toggleMark(marks, id);
+  return new Set(cursor ? [cursor, id] : [id]);
+}
+
 /** The box between where the drag started and where the pointer is now,
  *  whichever way it went. */
 export function marqueeBox(a: { x: number; y: number }, b: { x: number; y: number }): Box {
