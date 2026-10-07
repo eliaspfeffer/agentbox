@@ -189,6 +189,48 @@ export function readWorkItems(projectDir, now = Date.now()) {
   return out;
 }
 
+/**
+ * THE FINISHED THREADS THE 8 MB READ CUT OFF, read only when somebody asks.
+ *
+ * `readLines` keeps a ledger's trailing 8 MB, so a thread whose lines all came
+ * before that is in no fold, and one whose first lines did is folded without
+ * them (a blank title, the wrong `createdAt`). Measured 2026-10-07
+ * (w-fda2165ec6): 155 finished threads gone and 21 blank on one 12.8 MB
+ * ledger. Her call was that these load as she scrolls rather than up front, so
+ * the snapshot keeps its window and this reads the whole file, once per
+ * change of the file, for the Done and All tabs' next page.
+ *
+ * Finished threads only: this is history, and it is where the tabs that ask
+ * for it go. A ledger that fits in the window has nothing to give.
+ */
+const wholeFolds = new Map();
+export function readOlderWorkItems(projectDir, now = Date.now()) {
+  const file = ledgerPath(projectDir);
+  let size;
+  try { size = fs.statSync(file).size; } catch { return []; }
+  if (size <= MAX_LEDGER_BYTES) return [];
+  const stamp = ledgerStamp(file);
+  let whole = wholeFolds.get(file);
+  if (!whole || whole.stamp !== stamp) {
+    let lines;
+    try { lines = fs.readFileSync(file, 'utf8').split('\n').filter((l) => l && Buffer.byteLength(l, 'utf8') <= MAX_LINE_BYTES); } catch { return []; }
+    // Few ledgers are ever this big; hold the latest fold of each, no more.
+    if (wholeFolds.size >= 8) wholeFolds.delete(wholeFolds.keys().next().value);
+    whole = { stamp, items: foldWorkItems(lines, 0) };
+    wholeFolds.set(file, whole);
+  }
+  const windowed = foldedLedger(file);
+  const out = [];
+  for (const item of whole.items.values()) {
+    if (item.status !== 'done') continue;
+    const seen = windowed.get(item.id);
+    // In the window whole: the snapshot already has it right.
+    if (seen && seen.createdAt === item.createdAt) continue;
+    out.push(aged(item, now));
+  }
+  return out;
+}
+
 /** One work item, or null. */
 export function readWorkItem(projectDir, id, now = Date.now()) {
   if (!isWorkItemId(id)) return null;

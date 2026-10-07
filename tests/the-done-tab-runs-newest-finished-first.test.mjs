@@ -71,7 +71,9 @@ describe('the clock is when it was finished', () => {
 
 describe('every other tab keeps the sort you chose', () => {
   const rows = [done('urgent-old', 9, 2 * DAY), done('low-new', 1, HOUR)];
-  for (const tab of ['inbox', 'progress', 'snoozed', 'all', undefined]) {
+  // Not All since 2026-10-07: it holds finished threads now and reads them
+  // the way Done does (tests/the-all-tab-holds-finished-threads-too.test.mjs).
+  for (const tab of ['inbox', 'progress', 'snoozed', undefined]) {
     it(`${tab ?? 'no tab'} under Priority is still Urgent first`, () => {
       expect(ids(sorted(rows, byPriority, tab))).toEqual(['urgent-old', 'low-new']);
     });

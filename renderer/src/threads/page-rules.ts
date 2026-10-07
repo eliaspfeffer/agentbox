@@ -184,8 +184,20 @@ const byFinished = (a: Ranked, b: Ranked) => finishedAt(b) - finishedAt(a);
 // it was a wall of Urgent rows in no order a reader could follow, and nothing
 // in it is waiting on a priority any more. So Done always runs newest finished
 // first, and every other tab keeps the Display's sort.
-const order = (d: Display, tab?: string, projectOrder: string[] = [], direct?: ReadonlySet<string>) =>
-  (tab === 'done' ? byFinished : d.sort === 'updated' ? byUpdated : byPriority(projectOrder, direct));
+//
+// ALL IS EVERYTHING, FINISHED THREADS INCLUDED (w-fda2165ec6, 2026-10-07): it
+// held only open ones, about 40 of 1,339 on her store. What is still open
+// comes first, in the Display's sort; what is finished follows, newest
+// finished first, the way Done reads.
+type Cmp = (a: Ranked, b: Ranked) => number;
+const isFinished = (r: Ranked) => (r.status === 'done' ? 1 : 0);
+const finishedLast = (open: Cmp): Cmp => (a, b) =>
+  isFinished(a) - isFinished(b) || (isFinished(a) ? byFinished(a, b) : open(a, b));
+export const order = (d: Pick<Display, 'sort'>, tab?: string, projectOrder: string[] = [], direct?: ReadonlySet<string>): Cmp => {
+  if (tab === 'done') return byFinished;
+  const open = d.sort === 'updated' ? byUpdated : byPriority(projectOrder, direct);
+  return tab === 'all' ? finishedLast(open) : open;
+};
 
 /** The time column's heading: on Done it is when each thread was finished. */
 export const timeHeading = (tab?: string) => (tab === 'done' ? 'Done' : 'Updated');

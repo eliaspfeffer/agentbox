@@ -106,7 +106,7 @@ describe('the component that draws it', () => {
 describe('the tab numbers', () => {
   it('count what the filters show, so the number matches the list under it', () => {
     const counts = app.slice(app.indexOf('counts={{'), app.indexOf('counts={{') + 600);
-    for (const tab of ['inbox', 'progress', 'snoozed', 'done', 'allOpen']) {
+    for (const tab of ['inbox', 'progress', 'snoozed', 'done', 'allRows']) {
       expect(counts).toContain(`shownCount(${tab})`);
     }
   });

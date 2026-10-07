@@ -171,14 +171,24 @@ export function hiddenUntil(i: InboxItem, legacySnooze = 0): number {
 // deliberately not the same number as the `deferredUntil` that gates In
 // progress, which is any deferral by anyone, because nothing runs on a row an
 // agent parked either.
+//
+// `live` is whether a session is on this row right now (the supervisor's
+// running list). Nothing else here can see that, and the status cannot stand
+// in for it: a worker writes blocked or done, or leaves its answer, and then
+// keeps running while it writes its last message.
 export function belongsInInbox(
   i: InboxItem,
-  { deliveredThrough = 0, hiddenUntil = 0, now = Date.now() } = {},
+  { deliveredThrough = 0, hiddenUntil = 0, now = Date.now(), live = false } = {},
 ): boolean {
   // ADDED TO LATER AND NOT STARTED (w-afb66e6661). It is written down on
   // purpose and waits for a person rather than a clock, so it is in Later and
   // nowhere else. Not a deferral: there is no moment to come back at.
   if (notStarted(i)) return false;
+  // AN AGENT IS STILL WORKING ON IT (w-bc976fd247). A row that set itself
+  // blocked sat in Needs you wearing the turning mark until its session
+  // exited. It is In progress until then (`belongsInProgress`), and the
+  // branches below decide the moment it is not.
+  if (live) return false;
   if (hiddenUntil > now) return false;    // she put it away herself
   // One run of a repeating task that a worker EXPLICITLY marked clean. This is
   // the only place in the app where finishing hides something, so it is keyed on a
@@ -325,11 +335,15 @@ export function threadsOwedAnAnswer<T extends InboxItem & { id: string; parent?:
 // silence it bought was indistinguishable from being ignored.
 export function belongsInProgress(
   i: InboxItem,
-  { deferredUntil = 0, now = Date.now() } = {},
+  { deferredUntil = 0, now = Date.now(), live = false } = {},
 ): boolean {
   // Nothing is coming on a thread nobody has started: In progress promises a
   // worker, and this one is waiting for you to say go (w-afb66e6661).
   if (notStarted(i)) return false;
+  // A session on it is the promise kept, whatever the status says yet: an
+  // agent that has written blocked, done or a moment to wake at is still
+  // working until it exits (w-bc976fd247, and `live` above belongsInInbox).
+  if (live) return true;
   if (deferredUntil > now) return false;
   if (i.status === 'claimed') return true;
   // The promise this list makes has been kept: a session acted on her answer
@@ -375,9 +389,9 @@ export function belongsInProgress(
 // has its own way back ("Back to Inbox"). Stopping is for what is under way.
 export function stoppable(
   i: InboxItem,
-  { deferredUntil = 0, now = Date.now() } = {},
+  { deferredUntil = 0, now = Date.now(), live = false } = {},
 ): boolean {
-  return belongsInProgress(i, { deferredUntil, now });
+  return belongsInProgress(i, { deferredUntil, now, live });
 }
 
 /* --------------------- ACTIVE AGENTS, IN THE SIDEBAR --------------------- */
@@ -398,9 +412,9 @@ export function stoppable(
 // were spawned for, which is what they already are in her inbox.
 export function belongsOnTheRail(
   i: InboxItem,
-  { deliveredThrough = 0, hiddenUntil = 0, deferredUntil = 0, now = Date.now() } = {},
+  { deliveredThrough = 0, hiddenUntil = 0, deferredUntil = 0, now = Date.now(), live = false } = {},
 ): boolean {
-  if (belongsInProgress(i, { deferredUntil, now })) return true;
+  if (belongsInProgress(i, { deferredUntil, now, live })) return true;
   if (hiddenUntil > now && i.status !== 'done') return true;  // the user's own, put off: Scheduled
   return belongsInInbox(i, { deliveredThrough, hiddenUntil, now });
 }

@@ -158,6 +158,8 @@ describe('why the window has to close at all', () => {
     const input = read('main', 'claude-input.mjs');
     const steer = input.slice(input.indexOf('child.steer = text =>'));
     expect(steer).toMatch(/child\.stdin\.write\(JSON\.stringify\(\{ type: 'user'/);
-    expect(read('main', 'live-replies.mjs')).toMatch(/session\.child\.steer\(answer\)/);
+    // What is steered is their words inside `liveReplyBrief` (w-ac7f0c0cbb);
+    // what matters here is only that the hand-over happens in this tick.
+    expect(read('main', 'live-replies.mjs')).toMatch(/session\.child\.steer\(/);
   });
 });
