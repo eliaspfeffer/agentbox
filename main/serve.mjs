@@ -196,13 +196,16 @@ export function createServer({ channels, token, listeners = new Set(), dist = pa
     const url = new URL(req.url, 'http://127.0.0.1');
 
     // The token rides in a header on api calls and in the query on the event
-    // stream, because a browser cannot put a header on either a navigation or
-    // an EventSource. It guards the two doors that reach the store. The built
-    // screen is the same public files for everybody, and its own script and
-    // style requests carry no token, so asking for one there drew a blank tab.
-    const guarded = url.pathname === '/events' || url.pathname.startsWith('/api/');
+    // stream and on the inbox document, because a browser cannot put a header
+    // on a navigation or an EventSource. It guards the doors that reach the
+    // store and the document itself. Script and style requests carry no token:
+    // asking for one there drew a blank tab (2026-09-30). A path that is not a
+    // real file falls back to the document, so that fallback asks too.
+    // Otherwise any unknown path would hand over the inbox.
     const given = req.headers['x-agentbox-token'] || url.searchParams.get('token');
-    if (guarded && given !== token) {
+    const allowed = given === token;
+    const guarded = url.pathname === '/events' || url.pathname.startsWith('/api/');
+    if (guarded && !allowed) {
       res.writeHead(403, { 'content-type': 'text/plain' });
       res.end('Wrong or missing token. Use the url the terminal printed.');
       return;
@@ -266,7 +269,13 @@ export function createServer({ channels, token, listeners = new Set(), dist = pa
       res.writeHead(403).end('No');
       return;
     }
+    const denyDocument = () => {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Wrong or missing token. Use the url the terminal printed.');
+    };
     fs.readFile(file, (err, buf) => {
+      const document = err || path.basename(file) === 'index.html';
+      if (document && !allowed) { denyDocument(); return; }
       if (err) {
         fs.readFile(path.join(dist, 'index.html'), (err2, index) => {
           if (err2) {

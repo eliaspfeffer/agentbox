@@ -6,9 +6,9 @@
 // the page and refused its scripts: a blank white tab, every time. Found on
 // 2026-09-30 photographing two copies of the team version side by side.
 //
-// The built screen is the same public files for everybody and holds nothing of
-// anybody's; the doors that reach the store, /api and /events, are what the
-// token guards, and still do.
+// The scripts and styles stay public, which is what keeps the tab from going
+// blank. The inbox document itself asks for the token, and so does any path
+// that would fall back to that document. /api and /events still do too.
 import { it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -43,4 +43,17 @@ it('still refuses the store without the token', async () => {
   expect(res.status).toBe(403);
   const events = await fetch(`${base}/events`);
   expect(events.status).toBe(403);
+});
+
+it('refuses the inbox document when the token is missing', async () => {
+  const bare = await fetch(`${base}/`);
+  expect(bare.status).toBe(403);
+  expect(await bare.text()).toMatch(/token/i);
+  const named = await fetch(`${base}/index.html`);
+  expect(named.status).toBe(403);
+  const wander = await fetch(`${base}/no-such-page`);
+  expect(wander.status).toBe(403);
+  const page = await fetch(`${base}/?token=${token}`);
+  expect(page.status).toBe(200);
+  expect(await page.text()).toContain('app.js');
 });

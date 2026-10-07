@@ -29,8 +29,13 @@ case "$here" in
   *app.asar.unpacked/scripts)
     res="$(cd "$here/../.." && pwd)"
     app="$(cd "$res/.." && pwd)"
-    exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist" 2>/dev/null)"
-    [ -x "$app/MacOS/$exe" ] || exe="$(ls "$app/MacOS" 2>/dev/null | head -1)"
+    exe="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist" 2>/dev/null || true)"
+    # A missing PlistBuddy leaves exe empty, and `[ -x dir/ ]` is true because
+    # a directory is executable. Require a regular file, then the one binary
+    # sitting in MacOS/.
+    if [ ! -f "$app/MacOS/$exe" ] || [ ! -x "$app/MacOS/$exe" ]; then
+      exe="$(ls "$app/MacOS" 2>/dev/null | head -1)"
+    fi
     exec env ELECTRON_RUN_AS_NODE=1 "$app/MacOS/$exe" "$res/app.asar/main/approval-prompt-server.mjs"
     ;;
   *)

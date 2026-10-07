@@ -38,6 +38,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { findClaudeBin } from '../main/claude-bin.mjs';
+import { commandBundle } from './read-claude-commands.mjs';
 // The app's name is never typed, here or in what this writes out.
 import { Name } from '../shared/product-name.mjs';
 
@@ -198,7 +199,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`read-claude-models: no Claude Code here, keeping the table read from ${was}`);
     process.exit(0);
   }
-  const table = build(found.path);
+  const table = build(commandBundle(found.path));
   write(table);
   console.log(
     `read-claude-models: ${table.models.map((m) => `${m.alias}=${m.label} (${m.id})`).join(', ')}` +
