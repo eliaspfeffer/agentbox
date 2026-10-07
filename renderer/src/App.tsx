@@ -107,12 +107,13 @@ import {
   finishedCleared, firstRunNeeded, projectsOfTheirOwn, inboxCleared, laterCleared, laterId, laterIndex,
   mayOpenInbox, noCodingAgent, practising, restartFirstRun, snoozeRefused, tutorialRun,
   waitingId, waitingIndex,
-  finishFirstRun, forcedStep, readFirstRun, walkRows,
+  finishFirstRun, finishedTheFirstRun, setupStepCount, forcedStep, readFirstRun, walkRows,
   saveFirstRun, START as RUN_START, stepTo, TASK_BODY, TASK_TITLE, whyNotMade, type FirstRun,
   replyAnswered, replyWritten, skipStep, walkMayOpen,
 } from './onboarding';
 import { priorityCommands, priorityIdOf, priorityLabelOf, type PriorityId } from './priority';
 import { runNowCommands } from './run-now';
+import { withOlder } from './older-threads';
 import { NO_FILTER, filterBox, filterMenu, filterTags, isFiltering, toggleFilter, clearFilterPart, type BoxFilter as BoxFilterState, type FilterPart, type Harness } from './box-filter';
 import { BoxFilter } from './components/BoxFilter';
 import { itemPriority, moveProduct, placeScore } from '../../shared/rank.mjs';
@@ -1175,6 +1176,16 @@ export default function App() {
     return () => { api.firstRunWalking(false); };
   }, [walking]);
 
+  // WHICH SETUP STEP THEY REACHED, by number, so where people stop can be seen
+  // (setupStepCount in ./onboarding.ts). A walk opened at a named step for a
+  // screenshot is not somebody setting up.
+  const setupStep = forcedRun.current ? null : setupStepCount(run);
+  useEffect(() => {
+    if (setupStep === null) return;
+    const step = setupStep;
+    try { window.zero?.track?.('first_run_step', step); } catch {}
+  }, [setupStep]);
+
   // AND CLOSING HER OWN TASK FILLS THE INBOX UP, WHICH IS BEAT EIGHT.Staged is
   // the one she took on the round four page.
   //
@@ -1322,6 +1333,10 @@ export default function App() {
     if (!mayOpenInbox(claudeRef.current)) return;
     closeWhatFloats();
     if (practised) rememberOffered(localStorage);
+    // THAT setup was finished, and nothing about it (./onboarding.ts).
+    if (finishedTheFirstRun(runRef.current, { practised })) {
+      try { window.zero?.track?.('first_run_finished'); } catch {}
+    }
     const product = runRef.current?.product ?? null;
     if (product && filed === null) {
       void api.importAgents({ product, agents: chosen })
@@ -1521,7 +1536,25 @@ export default function App() {
   // toward launch" under Active agents. A count and a rail line are the same
   // promise broken more quietly. Everything comes back the moment the walk ends,
   // which is one render later; walkRows in ./onboarding says the rest.
-  const items = walkRows(snap?.items ?? [], run);
+  // OLD FINISHED THREADS, A PAGE AT A TIME (w-fda2165ec6). The snapshot reads
+  // a ledger's last 8 MB, which left 155 of Astral's finished threads on no
+  // tab. Her call: "if you're scrolling or whatever more should populate as
+  // needed". The foot of Done and All asks for the next page (`onEnd` on the
+  // List); `withOlder` says how a page meets the snapshot. `olderMore` is null
+  // until the first answer, and false once there is nothing left to ask for.
+  const [older, setOlder] = useState<WorkItem[]>([]);
+  const [olderMore, setOlderMore] = useState<boolean | null>(null);
+  const olderAsking = useRef(false);
+  const loadOlder = useCallback(() => {
+    if (olderAsking.current || olderMore === false) return;
+    olderAsking.current = true;
+    api.olderItems(older.length)
+      .then((page) => { setOlder((had) => [...had, ...page.items]); setOlderMore(page.more); })
+      .catch(() => setOlderMore(false))
+      .finally(() => { olderAsking.current = false; });
+  }, [older.length, olderMore]);
+  const itemsWithOlder = useMemo(() => withOlder(snap?.items ?? [], older), [snap?.items, older]);
+  const items = walkRows(itemsWithOlder, run);
 
   /* --------------------- her agents, as rows in her list ------------------- */
   // EVERY CLAUDE CODE AGENT ON HER MACHINE THAT AGENTBOX DID NOT START. They are
@@ -2122,19 +2155,22 @@ export default function App() {
   // it reads every project and every tab on purpose.
   // ALL (the team version, approved 2026-10-01): every open thread of yours,
   // whatever it is waiting on, as one list.
-  // ALL IS EVERYTHING OPEN, YOUR CONVERSATIONS INCLUDED. A conversation whose
-  // turn is the other person's is in no other tab (it is not running and it
-  // does not need you), so without this a message you just answered vanished
-  // from the Inbox altogether.
-  const allOpen = useMemo(() => {
+  // YOUR CONVERSATIONS INCLUDED. A conversation whose turn is the other
+  // person's is in no other tab (it is not running and it does not need you),
+  // so without this a message you just answered vanished from the Inbox
+  // altogether.
+  // AND DONE INCLUDED (w-fda2165ec6, 2026-10-07): "done and all don't contain
+  // most of my tasks". All held open threads only, about 40 of her 1,339.
+  // page-rules.ts `order` puts the open ones first and the finished after.
+  const allRows = useMemo(() => {
     const seenIds = new Set<string>();
     const talking = items.filter((i) => !i.agent && i.status !== 'done' && isDirect(snap?.products.find((p) => p.slug === i.product)));
-    return [...inbox, ...progress, ...snoozed, ...talking].filter((i) => (seenIds.has(i.id) ? false : (seenIds.add(i.id), true)));
-  }, [inbox, progress, snoozed, items, snap?.products]);
+    return [...inbox, ...progress, ...snoozed, ...talking, ...done].filter((i) => (seenIds.has(i.id) ? false : (seenIds.add(i.id), true)));
+  }, [inbox, progress, snoozed, done, items, snap?.products]);
   const wholeBox = view === 'inbox' ? inbox
     : view === 'snoozed' ? snoozed
       : view === 'progress' ? progress
-        : view === 'all' ? allOpen
+        : view === 'all' ? allRows
           : done;
   const shownBox = useMemo(() => filterBox(wholeBox, boxFilter), [wholeBox, boxFilter]);
   // THE DISPLAY MENU'S FILTERS AND SORT, on top of the box (approved
@@ -2215,7 +2251,7 @@ export default function App() {
     [withOthers, cards, view, picked, team?.me, inboxDisplay, snap?.products, now],
   );
   const mixedRows = useMemo(
-    () => (withOthers ? mergeRows(displayedBox, theirRows, view === 'done' ? 'done' : inboxDisplay.sort, { order: projectOrder, products: snap?.products ?? [] }) : null),
+    () => (withOthers ? mergeRows(displayedBox, theirRows, view === 'done' ? 'done' : inboxDisplay.sort, { order: projectOrder, products: snap?.products ?? [] }, view) : null),
     [withOthers, displayedBox, theirRows, inboxDisplay.sort, view, projectOrder, snap?.products],
   );
   // A teammate's thread opens as their card, over the page, and Back returns here.
@@ -5616,7 +5652,7 @@ export default function App() {
                       progress: (mineShown ? shownCount(progress) : 0) + theirCount('progress'),
                       snoozed: (mineShown ? shownCount(snoozed) : 0) + theirCount('snoozed'),
                       done: (mineShown ? shownCount(done) : 0) + theirCount('done'),
-                      all: (mineShown ? shownCount(allOpen) : 0) + theirCount('all'),
+                      all: (mineShown ? shownCount(allRows) : 0) + theirCount('all'),
                     }}
                     needs={team ? needsWord(picked, team.me) : undefined}
                     onView={(next) => { setView(next as View); setSelected(0); setMultiSel(new Set()); }}
@@ -5648,6 +5684,9 @@ export default function App() {
                   personCell={personCell}
                   onOpenCard={openTeammateCard}
                   selectedCard={keyCard ? cardSel : null}
+                  // The next page of old finished threads, at the foot of the
+                  // two tabs that hold them (w-fda2165ec6).
+                  onEnd={search === null && olderMore !== false && (view === 'done' || view === 'all') ? loadOlder : undefined}
                   items={list}
                   // Results are grouped and stamped like the inbox, whatever
                   // tab she opened search from. Scheduled would otherwise label

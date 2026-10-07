@@ -247,6 +247,14 @@ export const api = {
     return window.zero!.snapshot();
   },
 
+  // THE NEXT PAGE OF FINISHED THREADS THE SNAPSHOT LEFT OUT (w-fda2165ec6),
+  // asked for at the foot of Done and All. Fixtures have none: their ledgers
+  // are small, which is what an app with nothing cut off answers.
+  async olderItems(offset: number, limit = 50): Promise<{ items: WorkItem[]; more: boolean }> {
+    if (useFixtures || !window.zero?.olderItems) return { items: [], more: false };
+    return window.zero.olderItems({ offset, limit });
+  },
+
   // KEEPING AGENTBOX CURRENT. Through the seam like everything else, so both
   // buttons can be built and looked at with no packaged app behind them.
   // Fixtures answer the way a real installed copy would: the check finds

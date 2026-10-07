@@ -33,6 +33,7 @@ import { loadConfig } from './config.mjs';
 import { Store } from './store.mjs';
 import { Supervisor } from './supervisor.mjs';
 import { registerIpc } from './ipc.mjs';
+import { reportFromRenderer } from './crash-report.mjs';
 import * as workItemsDisk from './store/work-items.mjs';
 import { createTeamService, teamStateFile } from './team/index.mjs';
 import { loadCloudConfig, supabaseSession, headlessSessionFile } from './team/session.mjs';
@@ -120,6 +121,28 @@ function readVersion() {
 }
 
 /**
+ * The four channels main/main.mjs registers beside its window, not in ipc.mjs.
+ *
+ *  Each is about the desktop window itself (the dock badge, a ⌘R, banners in
+ *  Notification Center, the window's own crashes), so `registerIpc` never
+ *  files them and a tab asking got a 404. That was not harmless: a failed
+ *  `badge` became an uncaught error, the screen reported it on `crash`, that
+ *  failed too, and the tab sent thousands of requests a second.
+ *  tests/a-browser-tab-gets-an-answer-on-every-channel.test.mjs.
+ *
+ *  A tab has no dock and no ⌘R of ours to report, and nothing here decides
+ *  banners yet, so three of them answer with nothing. A crash goes through the
+ *  same scrubbed path as the desktop's, which writes nothing until crash
+ *  reports are set up for this process.
+ */
+function answerWhatOnlyTheWindowAnswered(ipcMain) {
+  ipcMain.handle('zero:badge', () => null);
+  ipcMain.handle('zero:notify', () => null);
+  ipcMain.handle('zero:boot-info', () => ({ reloaded: false, builtAt: null, recovered: null }));
+  ipcMain.handle('zero:crash', (_e, payload) => { reportFromRenderer(payload ?? {}); return null; });
+}
+
+/**
  * Boot the doing half, with no Electron anywhere.
  *
  *  Six lines, and they are the same six `main/main.mjs` runs. `analytics` and
@@ -163,6 +186,7 @@ export async function bootHeadless({ dataDir = repoRoot, appDir = repoRoot, user
     onChange: () => ipc?.push?.(),
   }) : null;
   ipc = registerIpc({ store, supervisor, config, window, host, team });
+  answerWhatOnlyTheWindowAnswered(host.ipcMain);
   return { config, store, supervisor, window, host, ipc, team, channels: host.ipcMain.handlers };
 }
 

@@ -3,7 +3,7 @@
 // end, on the title's line, the things that are not the message: priority, the
 // product, and when (or that an agent is on it, or that one stopped).
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import type { Product, RepeatRule, RunningSession, ThreadCard, View, WorkItem } from '../types';
 import { ago, dayLabel, previewText, stamp } from '../format';
 import { REST_HEADING, URGENT_HEADING, clickIntent, rowKeys, rowSummary, rowTitle, walkRowKeys } from '../list-rules';
@@ -136,7 +136,7 @@ export function dayGroups(
   return groups;
 }
 
-export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover, onAnswerImport, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null }: {
+export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover, onAnswerImport, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd }: {
   items: WorkItem[];
   view: View;
   // WHICH VIEW'S KEYS THE ROW HINT PRINTS, which is not always the view this
@@ -234,6 +234,9 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
   /** The teammate's row the keyboard is on, by `stopKey` (threads/walk-rules.ts).
    *  While it is set none of your rows is drawn selected. */
   selectedCard?: string | null;
+  /** Called as the foot of the list comes near the screen, for the next page
+   *  of old finished threads (w-fda2165ec6). Absent, there is no foot. */
+  onEnd?: () => void;
 }) {
   const rules = view === 'snoozed' ? (repeats ?? []) : [];
   // The keys the rows in THIS list offer, drawn on the row under the pointer.
@@ -745,6 +748,25 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
           })}
         </div>
       ))}
+      {onEnd && <ListFoot onEnd={onEnd} />}
     </div>
   );
+}
+
+// THE FOOT OF THE LIST, which asks for more as it comes within a screen of
+// being seen, so the next page is there before she reaches it. J walks the
+// list by scrolling each row into view, so the keyboard reaches it too.
+// Watched afresh whenever `onEnd` changes, which App does after every page: a
+// new watcher reports where the foot is straight away, so a page too short to
+// push it off the screen still asks for the next one.
+function ListFoot({ onEnd }: { onEnd: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const seen = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) onEnd(); }, { rootMargin: '0px 0px 800px 0px' });
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, [onEnd]);
+  return <div ref={ref} className="list-foot" aria-hidden />;
 }

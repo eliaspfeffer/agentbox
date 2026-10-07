@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('zero', {
   terminal: (payload) => ipcRenderer.invoke('zero:terminal', payload),
   agentUpdate: (payload) => ipcRenderer.invoke('zero:agent-update', payload),
   snapshot: () => ipcRenderer.invoke('zero:snapshot'),
+  olderItems: (payload) => ipcRenderer.invoke('zero:older-items', payload),
   dashboard: (slug) => ipcRenderer.invoke('zero:dashboard', slug),
   commandCatalog: (payload) => ipcRenderer.invoke('zero:command-catalog', payload),
   remoteControl: (payload) => ipcRenderer.invoke('zero:remote-control', payload),
@@ -167,7 +168,8 @@ contextBridge.exposeInMainWorld('zero', {
   // this window on purpose (a browser one autocaptures the text of what was
   // clicked, and here that text is task titles), so the page can say THAT
   // something happened and can say nothing about what.
-  track: (name) => ipcRenderer.invoke('zero:track', { name }),
+  // A number may ride with it (which setup step), and main keeps only a number.
+  track: (name, count) => ipcRenderer.invoke('zero:track', { name, count }),
   sessionTrace: (payload) => ipcRenderer.invoke('zero:session-trace', payload),
   // Everything that happened on one task, as the ledger lines it happened as.
   itemHistory: (payload) => ipcRenderer.invoke('zero:item-history', payload),

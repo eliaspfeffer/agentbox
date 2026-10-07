@@ -223,22 +223,29 @@ Nothing, unless you are running a build that was signed and released with a
 PostHog key baked into it. A build made from this repo has no key, so a clone
 and a fork are silent, and with no key the whole path is off at every send.
 
-A released build counts seven things, and they are counts:
+A released build counts twelve things, and they are counts:
 
 - the app was opened
+- the app was used today, once a day
+- a setup step was reached, by its number
 - first run finished
 - a repo was connected
 - an agent was seen
+- a task was written
 - a task was opened
 - a reply was sent
 - a task finished
+- an agent started work
+- an agent stopped work
 
 Each carries a random install id, the app and platform version, and at most
-four other things: how long something took, how many of a thing there were,
-which kind of row it was out of six fixed words, and whether an agent or you
-did it. No file contents, no prompts, no paths, no titles, nothing you typed.
+seven other things: how long something took, how many of a thing there were,
+which kind of row it was out of six fixed words, whether an agent or you did
+it, whether an agent's run failed, whether it happened in setup's practice
+project, and which coding agent ran it, Claude Code or Codex.
+No file contents, no prompts, no paths, no titles, nothing you typed.
 `shared/analytics-events.mjs` is the whole list, and anything a caller attaches
-beyond those four is dropped rather than sent, so nobody can widen it by
+beyond those seven is dropped rather than sent, so nobody can widen it by
 accident. Crash reports travel the same way and are scrubbed first
 (`shared/crash-scrub.mjs`).
 

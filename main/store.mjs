@@ -202,6 +202,23 @@ export class Store {
     return all;
   }
 
+  // THE NEXT PAGE OF FINISHED THREADS THE SNAPSHOT'S 8 MB READ LEFT OUT
+  // (`readOlderWorkItems`), newest finished first, for the Done and All tabs
+  // as she scrolls to their foot (w-fda2165ec6). Archived projects stay out,
+  // as they do of `listItems`.
+  listOlderItems({ offset = 0, limit = 50, now = Date.now() } = {}) {
+    const { workItemsDisk } = this.modules;
+    const all = [];
+    for (const product of this.listProducts()) {
+      let items = [];
+      try { items = workItemsDisk.readOlderWorkItems(product.dir, now); } catch { continue; }
+      for (const item of items) all.push({ ...item, product: product.slug, productName: product.name });
+    }
+    const finished = (i) => i.wrote?.status?.ts || i.updatedAt;
+    all.sort((a, b) => finished(b) - finished(a));
+    return { items: all.slice(offset, offset + limit), more: all.length > offset + limit };
+  }
+
   // One item, folded fresh off disk. The supervisor holds a SPAWN-TIME snapshot
   // for the whole life of a session, so it cannot ask what the session did to
   // the row without reading it again; that question is the difference between a
