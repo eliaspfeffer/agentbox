@@ -12,6 +12,15 @@ it. Not part of the app. Start it on a loop:
 /loop 30m /review-pull-requests
 ```
 
+Other rhythms, all from a Claude Code session in this repository that stays
+open (closing it stops them):
+
+- Continuously: `/loop 15m /review-pull-requests`, or `/loop /review-pull-requests`
+  to let Claude pick the pace. A pass with nothing new costs one quick check.
+- Hourly in the daytime: ask "run /review-pull-requests at the top of every
+  hour from 9am to 6pm on weekdays". Claude Code schedules it with a cron of
+  `0 9-18 * * 1-5`.
+
 Each pass reviews only what is new: a pull request, or new commits on one. A
 review covers exactly one commit, so new commits get a fresh review. Nothing is
 ever posted on GitHub by a pass. The maintainer answers in the inbox, and the
