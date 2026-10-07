@@ -110,10 +110,18 @@ export class PullRequestWatcher {
       // Looked up here because `gh api` asks for a card on a review row.
       let association = null;
       try { association = (await this.run('gh', ['api', `repos/${repo}/pulls/${n}`, '--jq', '.author_association'])).trim() || null; } catch {}
+      let account = null;
+      const login = entry.pr.author?.login;
+      if (login && !login.includes('/')) {
+        try {
+          const [created, repos] = (await this.run('gh', ['api', `users/${login}`, '--jq', '.created_at, .public_repos'])).trim().split('\n');
+          if (created) account = `opened ${created.slice(0, 10)}, ${repos ?? '?'} public repositories`;
+        } catch {}
+      }
       const flags = scanPullRequest({ files, diff });
       // Not being able to see it is not evidence there is nothing to see.
       if (!diff.trim()) flags.push({ flag: 'unreadable', why: 'its diff could not be fetched, so the app has read none of it', files: [], holdsRun: true });
-      ready.push({ ...entry, pr: { ...entry.pr, association }, flags });
+      ready.push({ ...entry, pr: { ...entry.pr, association, account }, flags });
     }
 
     // Re-read inside the lock: a worker can take or finish a row between the

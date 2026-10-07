@@ -47,6 +47,7 @@ const run = async (cmd, args) => {
   if (failGh) throw new Error('gh: could not resolve host');
   if (args[0] === 'api' && args[1] === 'user') return `${me}\n`;
   if (args[0] === 'api' && /^repos\/acme\/app\/pulls\/\d+$/.test(args[1])) return 'FIRST_TIME_CONTRIBUTOR\n';
+  if (args[0] === 'api' && args[1] === 'users/stranger') return '2011-04-02T10:00:00Z\n7026\n';
   if (args[0] === 'pr' && args[1] === 'list') return JSON.stringify(prs);
   if (args[0] === 'pr' && args[1] === 'view') return JSON.stringify({ files: [{ path: 'main/x.mjs', additions: 8, deletions: 0 }] });
   if (args[0] === 'pr' && args[1] === 'diff') return 'diff --git a/main/x.mjs b/main/x.mjs\n+++ b/main/x.mjs\n+const ok = 1;\n';
@@ -98,6 +99,9 @@ describe('a pull request reaching the inbox', () => {
     // On Claude Code, where its permission rules apply.
     expect(row.engine).toBe('claude');
     expect(row.body).toContain('Their relation to the repository: FIRST_TIME_CONTRIBUTOR');
+    // Looked up by the app, because `gh api` asks for a card on a review row
+    // (a trial review on 2026-10-07 broke that rule to find this out).
+    expect(row.body).toContain('Their account: opened 2011-04-02, 7026 public repositories');
     expect(row.body.startsWith(PULL_REQUEST_PROTOCOL.slice(0, 60))).toBe(true);
     expect(row.body).toContain('https://github.com/acme/app/pull/22');
     expect(row.body).toContain('/app/scripts/run-untrusted.sh');
