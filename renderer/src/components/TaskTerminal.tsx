@@ -1,13 +1,14 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {api} from '../api';
-import {commandRunning} from '../../../shared/terminal-state.mjs';
+import {commandRunning,whenACommandFinishes} from '../../../shared/terminal-state.mjs';
+import {linksAtRow} from '../../../shared/terminal-links.mjs';
 import {CrossIcon} from './CrossIcon';
 import '@xterm/xterm/css/xterm.css';
 import './task-terminal.css';
 const screenCache=new Map<string,{token:string;screen:string;offset:number;cols:number;rows:number}>();
 const views=new Map<string,{open:boolean;placement:'bottom'|'side'}>();
-export function TaskTerminal({product,id,headerTarget,startOpen=false,commandSession=false,onOpenChange}:{product:string;id:string;headerTarget?:HTMLElement|null;commandSession?:boolean;
+export function TaskTerminal({product,id,headerTarget,startOpen=false,commandSession=false,onOpenChange,onCommandFinished}:{product:string;id:string;headerTarget?:HTMLElement|null;commandSession?:boolean;
   /**
    * TOLD WHENEVER IT OPENS OR CLOSES, for the thread's menu (threads/ThreadMenu.tsx),
    * whose row says Open terminal or Hide terminal by what pressing it will do.
@@ -19,8 +20,14 @@ export function TaskTerminal({product,id,headerTarget,startOpen=false,commandSes
    * than a task that happens to have one: the Codex sign in on Settings. A
    * task's terminal stays shut until she opens it, which is why this defaults
    * to false and nothing else passes it. */
-  startOpen?:boolean}){
+  startOpen?:boolean;
+  /**
+   * TOLD EACH TIME A COMMAND FINISHES and the shell is back at its prompt, for
+   * Settings' Add account panel, which reloads the accounts when the sign in
+   * returns (shared/terminal-state.mjs, `whenACommandFinishes`). */
+  onCommandFinished?:()=>void}){
   const key=JSON.stringify({product,id});
+  const finished=useRef(onCommandFinished);finished.current=onCommandFinished;
   const saved=views.get(key);
   const [open,setOpen]=useState(saved?.open??startOpen);
   const [placement,setPlacement]=useState<'bottom'|'side'>(saved?.placement??'bottom');
@@ -52,13 +59,20 @@ export function TaskTerminal({product,id,headerTarget,startOpen=false,commandSes
         const style=getComputedStyle(host.current);
         const terminal=new Terminal({cursorBlink:true,screenReaderMode:true,allowTransparency:true,fontFamily:'Menlo, Monaco, monospace',fontSize:12,scrollback:5000,allowProposedApi:false,theme:{background:'#00000000',foreground:style.color},convertEol:false});
         const fit=new FitAddon();const serializer=new SerializeAddon();terminal.loadAddon(serializer);terminal.loadAddon(fit);terminal.open(host.current);
+        // A WEB ADDRESS OPENS IN THE BROWSER on click, wrapped over rows or not
+        // (shared/terminal-links.mjs). window.open is the app's one door out:
+        // main's window-open handler hands http(s) to the real browser.
+        const buf=()=>terminal.buffer.active;
+        const row=(y:number)=>{const line=buf().getLine(y);return line?{text:line.translateToString(!buf().getLine(y+1)?.isWrapped),wrapped:line.isWrapped}:undefined;};
+        terminal.registerLinkProvider({provideLinks:(y,show)=>{const found=linksAtRow(row,y-1);show(found.length?found.map(l=>({range:l.range,text:l.url,activate:()=>{window.open(l.url,'_blank');}})):undefined);}});
+        const watch=whenACommandFinishes(()=>finished.current?.());
         let offset=0,ready=false,token='',input=Promise.resolve();
         const report=(e:unknown)=>{if(!cancelled)setError(e instanceof Error?e.message:String(e));};
         const resize=()=>{if(!ready||cancelled||!host.current?.clientWidth||!host.current?.clientHeight)return;fit.fit();if(ready)void api.terminal({product,id,action:'resize',cols:Math.max(2,Math.min(500,terminal.cols)),rows:Math.max(2,Math.min(300,terminal.rows))}).catch(report);};
         const observer=new ResizeObserver(resize);observer.observe(host.current);
         const subscription=terminal.onData(data=>{input=input.then(async()=>{for(let i=0;i<data.length;i+=16384)await api.terminal({product,id,action:'write',data:data.slice(i,i+16384)});}).catch(report);});
         dispose=()=>{if(ready)screenCache.set(key,{token,screen:serializer.serialize({scrollback:1000}),offset,cols:terminal.cols,rows:terminal.rows});observer.disconnect();subscription.dispose();terminal.dispose();};
-        const consume=async(state:any)=>{if(cancelled)return;setCwd(state.cwd);setProcessName(state.process);setExited(state.exited);if(state.truncated){terminal.reset();terminal.writeln('[Earlier terminal output omitted]');}await new Promise<void>(resolve=>terminal.write(state.data,resolve));offset=state.offset;};
+        const consume=async(state:any)=>{if(cancelled)return;setCwd(state.cwd);setProcessName(state.process);setExited(state.exited);watch(state.process,state.exited);if(state.truncated){terminal.reset();terminal.writeln('[Earlier terminal output omitted]');}await new Promise<void>(resolve=>terminal.write(state.data,resolve));offset=state.offset;};
         let initial=await api.terminal({product,id,action:'open'});
         if(cancelled)return;
         token=initial.token;const cached=screenCache.get(key);

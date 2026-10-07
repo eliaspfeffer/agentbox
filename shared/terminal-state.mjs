@@ -56,3 +56,19 @@ export function commandRunning(processName, exited) {
   if (!name) return false;
   return !SHELLS.test(shellName(name));
 }
+
+// A COMMAND HAS JUST FINISHED: the terminal went from running something back to
+// its prompt, or the shell ended under it. Settings' Add account panel reloads
+// the accounts on this, because "the account appears above when it is done"
+// was a promise nothing kept: the row read "Not signed in" after `claude auth
+// login` said "Login successful." (2026-10-05). Feed it every reading the
+// terminal polls; it calls `onFinish` once per command, and never for a shell
+// that has only ever sat at its prompt.
+export function whenACommandFinishes(onFinish) {
+  let running = false;
+  return (processName, exited) => {
+    const now = commandRunning(processName, exited);
+    if (running && !now) onFinish();
+    running = now;
+  };
+}

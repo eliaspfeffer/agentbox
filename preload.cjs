@@ -167,7 +167,8 @@ contextBridge.exposeInMainWorld('zero', {
   // this window on purpose (a browser one autocaptures the text of what was
   // clicked, and here that text is task titles), so the page can say THAT
   // something happened and can say nothing about what.
-  track: (name) => ipcRenderer.invoke('zero:track', { name }),
+  // A number may ride with it (which setup step), and main keeps only a number.
+  track: (name, count) => ipcRenderer.invoke('zero:track', { name, count }),
   sessionTrace: (payload) => ipcRenderer.invoke('zero:session-trace', payload),
   // Everything that happened on one task, as the ledger lines it happened as.
   itemHistory: (payload) => ipcRenderer.invoke('zero:item-history', payload),
