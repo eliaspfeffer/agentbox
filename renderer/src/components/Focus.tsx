@@ -39,7 +39,7 @@ import {
 /*
  * THE ROW'S TWO WORDS COME FROM `rowSays` NOW, not from six constants pulled
    apart here. One list, one row shape (w-23a7b3f568, 2026-08-27). */
-import { rowKey, rowSays, slashRows, type SlashRow } from '../slash-menu';
+import { commandBeingWritten, enterWaitsForWords, rowKey, rowSays, slashRows, type SlashRow } from '../slash-menu';
 import { commandDraft } from '../../../shared/claude-commands.mjs';
 import { CompactionResult, runCompaction, runCommand } from './CompactionResult';
 import { codexCommand, COMPACTION_COPY } from '../../../shared/codex-commands.mjs';
@@ -2091,7 +2091,9 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
   // pointing at nothing once the list shortens to two.
   const [slashAt, setSlashAt] = useState(0);
   const [nativeNames, setNativeNames] = useState<string[]>([]);
-  const discoveringCommands = !item.agent && (runningEngine ?? DEFAULT_ENGINE) === DEFAULT_ENGINE && slashQuery(text) !== null;
+  // While the box starts with a slash, not only while the menu is open: once
+  // she types past /loop the box still has to know /loop is a command.
+  const discoveringCommands = !item.agent && (runningEngine ?? DEFAULT_ENGINE) === DEFAULT_ENGINE && text.startsWith('/');
   useEffect(() => {
     setNativeNames([]);
     if (!discoveringCommands) return;
@@ -2274,6 +2276,8 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
   // from the footer chip too; the chip is gone (see the note where it stood)
   // and with it went `chipOpen` and the click-away that shut it.
   const slashOpen = menuRows.length > 0;
+  // The command waiting on her words, once Enter has put it in the box.
+  const holding = !item.agent ? commandBeingWritten(text, claudeCode, nativeNames) : null;
   // WHAT THIS SEND WILL ACTUALLY RUN AS: the mode picked for this one message
   // if there is one, otherwise whatever the fleet is set to. Never a guess and
   // never a blank: a footer that says nothing when nothing is picked is the
@@ -2362,16 +2366,14 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
    * thread on this row within a few seconds, which is the confirmation. */
   const pickRow = (row: SlashRow, how: 'run' | 'fill' = 'run') => {
     if (row.kind === 'mode' || row.kind === 'codexMode') { pickMode(row.mode); return; }
-    if (how === 'fill') { setText(commandDraft(row.cmd)); ref.current?.focus(); return; }
     /*
-     * A COMMAND THAT REQUIRES AN ARGUMENT RUNS TOO, AND IS TOLD WHAT IT WANTS.
-       This line used to fill the box for those instead, which on `/fork` means
-       replacing the text she just typed with the same text and a space: the
-       menu closes, nothing else moves, and the key looks broken: typing /fork
-       and pressing return did nothing. It is the same fault w-5d1ad29efa fixed for the commands that take nothing,
-       one case further along. Both of the commands this reaches refuse
-       harmlessly and say what they want, which is something she can act on.
-       Tab still completes into the box for somebody who knows the word. */
+     * A COMMAND THAT WANTS WORDS WAITS FOR THEM (w-2c8ef9ed9e). Enter on /loop
+       used to start a loop with nothing to loop on. Now it fills the box and
+       Send runs it, the way a terminal does. It once ran so that Enter on /fork
+       would not look like a dead key; what answers that now is the box saying
+       which command it is holding (`commandBeingWritten`). slash-menu.ts says
+       which commands wait. */
+    if (how === 'fill' || enterWaitsForWords(row)) { setText(commandDraft(row.cmd)); ref.current?.focus(); return; }
     if (providerCommand(`/${row.cmd.name}`, runningEngine ?? 'claude-code')?.route !== 'claude') { void send(`/${row.cmd.name}`); return; }
     /*
      * The box is emptied AND the command is handed to `send` by hand. Both,
@@ -2442,6 +2444,16 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
           bottom of the window and there is nothing under it. */}
       {slashOpen && (
         <SlashMenu rows={menuRows} at={slashAt} onPick={pickRow} onHover={setSlashAt} />
+      )}
+      {/* THE COMMAND THE BOX IS HOLDING, SAID IN THE BOX (w-2c8ef9ed9e). Once
+          Enter has put `/loop ` there the menu closes on the space, so what she
+          still has to write is drawn faintly after the caret, the way a
+          terminal draws a command's argument hint, and goes as she types. */}
+      {holding && /^\/\S+\s*$/.test(text) && (
+        <div className="dock-ghost" style={{ top: ref.current?.offsetTop ?? 0 }} aria-hidden>
+          <span className="dock-ghost-typed">{text.endsWith(' ') ? text : `${text} `}</span>
+          {holding.argumentHint === '[arguments]' ? 'what it should do' : holding.argumentHint?.replace(/^[<[]|[>\]]$/g, '')}, then ⌘↵
+        </div>
       )}
       {/* AGENTS IN A CONVERSATION (w-7b9cb8636a): the @ menu, a mention's
           card, and the mentions drawn as chips under the text. Nothing here

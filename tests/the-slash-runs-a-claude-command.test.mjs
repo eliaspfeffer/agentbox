@@ -240,7 +240,8 @@ describe('the menu is one list', () => {
     // own division of the same two keys.
     expect(commandDraft({ name: 'model' })).toBe('/model ');
     const focus = read('renderer/src/components/Focus.tsx');
-    expect(focus).toContain("if (how === 'fill') { setText(commandDraft(row.cmd)); ref.current?.focus(); return; }");
+    // Enter fills too on a command that wants words, like /loop (w-2c8ef9ed9e).
+    expect(focus).toContain("if (how === 'fill' || enterWaitsForWords(row)) { setText(commandDraft(row.cmd)); ref.current?.focus(); return; }");
     expect(focus).toContain("pickRow(menuRows[slashAt] ?? menuRows[0], e.key === 'Tab' ? 'fill' : 'run');");
   });
 

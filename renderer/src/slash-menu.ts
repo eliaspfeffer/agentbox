@@ -112,8 +112,7 @@ export function slashRows(
   nativeNames: string[] = [],
 ): SlashRow[] {
   if (query === null) return [];
-  const native = claudeCode ? nativeNames.filter(name => !providerCommands('claude-code').some(c => c.name === name || c.aliases.includes(name))).map(name => ({name, description: 'Run this Claude Code command', menuDescription: null, whole: true, argumentHint: '[arguments]', aliases: []})) : [];
-  const commands = [...native, ...providerCommands(claudeCode ? 'claude-code' : 'codex')].filter(c => [c.name, ...c.aliases].some(w => w.startsWith(query.toLowerCase())));
+  const commands = commandsFor(claudeCode, nativeNames).filter(c => [c.name, ...c.aliases].some(w => w.startsWith(query.toLowerCase())));
   if (!claudeCode) {
     // CODEX HAS ITS OWN THREE NOW (2026-09-23). The paragraph above used to end
     // "the honest menu on a Codex row is no menu... one line here reverses it
@@ -125,6 +124,45 @@ export function slashRows(
   const modes: SlashRow[] = menuRowsFor(query, modeSet).map((mode) => ({ kind: 'mode', mode }));
   const cmds: SlashRow[] = commands.map((cmd) => ({ kind: 'command', cmd }));
   return [...modes, ...cmds];
+}
+
+/** Every command a row can run: the session's own first, then ours. */
+function commandsFor(claudeCode: boolean, nativeNames: string[]): ClaudeCommand[] {
+  const native = claudeCode ? nativeNames.filter(name => !providerCommands('claude-code').some(c => c.name === name || c.aliases.includes(name))).map(name => ({name, description: NATIVE_DESCRIPTION, menuDescription: null, whole: true, argumentHint: '[arguments]', aliases: []})) : [];
+  return [...native, ...providerCommands(claudeCode ? 'claude-code' : 'codex')];
+}
+const NATIVE_DESCRIPTION = 'Run this Claude Code command';
+
+/**
+ * WHETHER ENTER ON THIS ROW WAITS FOR HER WORDS rather than running it.
+ *
+ *  Typing /loop and pressing Return used to start a loop with nothing to loop
+ *  on. A command that wants words is completed into the box with its space,
+ *  she writes them, and Send runs it, the way a terminal does. Two kinds want
+ *  words: the session's own commands (skills like /loop, whose arguments we
+ *  cannot read, so they are treated as wanting them), and ours whose hint is a
+ *  required `<...>` (/fork, /rename). `/compact`'s hint is angle-bracketed but
+ *  says "optional", and a bare /model, /usage or /context answers on its own,
+ *  so those still run on Enter (w-5d1ad29efa). */
+export function enterWaitsForWords(row: SlashRow): boolean {
+  if (row.kind !== 'command') return false;
+  if (row.cmd.description === NATIVE_DESCRIPTION) return true;
+  const hint = row.cmd.argumentHint ?? '';
+  return hint.startsWith('<') && !/optional/i.test(hint);
+}
+
+/**
+ * THE COMMAND THE BOX IS HOLDING while she writes its words, or null.
+ *
+ *  Only once she has typed past the word: until the space, the menu is open and
+ *  says it. Only a command Enter would have waited on, because one that runs on
+ *  Enter is never left sitting in the box. */
+export function commandBeingWritten(text: string, claudeCode: boolean, nativeNames: string[]): ClaudeCommand | null {
+  const m = text.match(/^\/([a-z][a-z0-9:_-]*)\s/i);
+  if (!m) return null;
+  const word = m[1].toLowerCase();
+  const cmd = commandsFor(claudeCode, nativeNames).find(c => c.name === word || c.aliases.includes(word));
+  return cmd && enterWaitsForWords({ kind: 'command', cmd }) ? cmd : null;
 }
 
 /**
