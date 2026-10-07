@@ -49,7 +49,7 @@ import { Snooze } from './components/Snooze';
  are gone; their copy is in decisions.md and their photographs on
  `astral/w-86452550e5-looks`.
 */
-import { announcesUpdate, isUpdateRow } from './update-row';
+import { announcesUpdate, isUpdateRow, CHECK_SAY, updateLook } from './update-row';
 // Inbox zero is `IdlePage`.
 import { IdlePage } from './components/IdlePage';
 import { ago, closesTheTask, itemOptions, offerIsLive, parseRepeat } from './format';
@@ -5897,6 +5897,16 @@ export default function App() {
             ? (snap.update?.newVersion ?? null)
             : null}
           onInstallUpdate={() => { setModal(null); void api.updateInstall(); }}
+          /* LOOKING NOW, FROM ⌘K (w-39d6c237f7). The palette closes and the
+             answer arrives as a toast in the Settings row's own words, so the
+             two surfaces can never disagree about what was found. A check takes
+             a second or two against GitHub, so the toast says it is looking
+             first rather than leaving the press unanswered. */
+          onCheckUpdate={() => {
+            setModal(null);
+            showToast(CHECK_SAY.looking);
+            void api.updateCheck().then((got) => showToast(updateLook(got).sentence));
+          }}
           panelUp={panelShownNow}
           onTogglePanel={() => { setModal(null); togglePanel(); }}
           boardUp={inboxDisplay.view === 'board'}
@@ -6120,6 +6130,9 @@ export default function App() {
           // SIGN OUT AT THE FOOT OF SETTINGS (w-a09476712f): "should be at
           // bottom of settings page". Only while someone is signed in.
           account={snap?.team?.signedIn && snap.team.me ? { email: snap.team.me.email, team: snap.team.team?.name ?? null, onSignOut: () => { void api.teamSignOut().then(() => refresh()); } } : undefined}
+          // THE VERSION AND THE CHECK FOR A NEWER ONE (w-39d6c237f7), off the
+          // same snapshot field the sidebar card and ⌘K read.
+          update={snap?.update ?? null}
           onClose={() => { setSettingsOpen(false); setSettingsPane(null); setSettingsPage(null); }}
         />
       )}
