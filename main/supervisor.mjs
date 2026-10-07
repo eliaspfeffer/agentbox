@@ -111,6 +111,7 @@ import { autoSlots, DEFAULTS as MEMORY_GATE } from './memory-gate.mjs';
 import { LeftoverCleaner } from './leftovers.mjs';
 import { syncCodexMemoryGate } from './codex-memory-gate.mjs';
 import { autoAgents, perAccountAgents } from './machine.mjs';
+import { runEndedProps } from './analytics.mjs';
 
 const POLL_MS = 15_000;
 // HOW LONG SHE WAITS AFTER PRESSING THE BUTTON, and until now it was the line
@@ -5932,7 +5933,12 @@ export class Supervisor {
     if (live && !live.client.isClosed()) return live;
     const client = createCodexAppServer({
       spawn: () => spawn(this.config.codexBin, ['app-server'], {
-        cwd: this.appDir,
+        // HER HOME, NEVER THE APP'S OWN FOLDER. In an installed build that is
+        // `app.asar`, a file, and Node throws `spawn ENOTDIR` for a cwd that is
+        // not a folder: every Codex thread on every downloaded copy sat at
+        // Queued (2026-10-06). Each thread names its own cwd at thread/start,
+        // so this one is only somewhere real to stand.
+        cwd: this.config.home || os.homedir(),
         // The socket its threads' commands ask on, and no row: see
         // `codexMemoryGateEnv`. One app-server is every Codex thread of this
         // login, so a row named here would be the wrong row for all but one.
@@ -6309,6 +6315,9 @@ export class Supervisor {
       spawnFiles,
     };
     this.sessions.set(item.id, session);
+    // THAT an agent started work, and on which engine; nothing about the task.
+    // `count` is set by main.mjs and is absent wherever nothing is sent.
+    this.count?.('run_started', { engine });
     // Its worker, so a run left "running" by a crash can later be told ended.
     if (Number.isInteger(child?.pid)) this._leftoverCleaner?.worker(item.id, child.pid);
     if (engine !== 'codex') {
@@ -6583,6 +6592,7 @@ export class Supervisor {
       exited = true;
       if (how?.transportFault) session.transportFault = true;
       session.exitFailed = !!(signal || code !== 0 || session.transportFault || session.resultIsError || session.result == null);
+      this.count?.('run_finished', runEndedProps(session, Date.now()));
       onLine(`session exited (${code})`);
       // WHAT THE RUN CHANGED, SAVED WHERE SHE CAN OPEN IT.
       //

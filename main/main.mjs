@@ -28,7 +28,7 @@ import { dataFolderName, isNewUserBuild } from '../shared/side-build.mjs';
 import { runningAsAFreshUser } from '../shared/fresh-user-home.mjs';
 import { openFreshUser } from './fresh-user.mjs';
 import { installCrashReports, reportFromRenderer, pending as pendingCrashes, setTransport } from './crash-report.mjs';
-import { createAnalytics } from './analytics.mjs';
+import { createAnalytics, createDailyCount } from './analytics.mjs';
 import { createUpdater } from './updater.mjs';
 import { createSourceUpdater } from './source-updater.mjs';
 import { installNotifier } from './notify.mjs';
@@ -322,6 +322,8 @@ async function createWindow() {
   // died are finally sent, because a report is written while the process is
   // dying and delivery cannot be synchronous.
   const analytics = createAnalytics({ config, version: app.getVersion(), dir: crashDir });
+  // "Used today", once a day, at launch and whenever the window comes forward.
+  const usedToday = createDailyCount((name) => analytics.track(name));
   // The seam is filled whenever there is somewhere to send to. Whether anything
   // actually goes is asked again inside, at every send, so her switch stops it
   // from the moment she moves it rather than at the next launch.
@@ -330,6 +332,7 @@ async function createWindow() {
     const drained = analytics.drainCrashes(pendingCrashes());
     if (drained) console.log(`zero: sent ${drained} crash report(s) from a previous launch`);
     analytics.track('app_opened');
+    usedToday(Date.now());
   } else {
     console.log(`zero: diagnostics is ${analytics.reason}, nothing is sent`);
   }
@@ -354,6 +357,8 @@ async function createWindow() {
   // request so a project made after launch is not a folder of broken images.
   imageRoots = () => [config.accountRoot, ...store.listProducts().map((p) => p.repoPath).filter(Boolean)];
   const supervisor = new Supervisor(config, store, appDir, dataDir, userDir);
+  // THAT agents start and stop work (main/analytics.mjs checks the switch).
+  supervisor.count = (name, props) => analytics.track(name, props);
   app.on('before-quit', () => supervisor.killAll());
   // THE TEAM. Off entirely on a build with no team cloud (the single-person
   // app). Otherwise it restores whoever was signed in, and from then on every
@@ -619,6 +624,7 @@ async function createWindow() {
     lastScreenDetail = next;
     window.webContents.send('zero:screen-detail', { detail: next });
   };
+  window.on('focus', () => usedToday(Date.now()));
   window.on('move', tellScreenDetail);
   window.on('moved', tellScreenDetail);
   electronScreen.on('display-metrics-changed', tellScreenDetail);

@@ -25,6 +25,15 @@ export const EVENTS = {
   task_opened: 'A task was opened',
   reply_sent: 'A reply was sent',
   task_finished: 'A task finished',
+  // REAL USE, NOT ONLY THE WALKTHROUGH (2026-10-06). Every "task finished" on
+  // the day downloads opened was somebody closing practice rows in setup; there
+  // was no count of an agent doing real work, of where setup was left, or of an
+  // install being used on a day, which is what retention is read from.
+  day_active: `${Name} was used today`,
+  first_run_step: 'A setup step was reached',
+  task_written: 'A task was written',
+  run_started: 'An agent started work',
+  run_finished: 'An agent stopped work',
 };
 
 export const EVENT_NAMES = Object.keys(EVENTS);
@@ -39,11 +48,15 @@ export const ALLOWED_PROPS = new Set([
   'count',          // how many of a thing, never which ones
   'kind',           // -> KINDS below, an enum and nothing else
   'fromAgent',      // whether an agent or the founder did it
+  'failed',         // whether an agent's run ended in failure
+  'practice',       // whether it happened in setup's practice project
+  'engine',         // -> ENGINES below, which coding agent ran
 ]);
 
-// `kind` is the one property that is not a number, so it is a closed list. A
-// value outside it is dropped, not passed through.
+// `kind` and `engine` are the properties that are not numbers, so each is a
+// closed list. A value outside it is dropped, not passed through.
 export const KINDS = new Set(['task', 'question', 'review', 'directive', 'agent', 'digest']);
+export const ENGINES = new Set(['claude', 'codex']);
 
 // Refuse an event nobody approved; drop a property nobody approved. Returns the
 // payload that may be sent, or null when the event itself is not one of hers.
@@ -54,6 +67,10 @@ export function sanitize(name, props = {}) {
     if (!ALLOWED_PROPS.has(key)) continue;
     if (key === 'kind') {
       if (typeof value === 'string' && KINDS.has(value)) out.kind = value;
+      continue;
+    }
+    if (key === 'engine') {
+      if (typeof value === 'string' && ENGINES.has(value)) out.engine = value;
       continue;
     }
     if (typeof value === 'number' && Number.isFinite(value)) out[key] = value;
