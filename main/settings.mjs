@@ -842,7 +842,7 @@ export function memoryGateSettings({ config, supervisor }) {
   if (on) {
     let s = null;
     try { s = supervisor.memoryGateStatus?.() ?? null; } catch {}
-    if (s?.role === 'standby') now = `Another ${NAME} on this Mac is coordinating.`;
+    if (s?.role === 'standby') now = `Another ${NAME} on this computer is coordinating.`;
     else if (s) {
       const heavy = (s.running ?? []).filter((r) => r.holdsSlot).length;
       const waiting = (s.waiting ?? []).length;

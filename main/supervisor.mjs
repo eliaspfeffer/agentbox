@@ -1322,7 +1322,7 @@ export class Supervisor {
     const word = engineLabel(engine);
     try {
       this.store.recordSessionResult(item.product, item.id, {
-        result: `This task was being worked on in ${word}, which is not installed on this Mac, so ${NAME} has not put a session back on it. It is not lost: install ${word} and the same session picks up where it stopped.`,
+        result: `This task was being worked on in ${word}, which is not installed on this computer, so ${NAME} has not put a session back on it. It is not lost: install ${word} and the same session picks up where it stopped.`,
         status: 'open',
       });
     } catch (e) { console.warn('zero: could not say the harness is missing:', e.message); }
@@ -5778,7 +5778,7 @@ export class Supervisor {
     const levels = codexModelLevels(slug, { home });
     if (!levels || levels.includes(level)) return null;
     const offers = levels.length ? `It offers ${levels.join(', ')}.` : 'It advertises no levels at all.';
-    return `this row asks "${slug}" to think at "${level}", which is not a level that model offers on this Mac. ${offers} Nothing here will pick a stand-in for her, so this run is stopping rather than doing her work at a level she did not choose`;
+    return `this row asks "${slug}" to think at "${level}", which is not a level that model offers on this computer. ${offers} Nothing here will pick a stand-in for her, so this run is stopping rather than doing her work at a level she did not choose`;
   }
 
   /**
@@ -5858,7 +5858,7 @@ export class Supervisor {
     const asked = from === 'workspace'
       ? `every Codex agent here is set to run on "${word}"`
       : `this row asks to run on "${word}"`;
-    return `${asked}, which is not a model the Codex on this Mac knows.${instead} Nothing here will pick a stand-in for her, so this run is stopping rather than doing her work on a model she did not choose`;
+    return `${asked}, which is not a model the Codex on this computer knows.${instead} Nothing here will pick a stand-in for her, so this run is stopping rather than doing her work on a model she did not choose`;
   }
 
   /**
@@ -7490,7 +7490,7 @@ export class Supervisor {
     // EVERY RUN, not only a fresh one: a conversation resumed after the switch
     // went on, and a chat, never heard it otherwise (Codex's review).
     if (cleaner.enabled) {
-      parts.push('Anything you leave running after your turn (a dev server, a preview, a background job) is stopped two hours after you finish, sooner if this Mac runs short of memory. '
+      parts.push('Anything you leave running after your turn (a dev server, a preview, a background job) is stopped two hours after you finish, sooner if this computer runs short of memory. '
         + 'If the person needs something to keep running, start it with AGENTBOX_KEEP=1 in its environment and say so in your answer. Stop anything else you started before you finish.');
     }
     const stopping = cleaner.stoppingNote(item.id);
