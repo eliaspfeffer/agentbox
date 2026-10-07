@@ -107,7 +107,7 @@ import {
   finishedCleared, firstRunNeeded, projectsOfTheirOwn, inboxCleared, laterCleared, laterId, laterIndex,
   mayOpenInbox, noCodingAgent, practising, restartFirstRun, snoozeRefused, tutorialRun,
   waitingId, waitingIndex,
-  finishFirstRun, finishedTheFirstRun, forcedStep, readFirstRun, walkRows,
+  finishFirstRun, finishedTheFirstRun, setupStepCount, forcedStep, readFirstRun, walkRows,
   saveFirstRun, START as RUN_START, stepTo, TASK_BODY, TASK_TITLE, whyNotMade, type FirstRun,
   replyAnswered, replyWritten, skipStep, walkMayOpen,
 } from './onboarding';
@@ -1174,6 +1174,16 @@ export default function App() {
     api.firstRunWalking(true);
     return () => { api.firstRunWalking(false); };
   }, [walking]);
+
+  // WHICH SETUP STEP THEY REACHED, by number, so where people stop can be seen
+  // (setupStepCount in ./onboarding.ts). A walk opened at a named step for a
+  // screenshot is not somebody setting up.
+  const setupStep = forcedRun.current ? null : setupStepCount(run);
+  useEffect(() => {
+    if (setupStep === null) return;
+    const step = setupStep;
+    try { window.zero?.track?.('first_run_step', step); } catch {}
+  }, [setupStep]);
 
   // AND CLOSING HER OWN TASK FILLS THE INBOX UP, WHICH IS BEAT EIGHT.Staged is
   // the one she took on the round four page.

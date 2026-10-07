@@ -204,11 +204,18 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // and attaches the properties itself. This is the reason there is no
   // analytics SDK in the renderer at all (a test fails the build if one
   // appears): a browser SDK autocaptures the text of what was clicked, and in
-  // Agentbox that text is task titles.
-  ipcMain.handle('zero:track', (_e, { name } = {}) => {
+  // Agentbox that text is task titles. A NUMBER MAY RIDE WITH THE NAME, and only
+  // a number (2026-10-06): which setup step was reached.
+  ipcMain.handle('zero:track', (_e, { name, count } = {}) => {
     if (!EVENT_NAMES.includes(name)) return false;
-    return analytics.track(name);
+    return analytics.track(name, Number.isFinite(count) ? { count } : undefined);
   });
+
+  // WHETHER A COUNT CAME FROM SETUP'S PRACTICE PROJECT, read off the project's
+  // own flag rather than its name, so the walkthrough and real use part.
+  const isPractice = (slug) => {
+    try { return store.listProducts().some((p) => p.slug === slug && p.practice === true); } catch { return false; }
+  };
 
   ipcMain.handle('zero:approve', (_e, { id, allow, note }) => {
     return { ok: answerApproval(id, allow, note) };
@@ -566,8 +573,8 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     if (team && status !== 'done' && typeof answer === 'string' && answer.trim()) handOnByReply(product, id);
     // THAT the user replied and THAT something finished. Never a word of either:
     // in Agentbox the answer IS the prompt (privacy page, section 4).
-    if (typeof answer === 'string' && answer.trim()) analytics.track('reply_sent');
-    if (status === 'done') analytics.track('task_finished');
+    if (typeof answer === 'string' && answer.trim()) analytics.track('reply_sent', { practice: isPractice(product) });
+    if (status === 'done') analytics.track('task_finished', { practice: isPractice(product) });
     // HER REPLY IS THE OTHER HALF OF THE SAME WAIT, and it is the one she pays
     // on every round trip rather than once: measured 2026-08-24, median 9.1
     // seconds between pressing the key and the continuation being spawned.
@@ -745,6 +752,8 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     });
     // A real thread ends the walk's hold on agents (`Supervisor#sentByThem`).
     supervisor.sentByThem(labels);
+    // THAT a task was written, and whether in practice. Never its words.
+    analytics.track('task_written', { practice: isPractice(product) });
     // AND LOOK AT IT NOW. Composing used to write the line and stop, so the
     // task sat in the store until the next fifteen second tick: measured
     // 2026-08-24, median 7.0 seconds and up to 15.0 before the spawn was even

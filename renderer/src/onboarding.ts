@@ -296,6 +296,16 @@ export function finishedTheFirstRun(run: { tutorial?: boolean } | null, { practi
   return !!run && practised && !run.tutorial;
 }
 
+/**
+ * WHICH SETUP STEP TO COUNT, by its number in `BEAT` (2026-10-06), so the
+ *  steps where new people stop can be seen. Null for the tutorial re-run, which
+ *  is not setup, and for `landed`, which is the end and is counted as
+ *  `first_run_finished` instead. */
+export function setupStepCount(run: { step: Step; tutorial?: boolean } | null): number | null {
+  if (!run || run.tutorial || run.step === 'landed') return null;
+  return BEAT[run.step] ?? null;
+}
+
 export type Event =
   | { t: 'start' }
   | { t: 'folder'; path: string }
