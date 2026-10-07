@@ -1,3 +1,21 @@
+// THE DEFAULT LOGIN NAMES ITS ACCOUNT, EVEN THOUGH ITS FILE SITS BESIDE THE
+// FOLDER RATHER THAN INSIDE IT.
+//
+// WHAT WAS WRONG, reported on PR 13: the Accounts page drew the default row with
+// no email, while every row for a second login had one. The page cannot tell a
+// person which subscription their primary login actually is, which is the whole
+// reason it reads the file at all.
+//
+// HOW IT WAS MEASURED: Claude Code keeps the default login's `.claude.json` in
+// the HOME folder, next to `~/.claude`, and keeps it INSIDE the folder only when
+// that folder came from a `CLAUDE_CONFIG_DIR`. `accountIdentity` looked inside
+// `~/.claude` in both cases, so on the ordinary Mac it found nothing.
+//
+// WHAT CAN SILENTLY BREAK: the fallback is applied to a NAMED folder too, and
+// then a second login with no file of its own reports the default account's
+// email -- one subscription shown as two, which is the exact confusion
+// `duplicateAccountNote` exists to catch. The third expectation below is that.
+
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
