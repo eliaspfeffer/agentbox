@@ -105,9 +105,6 @@ describe('the tarball npm would publish', () => {
       // The memory check every worker's shell commands ask (w-3958c3753d):
       // Claude Code runs it as a file, so it ships like the approval server.
       'scripts/memory-gate-hook.sh',
-      // The sandbox a pull request review runs a stranger's tests in
-      // (w-bde446f1aa): the review is handed its path, so it ships as a file.
-      'scripts/run-untrusted.sh',
     ]);
   });
 

@@ -2,8 +2,6 @@ import { claudeActivity, codexActivity, currentActivity } from './agent-activity
 import { taskRemoteControl } from './task-remote-control.mjs';
 import { taskFolderPath, real, restoreTaskFolder } from './task-folders.mjs';
 import { SHIP_LABEL, ShipQueue, readShipSettings, shipScriptFor } from './ship-queue.mjs';
-import { PullRequestWatcher } from './pull-requests.mjs';
-import { PULL_REQUEST_RULES, isPullRequestRow } from '../shared/pull-requests.mjs';
 import { folderJob } from './task-folders-offthread.mjs';
 import { gitJob } from './git-change-offthread.mjs';
 import { queuedReplyText } from './live-replies.mjs';
@@ -348,16 +346,6 @@ export class Supervisor {
         this.spawnWorker(fresh, { continuation: true, shipFailure: reply });
       },
       afterShip: () => this.onShipped(),
-    });
-    // PULL REQUESTS FROM OTHER PEOPLE become review rows, for a project a
-    // person switched that on for in this Mac's config (main/pull-requests.mjs).
-    // With the list empty it never asks GitHub anything.
-    this.pullRequests = new PullRequestWatcher({
-      store,
-      products: () => this.store.listProducts(),
-      watched: () => this.config.pullRequestProducts ?? [],
-      sandbox: unpacked(path.join(this.appDir, 'scripts', 'run-untrusted.sh')),
-      isLive: (item) => this.sessions.has(item.id),
     });
     this._compactionJobs = new Map();
     this.sessions = new Map(); // itemId -> {child, product, startedAt, tail, itemId}
@@ -4037,10 +4025,6 @@ export class Supervisor {
     // Repeating tasks first, so a run created on this tick is already in the
     // list the fresh-work pass below reads, rather than waiting for the next.
     await this.serveRepeats(now);
-    // And a look at GitHub for new pull requests, at most every few minutes a
-    // project. Started and not awaited: GitHub can take seconds, and the rows
-    // it files are picked up by the next tick like any other.
-    this.pullRequests?.tick(now).catch((e) => console.warn('zero: pull requests:', e.message));
     // And the folders of rows she has finished, put away. On a timer of its own
     // rather than every pass, because it is a walk of the disk and a tick is
     // fifteen seconds: she closes rows while nothing at all is running, which
@@ -6300,7 +6284,7 @@ export class Supervisor {
     // it never starts.
     const runId = crypto.randomUUID();
     const spawnFiles = [];
-    this.prepareClaudePermissions(plan, product, runId, spawnFiles, item);
+    this.prepareClaudePermissions(plan, product, runId, spawnFiles);
 
     // THE ROW'S OWN FOLDER, and the shared checkout only when it cannot have
     // one. Everything downstream follows this one word: the snapshot the change
@@ -7320,7 +7304,7 @@ export class Supervisor {
   // The product's own docs dir rides too when it sits outside the store root,
   // which is what a product with a repo of its own looks like. The worker's cwd
   // needs no grant: Claude Code always has its working directory.
-  writeWorkerSettings(product = null, runId = crypto.randomUUID(), item = null) {
+  writeWorkerSettings(product = null, runId = crypto.randomUUID()) {
     const shipped = unpacked(path.join(this.appDir, 'worker-permissions.json'));
     if (!fs.existsSync(shipped)) return null;
     let rules;
@@ -7333,11 +7317,6 @@ export class Supervisor {
     add(this.config.storeRoot);
     if (product?.dir) add(product.dir);
     rules.permissions = { ...(rules.permissions ?? {}), additionalDirectories: dirs };
-    // THE ONE ROW THAT CARRIES RULES OF OURS: a pull request review, which
-    // spends its run reading text a stranger wrote and could be talked into
-    // speaking on GitHub (shared/pull-requests.mjs). Every other row runs on
-    // Claude Code's own defaults, as above.
-    if (isPullRequestRow(item)) rules.permissions = { ...rules.permissions, ...PULL_REQUEST_RULES };
     const gateHooks = this.memoryGateHooks();
     if (gateHooks) rules.hooks = { ...(rules.hooks ?? {}), ...gateHooks };
     // Beside the MCP config, and written the same way: a real file on disk,
@@ -7350,12 +7329,12 @@ export class Supervisor {
 
   // Every Claude session can ask the user, and every one of them is a worker
   // now that personal projects are gone (w-d19d6d387c).
-  prepareClaudePermissions({ args }, product, runId, spawnFiles, item = null) {
+  prepareClaudePermissions({ args }, product, runId, spawnFiles) {
     const mcpConfig = this.writeMcpConfig(runId);
     if (!mcpConfig) return;
     spawnFiles.push(mcpConfig);
     args.push('--mcp-config', mcpConfig, '--permission-prompt-tool', 'mcp__zero-approvals__approval_prompt');
-    const rules = this.writeWorkerSettings(product, runId, item);
+    const rules = this.writeWorkerSettings(product, runId);
     if (rules) { spawnFiles.push(rules); args.push('--settings', rules); }
   }
 

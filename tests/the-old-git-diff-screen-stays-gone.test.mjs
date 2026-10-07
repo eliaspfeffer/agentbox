@@ -67,10 +67,7 @@ describe('the code an agent wrote comes out of the conversation, never out of gi
     for (const f of files) {
       // 2026-09-16: an explicit /diff command is approved migration parity.
       // The automatic task diff screen remains absent.
-      // 2026-10-07 (w-bde446f1aa): the pull request watcher asks GitHub for a
-      // stranger's pull request with `gh pr diff`, to scan it before anything
-      // runs. That is not an agent's work shown out of git.
-      if (f === 'git-change.mjs' || f === 'task-commands.mjs' || f === 'pull-requests.mjs') continue;
+      if (f === 'git-change.mjs' || f === 'task-commands.mjs') continue;
       const src = code(read(path.join('main', f)));
       expect(src, `${f} runs git diff`).not.toMatch(/'diff'|"diff"|git diff/);
     }

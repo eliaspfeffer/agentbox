@@ -3,7 +3,8 @@
 // w-bde446f1aa, 2026-10-07. Running a pull request's tests means running code
 // somebody outside wrote, as the person who owns this Mac: an ordinary test
 // file can read ~/.ssh, the `gh` token or the whole store and post it anywhere.
-// scripts/run-untrusted.sh wraps every such command in macOS's own sandbox.
+// The pull request loop's run-untrusted.sh (.claude/skills/review-pull-requests)
+// wraps every such command in macOS's own sandbox.
 // Measured by hand the same day: under the profile, `cat` of a denied file
 // exits 1 with "Operation not permitted" and a `fetch` to example.com fails
 // with EPERM, while the same fetch outside it returns 200.
@@ -19,7 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const wrapper = path.join(root, 'scripts', 'run-untrusted.sh');
+const wrapper = path.join(root, '.claude', 'skills', 'review-pull-requests', 'run-untrusted.sh');
 const canSandbox = process.platform === 'darwin' && fs.existsSync('/usr/bin/sandbox-exec');
 
 let home, work, outside;
@@ -85,19 +86,11 @@ describe.skipIf(!canSandbox)('running pull request code in the sandbox', () => {
   });
 });
 
-// The review is handed this script's path inside the installed app, and a
-// path inside app.asar cannot be run by another process.
-describe('the installed app', () => {
-  it('ships the script outside the archive', () => {
-    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-    expect(pkg.files).toContain('scripts/run-untrusted.sh');
-    expect(pkg.build.files).toContain('scripts/run-untrusted.sh');
-    expect(pkg.build.asarUnpack).toContain('scripts/run-untrusted.sh');
+describe('using it wrongly', () => {
+  it('is a file that can be run', () => {
     expect(fs.statSync(wrapper).mode & 0o111).not.toBe(0);
   });
-});
 
-describe('using it wrongly', () => {
   it('refuses without a folder and a command', () => {
     const r = spawnSync(wrapper, [], { encoding: 'utf8' });
     expect(r.status).toBe(2);

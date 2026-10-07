@@ -5,8 +5,9 @@
 // person who owns it wanted them reviewed for anything malicious before they
 // are run, tested or merged. A review agent can be talked out of a check by
 // the very text it is reading, so the checks that decide whether code may run
-// on this Mac at all are plain code over the diff, done by the app before any
-// agent sees it, and handed to the agent as facts.
+// on this Mac at all are plain code over the diff, done by the pull request
+// loop (.claude/skills/review-pull-requests) before any agent sees it, and
+// handed to the agent as facts.
 //
 // Measured against the real queue that day: the dependency bumps (#16 to #20)
 // all touch package.json and package-lock.json, so all five must be held back
@@ -14,7 +15,7 @@
 // pass with nothing that blocks a run.
 
 import { describe, it, expect } from 'vitest';
-import { scanPullRequest, mayRunHere } from '../shared/pull-requests.mjs';
+import { scanPullRequest, mayRunHere } from '../.claude/skills/review-pull-requests/scan.mjs';
 
 // A unified diff the way `gh pr diff` prints it.
 const diffOf = (file, added = [], removed = []) => [
