@@ -1700,6 +1700,16 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
               >
                 <Switch label="Let agents start the tasks they file here" on={current.autonomous} onChange={(v) => setProject(current.slug, 'autonomous', v)} />
               </Row>
+              {/* PULL REQUESTS FROM OTHER PEOPLE (w-bde446f1aa): only where
+                  there is a code folder, the one place a repository can be. */}
+              {current.repoPath && (
+                <Row
+                  label="Review pull requests from GitHub"
+                  desc="Each new pull request becomes a task. An agent checks it for anything risky, runs its tests walled off from your files and the internet, and brings you one summary to merge, send back or close. Nothing is posted on GitHub until you say so."
+                >
+                  <Switch label="Review pull requests from GitHub" on={current.pullRequests} onChange={(v) => setProject(current.slug, 'pullRequests', v)} />
+                </Row>
+              )}
               {current.permission !== 'workspace' && (
                 <Row
                   label={twoEngines ? 'This project has its own Claude Code permissions' : 'This project has its own permissions'}

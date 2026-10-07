@@ -179,7 +179,9 @@ describe('the folders a worker may touch', () => {
     const sup = fs.readFileSync(path.join(REPO, 'main', 'supervisor.mjs'), 'utf8');
     // Named by the run since P2, so two spawns with different connector rules
     // never share one file; still generated, never the bundle's.
-    expect(sup).toContain("const rules = this.writeWorkerSettings(product, runId);");
+    // The row rides along since w-bde446f1aa, so a pull request review can
+    // carry the rules it needs (a-pull-request-review-asks-before-it-speaks-on-github).
+    expect(sup).toContain("const rules = this.writeWorkerSettings(product, runId, item);");
   });
 });
 

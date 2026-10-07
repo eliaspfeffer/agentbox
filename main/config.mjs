@@ -97,6 +97,10 @@ const DEFAULTS = {
   // default: autonomy here is granted per product, deliberately, in the
   // config file, the same way sessionArgs is.
   autonomousProducts: [],
+  // Products whose GitHub pull requests become review rows
+  // (main/pull-requests.mjs). Empty by default, and here rather than in the
+  // project folder so no agent can switch it on for itself.
+  pullRequestProducts: [],
   // PERSONAL PROJECTS AND THE DRIVE WERE BOTH DECLARED HERE AND BOTH ARE GONE
   // (w-d19d6d387c, 2026-09-22). A personal project ran its sessions on the
   // founder's message and nothing else, with no brief and no store; the drive

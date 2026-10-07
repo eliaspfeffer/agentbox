@@ -43,6 +43,7 @@
     "scripts/after-install.mjs",
     "scripts/approval-server.sh",
     "scripts/memory-gate-hook.sh",
+    "scripts/run-untrusted.sh",
     "worker-permissions.json",
     "LICENSE",
     "README.md"
@@ -128,6 +129,7 @@
       "worker-permissions.json",
       "scripts/approval-server.sh",
       "scripts/memory-gate-hook.sh",
+      "scripts/run-untrusted.sh",
       "renderer/dist/**/*",
       "package.json"
     ],
@@ -135,6 +137,7 @@
       "worker-permissions.json",
       "scripts/approval-server.sh",
       "scripts/memory-gate-hook.sh",
+      "scripts/run-untrusted.sh",
       "node_modules/node-pty/**"
     ],
     "mac": {

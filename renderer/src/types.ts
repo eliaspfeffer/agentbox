@@ -756,6 +756,8 @@ export interface ProjectSettings {
   /** Her mark for this project as a drawable url, or null for the burst. */
   logo: string | null;
   autonomous: boolean;
+  /** Whether its GitHub pull requests become review tasks (main/pull-requests.mjs). */
+  pullRequests: boolean;
   permission: PermissionMode | 'workspace';
   permissionArgs: string[] | null;
   /** This project's own Codex mode, or 'workspace' when it has no opinion. */

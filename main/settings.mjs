@@ -446,6 +446,7 @@ export function readSettings({ config, supervisor, store }) {
       // workspace default and never a strip of Claude Code jargon on a page
       // she opens to change her rules.
       autonomous: (config.autonomousProducts ?? []).includes(product.slug),
+      pullRequests: (config.pullRequestProducts ?? []).includes(product.slug),
       permission: override ? permissionMode(override) : 'workspace',
       permissionArgs: override ?? null,
       codexMode: config.projectCodexMode?.[product.slug] ?? 'workspace',
@@ -687,6 +688,11 @@ export function setProjectSetting({ config, supervisor }, { product, key, value 
   switch (key) {
     case 'autonomous':
       saveConfig(config, { autonomousProducts: withSlug(config.autonomousProducts, product, !!value) });
+      break;
+    // Whether this project's GitHub pull requests become review rows
+    // (main/pull-requests.mjs). The watcher reads the list off this same config.
+    case 'pullRequests':
+      saveConfig(config, { pullRequestProducts: withSlug(config.pullRequestProducts, product, !!value) });
       break;
     // WHICH OF HER CLAUDE CODE AGENTS THIS PROJECT TOOK. Names only: the files
     // stay where their author put them and Agentbox never copies or moves one,

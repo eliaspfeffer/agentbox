@@ -892,7 +892,7 @@ export const fixtureSettings = {
   projects: [
     {
       slug: 'kestrel', name: 'Kestrel', dir: '/fixtures/kestrel', repoPath: '/Users/you/Desktop/dev/kestrel',
-      autonomous: true,
+      autonomous: true, pullRequests: true,
       permission: 'workspace', permissionArgs: null, running: 2,
       instructions: [
         'The card art is the product. Never ship a card that renders wrong,',
@@ -903,12 +903,12 @@ export const fixtureSettings = {
     },
     {
       slug: 'onboard', name: 'Onboard', dir: '/fixtures/onboard', repoPath: null,
-      autonomous: false,
+      autonomous: false, pullRequests: false,
       permission: 'workspace', permissionArgs: null, running: 0, instructions: '',
     },
     {
       slug: 'thicket', name: 'Thicket', dir: '/fixtures/thicket', repoPath: null,
-      autonomous: false,
+      autonomous: false, pullRequests: false,
       permission: 'plan', permissionArgs: ['--model', 'claude-opus-5', '--allowedTools', 'mcp__agentbox', '--permission-mode', 'plan'],
       running: 0, instructions: '',
     },
