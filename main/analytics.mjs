@@ -204,3 +204,30 @@ export function createAnalytics({ config, version, dir, client, env = process.en
     async shutdown() { try { await posthog?.shutdown?.(); } catch {} },
   };
 }
+
+// "USED TODAY", ONCE PER CALENDAR DAY (2026-10-06). Retention is read from
+// whether an install was used on a day, and `app_opened` cannot say that: a Mac
+// app left open for a week sends it once. This is touched at launch and every
+// time the window comes forward, and sends only on the first touch of each
+// local day. Kept in memory: a relaunch on the same day may send it again,
+// which PostHog's per-install, per-day counting absorbs.
+export function createDailyCount(track) {
+  let last = null;
+  return (now) => {
+    const d = new Date(now);
+    const day = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    if (day === last) return;
+    last = day;
+    track('day_active');
+  };
+}
+
+// WHAT AN AGENT'S RUN REPORTS WHEN IT ENDS: how long, whether it failed, and
+// which engine. Nothing about the task it was on.
+export function runEndedProps(session, now) {
+  return {
+    seconds: Math.round((now - (session.startedAt ?? now)) / 1000),
+    failed: !!session.exitFailed,
+    engine: session.engine,
+  };
+}

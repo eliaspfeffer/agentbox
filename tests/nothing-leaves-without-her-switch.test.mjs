@@ -49,13 +49,16 @@ describe('the renderer cannot send anything', () => {
   it('does not carry the key into the window either', () => {
     const preload = fs.readFileSync(new URL('../preload.cjs', import.meta.url), 'utf8');
     expect(preload).not.toMatch(/posthogKey|ASTRAL_POSTHOG_KEY/);
-    // The bridge sends a NAME and nothing else.
-    expect(preload).toMatch(/track: \(name\) => ipcRenderer\.invoke\('zero:track', \{ name \}\)/);
+    // The bridge sends a NAME and a NUMBER and nothing else (the number since
+    // 2026-10-06, for which setup step; main drops anything that is not one).
+    expect(preload).toMatch(/track: \(name, count\) => ipcRenderer\.invoke\('zero:track', \{ name, count \}\)/);
   });
 });
 
 describe('the list of what may be sent', () => {
-  it('is her seven and no more', () => {
+  // Her seven, and since 2026-10-06 the five that count real use rather than
+  // the walkthrough (tests/real-use-is-counted.test.mjs says why).
+  it('is her twelve and no more', () => {
     expect(Object.values(EVENTS)).toEqual([
       `${Name} was opened`,
       'First run finished',
@@ -64,6 +67,11 @@ describe('the list of what may be sent', () => {
       'A task was opened',
       'A reply was sent',
       'A task finished',
+      `${Name} was used today`,
+      'A setup step was reached',
+      'A task was written',
+      'An agent started work',
+      'An agent stopped work',
     ]);
   });
 
@@ -283,8 +291,8 @@ describe('the README, which is where the privacy notice lives', () => {
       .replace(Name.toLowerCase(), 'the app'));
     const missing = said.filter((sentence) => !text.includes(sentence));
     expect(missing).toEqual([]);
-    expect(text).toContain('seven things');
-    expect(EVENT_NAMES).toHaveLength(7);
+    expect(text).toContain('twelve things');
+    expect(EVENT_NAMES).toHaveLength(12);
   });
 
   it('promises no content leaves, which is what sanitize enforces', () => {

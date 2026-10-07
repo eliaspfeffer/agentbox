@@ -418,8 +418,13 @@ function AccountRows({ agent, onChoose, onAdd }: {
    IT TYPES THE COMMAND ONCE. The line came back from main, which made the
    folder it points at, so there is nothing for her to remember, retype or get
    wrong. `sent` guards the write because React may run this twice and signing
-   in twice is worse than not at all. */
-function SettingsTerminal({ command }: { command?: string }) {
+   in twice is worse than not at all.
+
+   `onFinished` is told when the sign in hands back to the prompt, so the new
+   account appears above the moment it is signed in, which is what the panel
+   promises. It used to stay "Not signed in" until something else reloaded the
+   page (2026-10-05). */
+function SettingsTerminal({ command, onFinished }: { command?: string; onFinished?: () => void }) {
   const sent = useRef(false);
   useEffect(() => {
     if (!command || sent.current) return;
@@ -433,7 +438,7 @@ function SettingsTerminal({ command }: { command?: string }) {
   }, [command]);
   return (
     <div className="ac-shell">
-      <TaskTerminal product={SETTINGS_TERMINAL.product} id={SETTINGS_TERMINAL.id} startOpen />
+      <TaskTerminal product={SETTINGS_TERMINAL.product} id={SETTINGS_TERMINAL.id} startOpen onCommandFinished={onFinished} />
     </div>
   );
 }
@@ -1223,7 +1228,7 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
                 {adding.error
                   ? <p>{adding.error}</p>
                   : <p>Finish signing in below. It opens your browser, and the account appears above when it is done.</p>}
-                {!adding.error && <SettingsTerminal command={adding.command} />}
+                {!adding.error && <SettingsTerminal command={adding.command} onFinished={() => void load()} />}
               </div>
             )}
             {engine === 'codex' ? (
