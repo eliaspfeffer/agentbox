@@ -1,9 +1,9 @@
 // THE STORE AND CLAUDE CODE ON A LINUX HOME.
 //
 // The lookup was written on a Mac: /Users, a login zsh, and a keychain at
-// ~/Library/Keychains. A Linux home has none of those. The store is still
-// ~/.agentbox, Claude Code is still the file on disk, and a fresh home
-// still opens when the keychain directory is not there.
+// ~/Library/Keychains. A Linux home has none of those. The store is the XDG
+// data directory under that home, Claude Code is still the file on disk, and
+// a fresh home still opens when the keychain directory is not there.
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -11,7 +11,7 @@ import path from 'node:path';
 import { appHome } from '../main/store/home.mjs';
 import { findClaudeBin } from '../main/claude-bin.mjs';
 import { prepareHome } from '../shared/fresh-user-home.mjs';
-import { envNames } from '../shared/product-name.mjs';
+import { envNames, nameSlug } from '../shared/product-name.mjs';
 
 const HOME = '/home/ada';
 
@@ -31,11 +31,12 @@ function withoutStoreEnv(run) {
 }
 
 describe('a linux home needs no mac path', () => {
-  it('keeps the store at ~/.agentbox under /home, with no /Users in the answer', () => {
+  it('keeps the store in the XDG data directory under /home, with no /Users in the answer', () => {
     withoutStoreEnv(() => {
       const root = appHome(HOME);
-      expect(root).toBe(`${HOME}/.agentbox`);
+      expect(root).toBe(`${HOME}/.local/share/${nameSlug}`);
       expect(root.startsWith('/Users')).toBe(false);
+      expect(root).not.toBe(`${HOME}/.${nameSlug}`);
     });
   });
 

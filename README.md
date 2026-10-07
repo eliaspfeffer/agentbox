@@ -195,8 +195,10 @@ nothing new to pay for.
 default works unset and they all live in `main/config.mjs`. The ones that
 matter:
 
-- `storeRoot`: where the store lives. Defaults to a folder named after the app
-  in your home directory.
+- `storeRoot`: where the store lives. On macOS this defaults to a folder
+  named after the app in your home directory. On Linux it defaults to
+  `$XDG_DATA_HOME/agentbox`, which is `~/.local/share/agentbox` when that
+  variable is unset.
 - `claudeBin`: the binary to run. The app finds `claude` itself if you leave
   this alone.
 - `maxConcurrentSessions`: how many agents run at once. The queue absorbs the

@@ -2,7 +2,8 @@
 
 agentbox is an inbox over a store on disk, on Linux and on macOS: work items
 in, headless `claude -p` and Codex workers out, one per item. On Linux the
-store is `~/.agentbox`, the shell is the one that exists, and the palette
+store is `$XDG_DATA_HOME/agentbox` (`~/.local/share/agentbox` when that
+variable is unset), the shell is the one that exists, and the palette
 chord is Ctrl+K. The Mac app, the dmg, and the Darwin paths stay. Read the
 code and git for the current state; this file only holds the rules that are
 not obvious from them.

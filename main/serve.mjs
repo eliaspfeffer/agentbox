@@ -133,7 +133,7 @@ export async function bootHeadless({ dataDir = repoRoot, appDir = repoRoot, user
   // main/main.mjs does for the desktop. The ledgers live under the home the
   // store reads from this variable, and every worker is handed `storeRoot` as
   // that same variable. Without this line the two disagreed: the copy wrote its
-  // rows wherever an inherited variable pointed (or `~/.agentbox`), each worker
+  // rows wherever an inherited variable pointed (or a dot-folder in $HOME), each worker
   // looked under `storeRoot`, and every store call answered "no work item".
   // tests/an-agent-in-a-browser-copy-can-reach-its-own-work-item.test.mjs.
   // Rows already written under the old home come along, or they would vanish.
