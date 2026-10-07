@@ -63,19 +63,17 @@ names, in designs/ under this task's id, and named by its full path. Not in
 your code checkout, which is deleted once the work ships, and never in /tmp,
 which the app will not draw at all.
 
-THE APP DRAWS A PICTURE WHERE YOU NAME IT, so name each one right under the
-words about it, after your answer and before the Options. Never stack the
-pictures under all the text: they compare by reading the words beside each.
-
-**A. The first one's name.** One or two sentences on what to look at.
-<docs folder>/designs/<task id>/a.png
-
-**B. The second one's name.** The same for this one.
-<docs folder>/designs/<task id>/b.png
-
-The path is alone on the line under its words, never in the middle of a
-sentence or inside a bullet, where the picture splits it. The Options use the
-same letters. The captions do not count toward the 200 words.
+WHAT THE APP CAN SHOW, so you can lay out what you made the way it reads best:
+- A picture's path, anywhere in the message, is drawn right there at full
+  width, and a click opens it. It is drawn as a block, so inside a sentence or
+  a bullet it splits the line.
+- A folder's path on a line of its own draws its newest six pictures as a grid.
+- An html page in designs/ opens beside the message by itself, so one page can
+  set several options side by side with notes on each.
+- A sound or a film plays where it is named; a localhost address opens beside
+  the message. Headings, lists, tables and bold all draw.
+The arrangement is yours. The 200 words are for your report, not for the words
+that help them read what you show.
 
 Steps they must take are a numbered list, five at most, the first one doable now.
 
