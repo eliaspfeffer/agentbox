@@ -96,9 +96,10 @@ export function defaultStoreRoot({ home = os.homedir(), platform = process.platf
 // store goes missing on the release that renames the app.
 // `homeDir` is injected so a test can ask what this answers on a machine with
 // an old dot-folder on it, without one having to exist on the machine running
-// the test. Production never passes it.
-export function appHome(homeDir = os.homedir()) {
-  const override = readEnv('HOME');
+// the test. `platform` and `env` are the same kind of injection: this suite
+// runs on a Mac and still has to answer a Linux home. Production passes neither.
+export function appHome(homeDir = os.homedir(), { platform = process.platform, env } = {}) {
+  const override = readEnv('HOME', env);
   if (override) return override;
   const here = path.join(homeDir, `.${nameSlug}`);
   if (isDir(here)) return here;
@@ -110,9 +111,10 @@ export function appHome(homeDir = os.homedir()) {
   // be the same path loadConfig opens, or the desktop and this lookup write two
   // stores. The machine's own XDG_DATA_HOME is an absolute path in the real
   // home; applying it to a stand-in home writes that stand-in's store there.
-  if (process.platform === 'linux') {
-    const real = path.resolve(homeDir) === path.resolve(os.homedir());
-    return defaultStoreRoot({ home: homeDir, platform: 'linux', env: real ? process.env : {} });
+  // A caller that passes `env` is asking about that environment, not this one.
+  if (platform === 'linux') {
+    const real = env === undefined && path.resolve(homeDir) === path.resolve(os.homedir());
+    return defaultStoreRoot({ home: homeDir, platform: 'linux', env: real ? process.env : (env ?? {}) });
   }
   return here;
 }
