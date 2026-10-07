@@ -87,7 +87,9 @@ describe('the walk ends by saying it is over', () => {
     const finished = card.slice(card.indexOf('function Finished('), card.indexOf('LANDING IN HER OWN PROJECT'));
     expect(finished).not.toContain('COPY.finishHead');
     expect(finished).not.toContain('fr-burst');
-    const fin = app.slice(app.indexOf('const finishRun'), app.indexOf('const finishRun') + 900);
+    // To the function's own end, not a fixed width: 900 characters stopped
+    // short of its last lines the day it started counting a finished setup.
+    const fin = app.slice(app.indexOf('const finishRun'), app.indexOf('}, [closeWhatFloats]);', app.indexOf('const finishRun')));
     // THIS USED TO READ setProjectSetting, AND THAT IS THE WHOLE OF WHAT WAS
     // WRONG WITH THE BUTTON. Writing the ticked names into a settings file was
     // ALL the press did, and no other part of the app has ever read that key,

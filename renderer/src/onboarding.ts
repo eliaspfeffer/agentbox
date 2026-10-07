@@ -287,6 +287,15 @@ export function afterCommand(run: { tutorial?: boolean } | null): 'done' | 'end'
   return run?.tutorial ? 'end' : 'done';
 }
 
+/**
+ * WHETHER ENDING THIS WALK IS "FIRST RUN FINISHED" (2026-10-06). It was on the
+ *  approved list for seven weeks and never sent, so nobody could say how many
+ *  new installs got through setup. Walked to the end counts; the quiet way out
+ *  is not finishing, and the tutorial re-run from ⌘K is not a first run. */
+export function finishedTheFirstRun(run: { tutorial?: boolean } | null, { practised }: { practised: boolean }): boolean {
+  return !!run && practised && !run.tutorial;
+}
+
 export type Event =
   | { t: 'start' }
   | { t: 'folder'; path: string }

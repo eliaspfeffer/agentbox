@@ -107,7 +107,7 @@ import {
   finishedCleared, firstRunNeeded, projectsOfTheirOwn, inboxCleared, laterCleared, laterId, laterIndex,
   mayOpenInbox, noCodingAgent, practising, restartFirstRun, snoozeRefused, tutorialRun,
   waitingId, waitingIndex,
-  finishFirstRun, forcedStep, readFirstRun, walkRows,
+  finishFirstRun, finishedTheFirstRun, forcedStep, readFirstRun, walkRows,
   saveFirstRun, START as RUN_START, stepTo, TASK_BODY, TASK_TITLE, whyNotMade, type FirstRun,
   replyAnswered, replyWritten, skipStep, walkMayOpen,
 } from './onboarding';
@@ -1322,6 +1322,10 @@ export default function App() {
     if (!mayOpenInbox(claudeRef.current)) return;
     closeWhatFloats();
     if (practised) rememberOffered(localStorage);
+    // THAT setup was finished, and nothing about it (./onboarding.ts).
+    if (finishedTheFirstRun(runRef.current, { practised })) {
+      try { window.zero?.track?.('first_run_finished'); } catch {}
+    }
     const product = runRef.current?.product ?? null;
     if (product && filed === null) {
       void api.importAgents({ product, agents: chosen })
