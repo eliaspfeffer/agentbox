@@ -2648,24 +2648,40 @@ export class Supervisor {
    * account and the namer did not, so every call died in two seconds and no
    * row was named for a day.
    *
-   * So the Claude accounts are tried in turn, the ones not resting first, and
-   * the first answer wins. Each is asked once, so a Mac with every account at
-   * its limit costs one call per account and then waits for the next pass. The
-   * environment is a worker's (`_workerEnv`), so no API key from the app's own
-   * shell reaches the call. Codex keeps its one login, as before.
+   * So every account is tried in turn, the ones not resting first, and the
+   * first answer wins: the home engine's accounts, then the other engine's when
+   * this Mac offers it (`engineChoices`, so a Codex nobody opted into is never
+   * billed). Each is asked once, so a Mac with every account at its limit costs
+   * one call per account and then waits for the next pass. The environment is
+   * a worker's (`_workerEnv`), so no API key from the app's own shell reaches
+   * the call, and the account rides it the way it does on a worker's spawn.
    */
   async _askSmall(ask) {
-    const engine = this._homeEngine();
-    const opts = { claudeBin: this.config?.claudeBin, codexBin: this.config?.codexBin, engine };
-    if (engine === 'codex') return ask(opts);
-    const env = this._workerEnv(engine);
-    const all = this._profilesFor(engine);
-    const healthy = new Set(this._healthyProfiles());
-    for (const profile of [...all.filter((p) => healthy.has(p)), ...all.filter((p) => !healthy.has(p))]) {
-      const answer = await ask({ ...opts, env: profile === 'default' ? env : { ...env, CLAUDE_CONFIG_DIR: profile } });
-      if (answer) return answer;
+    const home = this._homeEngine();
+    const other = home === 'codex' ? DEFAULT_ENGINE : 'codex';
+    const engines = [home, ...(this.engineChoices().some((e) => e.id === other) ? [other] : [])];
+    for (const engine of engines) {
+      for (const env of this._smallModelEnvs(engine)) {
+        const answer = await ask({ claudeBin: this.config?.claudeBin, codexBin: this.config?.codexBin, engine, env });
+        if (answer) return answer;
+      }
     }
     return '';
+  }
+
+  /** One environment per account on an engine, the accounts not resting first. */
+  _smallModelEnvs(engine) {
+    const env = this._workerEnv(engine);
+    const now = Date.now();
+    const resting = (p) => {
+      const key = this._accountKey(engine, p);
+      return (this._profileCooldown?.[key] ?? 0) >= now || !!this._profileTrouble?.[key];
+    };
+    const all = this._profilesFor(engine);
+    return [...all.filter((p) => !resting(p)), ...all.filter(resting)].map((p) => {
+      if (engine === 'codex') return { ...env, CODEX_HOME: this._codexProfileHome(p) };
+      return p === 'default' ? env : { ...env, CLAUDE_CONFIG_DIR: p };
+    });
   }
 
   /**

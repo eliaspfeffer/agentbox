@@ -27,6 +27,11 @@
 //      limit spawns a call per account per tick.
 //   4. A row that cannot be named is retried every tick, and starves the rest.
 //   5. The message sorter, which makes the same kind of call, is left behind.
+//   6. Codex is left behind (asked for on this thread: "make sure it works for
+//      both codex and claude code"). A Codex-only Mac with two logins names
+//      on the one with room, and a Mac offering both engines falls back to
+//      the other when every account on its own is at its limit. A Codex
+//      nobody opted into is never billed for a name.
 
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -34,7 +39,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Each fake call answers by the account it was spawned on: the reply table is
-// keyed by CLAUDE_CONFIG_DIR, with 'default' for a spawn that names none.
+// keyed by CLAUDE_CONFIG_DIR, with 'default' for a Claude spawn that names
+// none, and by `codex:` plus CODEX_HOME for a Codex spawn.
 const fake = vi.hoisted(() => ({ spawns: [], replies: {} }));
 vi.mock('node:child_process', async (importActual) => {
   const actual = await importActual();
@@ -42,7 +48,9 @@ vi.mock('node:child_process', async (importActual) => {
   return {
     ...actual,
     spawn: (bin, args, options) => {
-      const account = options?.env?.CLAUDE_CONFIG_DIR ?? 'default';
+      const account = args[0] === 'exec'
+        ? `codex:${options?.env?.CODEX_HOME}`
+        : options?.env?.CLAUDE_CONFIG_DIR ?? 'default';
       fake.spawns.push({ bin, args, options, account });
       const child = new Emitter();
       child.stdout = new Emitter();
@@ -63,8 +71,15 @@ const { Supervisor } = await import('../main/supervisor.mjs');
 const SECOND = '/nonexistent-accounts/second';
 const LIMIT = [1, "You've hit your weekly limit · resets Oct 8 at 12pm\n"];
 
+const CODEX_ONE = '/nonexistent-accounts/codex-one';
+const CODEX_TWO = '/nonexistent-accounts/codex-two';
+// A Mac with Codex and no Claude Code, signed into two Codex logins.
+const CODEX_ONLY = { claudeFound: false, codexBin: '/nonexistent/codex', codexHome: CODEX_ONE, codexProfiles: ['default', CODEX_TWO] };
+// A Mac with both, where the person has opened the choice of engine.
+const BOTH = { codexBin: '/nonexistent/codex', codexHome: CODEX_ONE, engineChoice: '2026-10-01T00:00:00.000Z' };
+
 const dirs = [];
-function build({ items = [] } = {}) {
+function build({ items = [], extra = {} } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'name-account-'));
   dirs.push(dir);
   const product = { slug: 'shop', name: 'Shop', dir, repoPath: null };
@@ -79,6 +94,7 @@ function build({ items = [] } = {}) {
       maxConcurrentSessions: 3,
       authProfiles: ['default', SECOND],
       autonomousProducts: ['shop'],
+      ...extra,
     },
     {
       listItems: () => items,
@@ -184,6 +200,72 @@ describe('a row that cannot be named', () => {
     fake.replies = { default: [0, 'Stuck row name\n'] };
     await sup.nameTheRows([stuck], 1_000_000 + 11 * 60_000);
     expect(named).toEqual([{ id: 'w-stuck', label: 'Stuck row name' }]);
+  });
+});
+
+describe('on Codex', () => {
+  it('names the row on the second Codex login when the first is at its limit', async () => {
+    fake.replies = { [`codex:${CODEX_ONE}`]: LIMIT, [`codex:${CODEX_TWO}`]: [0, 'Talking head script quality\n'] };
+    const { sup, named } = build({ extra: CODEX_ONLY });
+    await sup.nameTheRows([row()]);
+    expect(named).toEqual([{ id: 'w-dictated', label: 'Talking head script quality' }]);
+    expect(fake.spawns.map((s) => s.account)).toEqual([`codex:${CODEX_ONE}`, `codex:${CODEX_TWO}`]);
+  });
+
+  it('asks a resting Codex login last', async () => {
+    fake.replies = { [`codex:${CODEX_ONE}`]: LIMIT, [`codex:${CODEX_TWO}`]: [0, 'Talking head script quality\n'] };
+    const { sup, named } = build({ extra: CODEX_ONLY });
+    sup._profileCooldown = { 'codex:default': Date.now() + 60 * 60_000 };
+    await sup.nameTheRows([row()]);
+    expect(named).toHaveLength(1);
+    expect(fake.spawns.map((s) => s.account)).toEqual([`codex:${CODEX_TWO}`]);
+  });
+
+  it('never calls a Claude Code that is not on the Mac', async () => {
+    fake.replies = {};
+    const { sup } = build({ extra: CODEX_ONLY });
+    await sup.nameTheRows([row()]);
+    expect(fake.spawns.every((s) => s.args[0] === 'exec')).toBe(true);
+    expect(fake.spawns).toHaveLength(2);
+  });
+
+  it('never hands the Codex call an OpenAI key from the app', async () => {
+    fake.replies = { [`codex:${CODEX_ONE}`]: [0, 'Talking head script quality\n'] };
+    const was = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = 'sk-test-not-real';
+    try {
+      const { sup } = build({ extra: CODEX_ONLY });
+      await sup.nameTheRows([row()]);
+    } finally {
+      if (was === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = was;
+    }
+    expect(fake.spawns).toHaveLength(1);
+    expect(fake.spawns[0].options.env.OPENAI_API_KEY).toBeUndefined();
+  });
+});
+
+describe('a Mac with both', () => {
+  it('names on Codex when every Claude account is at its limit', async () => {
+    fake.replies = { default: LIMIT, [SECOND]: LIMIT, [`codex:${CODEX_ONE}`]: [0, 'Talking head script quality\n'] };
+    const { sup, named } = build({ extra: BOTH });
+    await sup.nameTheRows([row()]);
+    expect(named).toEqual([{ id: 'w-dictated', label: 'Talking head script quality' }]);
+    expect(fake.spawns.map((s) => s.account)).toEqual(['default', SECOND, `codex:${CODEX_ONE}`]);
+  });
+
+  it('does not touch Codex while a Claude account answers', async () => {
+    fake.replies = { default: [0, 'Talking head script quality\n'], [`codex:${CODEX_ONE}`]: [0, 'Wrong engine\n'] };
+    const { sup } = build({ extra: BOTH });
+    await sup.nameTheRows([row()]);
+    expect(fake.spawns.map((s) => s.account)).toEqual(['default']);
+  });
+
+  it('never bills a Codex the person has not opted into', async () => {
+    fake.replies = { default: LIMIT, [SECOND]: LIMIT, [`codex:${CODEX_ONE}`]: [0, 'Talking head script quality\n'] };
+    const { sup, named } = build({ extra: { ...BOTH, engineChoice: undefined } });
+    await sup.nameTheRows([row()]);
+    expect(named).toEqual([]);
+    expect(fake.spawns.map((s) => s.account)).toEqual(['default', SECOND]);
   });
 });
 
