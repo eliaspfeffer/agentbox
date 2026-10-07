@@ -12,7 +12,7 @@
 
 import { claudeModelRows, CODEX_OWN, DEFAULT_MODEL, engineModelPicked, type ModelChoice } from '../models';
 import { splitMessage } from '../message-split';
-import { parseWhen } from '../format';
+import { parseRepeat, parseWhen, type RepeatParse } from '../format';
 import { firstName } from '../team/company';
 import type { Person } from '../types';
 import { projectSeenBy } from '../../../shared/thread-cards.mjs';
@@ -194,6 +194,22 @@ export function momentFromWords(text: string, now = Date.now()): { ts: number; h
   const when = parseWhen(text ?? '', now);
   if (!when || when.ts <= now) return null;
   return { ts: when.ts, hint: laterHint(when.ts) };
+}
+
+/**
+ * What a rule typed into Repeat it means: a rule, a rhythm the store cannot
+ * keep ("every other day"), or null. The same `parseRepeat` that reads a rule
+ * at the top of a message, with one difference: this box holds nothing but the
+ * rule, so a time after the rhythm is the time even without "at". At the start
+ * of a message "every day 5pm" leaves the "5pm" to the task, and here that
+ * would set 8am when she typed five
+ * (tests/repeat-it-takes-a-rule-in-words.test.mjs).
+ */
+export function ruleFromWords(text: string): RepeatParse {
+  const phrase = (text ?? '').trim().replace(/\s+/g, ' ');
+  if (!phrase) return null;
+  const timed = phrase.match(/^(.+?) (?:at )?(\d{1,2}(?::\d{2})? ?(?:am|pm)?)$/i);
+  return (timed && parseRepeat(`${timed[1]} at ${timed[2]}`)) || parseRepeat(phrase);
 }
 
 /* -------------------------------- message --------------------------------- */
