@@ -5482,17 +5482,17 @@ export class Supervisor {
   }
 
   /**
-   * WHICH SUBSCRIPTION THE FLEET IS SPENDING, for the one line that says so
-   * (w-e217e577e5, 2026-10-07). Null on a Mac where nothing readable is signed
-   * in, and then nothing is drawn anywhere.
+   * WHICH SUBSCRIPTION THE FLEET IS SPENDING, for the one line the walk says
+   * about it (w-e217e577e5, 2026-10-07). Null on a Mac where nothing readable is
+   * signed in, and then nothing is said anywhere.
    *
    * IT IS ANSWERED HERE FOR THE REASON `engineFacts` IS. Which engine a row runs
    * on needs the capability gate, and which ACCOUNT it runs on needs
    * `_narrowToChosen`, the rule that one account picked in Settings is the only
    * one the fleet uses. A corner that worked either out for itself could name
    * the subscription this app is deliberately not spending, which is the one
-   * mistake this line must never make: somebody reads it to find out whose money
-   * is going.
+   * mistake this line must never make: somebody reads it to find out whether any
+   * account of theirs got connected at all.
    *
    * THE FIRST OF THE POOL, which is the account the next spawn goes to on a Mac
    * with nothing picked (`_pickProfile` round-robins from there). Two accounts
