@@ -7644,7 +7644,9 @@ export function unpacked(p) {
 // row, and it used to count as a word: a persona test switched a finished
 // thread to Private and the agent ran again on its own, unasked and paid for.
 // Those fields describe the thread; they never ask it anything.
-const NOT_A_WORD = new Set(['visibility', 'priority', 'problem', 'progress', 'solution', 'blockedBy', 'blocks']);
+// Moving an answer out of the inbox is not asking the agent to answer again.
+// runAt also covers snoozes written before the inbox reminder had its own field.
+const NOT_A_WORD = new Set(['visibility', 'priority', 'problem', 'progress', 'solution', 'blockedBy', 'blocks', 'runAt', 'snoozedUntil']);
 function lastFounderWrite(item) {
   let latest = 0;
   for (const [field, w] of Object.entries(item?.wrote ?? {})) {

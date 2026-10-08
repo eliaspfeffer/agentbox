@@ -44,6 +44,8 @@ export interface WorkItem {
   // The moment before which nothing happens to this item: it cannot be claimed,
   // it will not start, and it is not in the inbox. 0 or absent is unscheduled.
   runAt?: number;
+  // When the existing answer returns to the human inbox. Never starts work.
+  snoozedUntil?: number;
   // Whether this has been started at all (w-afb66e6661). 'later' is a thread
   // written down and deliberately not begun: it waits for a person rather than
   // a clock, lives in Later, and nothing runs on it. 'now' is how it is
@@ -1019,6 +1021,7 @@ declare global {
       teamMessage(p: { to: string | string[]; body: string; priority?: number }): Promise<TeamCallResult>;
       threadEdit(p: { product: string; id: string; patch: ThreadEditPatch }): Promise<{ ok: boolean; error?: string }>;
       schedule(p: { product: string; id: string; runAt: number }): Promise<WorkItem>;
+      snooze(p: { product: string; id: string; snoozedUntil: number }): Promise<WorkItem>;
       repeats(): Promise<RepeatRule[]>;
       composeRepeat(p: { product: string; title: string; body?: string; priority?: number; rule: RepeatShape; engine?: string; model?: string }): Promise<RepeatRule>;
       setRepeat(p: { product: string; id: string; rule: Partial<RepeatShape & { title: string; body: string; priority: number }> }): Promise<RepeatRule>;
