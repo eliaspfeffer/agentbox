@@ -96,6 +96,7 @@ import {
   summarizeCodexEvent, traceCodexEvent, SAYING_CAP,
 } from './codex.mjs';
 import { createCodexAppServer } from './codex-app-server.mjs';
+import { codexLaunchEnv } from './codex-launch-env.mjs';
 import { CodexUsage } from './codex-usage.mjs';
 import { createCodexWorker, codexTranscriptFile, mcpServerNames, workerThreadParams } from './codex-session.mjs';
 import { CODEX_DEFAULT_MODE, isCodexMode } from '../shared/codex-modes.mjs';
@@ -6143,7 +6144,7 @@ export class Supervisor {
         // The socket its threads' commands ask on, and no row: see
         // `codexMemoryGateEnv`. One app-server is every Codex thread of this
         // login, so a row named here would be the wrong row for all but one.
-        env: { ...this._workerEnv('codex'), CODEX_HOME: home, ...this.codexMemoryGateEnv() },
+        env: codexLaunchEnv(this.config.codexBin, { ...this._workerEnv('codex'), CODEX_HOME: home, ...this.codexMemoryGateEnv() }),
         stdio: ['pipe', 'pipe', 'pipe'],
       }),
       // WHAT IS LEFT OF THIS LOGIN'S LIMIT, ARRIVING UNBIDDEN. `onNotification`
