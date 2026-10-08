@@ -91,7 +91,9 @@ describe('the linux store lives in the xdg data directory', () => {
   });
 
   it('is the browser command fallback, rather than a dot folder in $HOME', () => {
-    expect(bin).toContain('defaultStoreRoot(');
+    // appHome() answers the XDG directory on a fresh Linux home, and keeps a
+    // Mac's ~/.agentbox (tests/npx-on-a-mac-keeps-the-store-it-already-had).
+    expect(bin).toContain('appHome()');
     expect(bin).not.toContain("path.join(os.homedir(), '.agentbox')");
   });
 });

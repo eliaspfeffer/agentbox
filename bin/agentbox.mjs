@@ -16,7 +16,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { bootHeadless, createServer, newToken } from '../main/serve.mjs';
-import { defaultStoreRoot } from '../main/store/home.mjs';
+import { appHome } from '../main/store/home.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appDir = path.dirname(here);
@@ -43,10 +43,13 @@ if (args.includes('--help') || args.includes('-h')) {
 
 // WHERE THE STORE LIVES. A copy run out of npm has no folder of its own to
 // write into, and writing inside node_modules would be thrown away by the next
-// install. The default is the XDG data directory on Linux and a folder of the
-// app's name on macOS. `--dir` and AGENTBOX_HOME are the escape hatches.
+// install. The default is appHome(): a dot-folder already on disk, else the
+// XDG data directory on Linux and `~/.agentbox` on macOS, where this command
+// has always kept it. Not the desktop config's default, which on macOS is
+// `~/Agentbox` and would open every existing Mac user on an empty inbox.
+// `--dir` and AGENTBOX_HOME are the escape hatches.
 const dataDir = path.resolve(
-  flag('dir', process.env.AGENTBOX_HOME ?? defaultStoreRoot()),
+  flag('dir', process.env.AGENTBOX_HOME ?? appHome()),
 );
 fs.mkdirSync(dataDir, { recursive: true });
 

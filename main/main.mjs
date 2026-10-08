@@ -38,7 +38,6 @@ import { IMG_SCHEMES, imgPath, mediaResponse, mediaType, servable } from './img-
 import { hotWindowVerdict, storeHasWork } from './dev-window.mjs';
 import { writeHeldThenReload } from './write-before-reload.mjs';
 import { IS_SHE_TYPING_IN_THE_PAGE, theAppKeepsThisInput, theAppKeepsThisLetterInAPage } from '../shared/artifact-keys.mjs';
-import { installLinuxLauncher } from '../scripts/linux-launcher.mjs';
 import { NAME, Name, WAS } from '../shared/product-name.mjs';
 
 // HOW LONG TO WAIT AFTER THE LID OPENS, and the wait is for the network rather
@@ -1023,7 +1022,14 @@ if (!app.requestSingleInstanceLock()) {
     // A from-source Linux launch keeps the launcher command installed. The
     // entry runs that command; this only refreshes where it points. A packaged
     // build ships its own entry and must not write one from here.
-    if (process.platform === 'linux' && !app.isPackaged) installLinuxLauncher({ appDir, env: process.env });
+    // LOADED HERE AND NOT AT THE TOP: scripts/ is not in the packaged app or the
+    // npx package, and a static import of it stopped main.mjs loading at all,
+    // on every Mac (tests/the-mac-app-ships-every-file-it-starts-with).
+    if (process.platform === 'linux' && !app.isPackaged) {
+      import('../scripts/linux-launcher.mjs')
+        .then(({ installLinuxLauncher }) => installLinuxLauncher({ appDir, env: process.env }))
+        .catch(() => { /* a launcher is never a reason to stop a launch */ });
+    }
     // THE ABOUT BOX SAYS AGENTBOX AND ITS OWN VERSION (w-db6f5e331e). Run from
     // source it read the bundle's, which is Electron's: "Electron 43.0.0".
     app.setAboutPanelOptions({ applicationName: NAME, applicationVersion: app.getVersion(), version: '' });

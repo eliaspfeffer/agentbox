@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  Free and open source. Runs in your browser or as a desktop app on Linux and macOS, on the Claude Code or Codex plan you already have.<br>
+  Free and open source. Runs in your browser or as a Mac app, on the Claude Code or Codex plan you already have.<br>
   No server, no account, no extra subscription.
 </p>
 
@@ -31,7 +31,7 @@
 
 ## Install
 
-On Omarchy and other Linux machines, install Node 22, then use the browser command or the desktop command below. The same two commands run on macOS. Both need Claude Code or Codex installed and signed in on this machine.
+There are two ways to run it: in the browser, or as a Mac app. Both need Node 22 and Claude Code or Codex installed and signed in.
 
 **In your browser.** One command, nothing to install first:
 
