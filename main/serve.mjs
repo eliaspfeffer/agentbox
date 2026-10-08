@@ -163,7 +163,7 @@ export async function bootHeadless({ dataDir = repoRoot, appDir = repoRoot, user
   // main/main.mjs does for the desktop. The ledgers live under the home the
   // store reads from this variable, and every worker is handed `storeRoot` as
   // that same variable. Without this line the two disagreed: the copy wrote its
-  // rows wherever an inherited variable pointed (or `~/.agentbox`), each worker
+  // rows wherever an inherited variable pointed (or a dot-folder in $HOME), each worker
   // looked under `storeRoot`, and every store call answered "no work item".
   // tests/an-agent-in-a-browser-copy-can-reach-its-own-work-item.test.mjs.
   // Rows already written under the old home come along, or they would vanish.
@@ -231,6 +231,9 @@ export function createServer({ channels, token, listeners = new Set(), dist = pa
     // an EventSource. It guards the two doors that reach the store. The built
     // screen is the same public files for everybody, and its own script and
     // style requests carry no token, so asking for one there drew a blank tab.
+    // NOR DOES THE PAGE ITSELF ASK: the tab takes the token out of its address
+    // bar on load, so a reload asks for `/` bare, and refusing that drew
+    // "Wrong or missing token" on every reload (tests/a-browser-tab-survives-a-reload).
     const guarded = url.pathname === '/events' || url.pathname.startsWith('/api/');
     const given = req.headers['x-agentbox-token'] || url.searchParams.get('token');
     if (guarded && given !== token) {
