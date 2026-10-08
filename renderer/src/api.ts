@@ -429,7 +429,7 @@ export const api = {
     return window.zero.terminal(p);
   },
   async commandCatalog(p: {product: string; id: string}): Promise<string[]> {
-    if (useFixtures) return ['code-review','simplify','verify'];
+    if (useFixtures) return ['code-review','loop','simplify','verify'];
     return window.zero!.commandCatalog(p);
   },
   async command(p: {product: string; id: string; text: string}): Promise<{state: string; at: number; text?: string; name?: string}> {
