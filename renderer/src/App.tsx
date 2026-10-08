@@ -49,7 +49,7 @@ import { Snooze } from './components/Snooze';
  are gone; their copy is in decisions.md and their photographs on
  `astral/w-86452550e5-looks`.
 */
-import { announcesUpdate, isUpdateRow } from './update-row';
+import { announcesUpdate, isUpdateRow, CHECK_SAY, updateLook } from './update-row';
 // Inbox zero is `IdlePage`.
 import { IdlePage } from './components/IdlePage';
 import { ago, closesTheTask, itemOptions, offerIsLive, parseRepeat } from './format';
@@ -72,7 +72,8 @@ import { DONE } from './done-word';
 import { modalAfterLeavingATask } from './modal-scope';
 import { NOTHING_OVER_THE_APP, afterTheWalk, type OpenOverTheApp } from './walk-scope';
 import { splitMessage } from './message-split';
-import { parseQuery, searchItems } from './search';
+import { parseQuery } from './search';
+import { searchThreads, threadSearchDetails } from './threads/search';
 import { applyTheme, machineTheme, onMachineTheme, resolvePick, resolveTheme, THEME_KEY, type ThemePick } from './theme';
 import { hintScheduler, type HintScheduler } from './hint-timing';
 import { HINTS } from './hint-plate';
@@ -122,6 +123,7 @@ import { ChatAgentsContext, type ChatAgentsValue } from './team/ChatAgents';
 import { agentLinks, chatProjects, chatTaskSharing, chatTranscript, taskBrief, taskTitle, withTask } from './team/agent-mentions';
 import { isCleanRun, ruleIdOf, ruleLabel } from '../../shared/repeats.mjs';
 import { NAME, Name } from '../../shared/product-name.mjs';
+import { isNew } from '../../shared/notify-rules.mjs';
 import { inMyInbox, isShared, heldByAPerson, runnerOf, iSpokeLast } from '../../shared/team-rules.mjs';
 import { Face, TeamContext, firstName, teamView } from './team/people';
 import { FaceHover } from './team/status';
@@ -1443,8 +1445,11 @@ export default function App() {
     setRun((r) => (r ? stepTo(r, 'done') : r));
   }, [run, modal, finishRun]);
 
-  const prevInboxIds = useRef<Set<string>>(new Set());
-  const prevAskIds = useRef<Set<string>>(new Set());
+  // The ids on the snapshot before this one, which is what makes a row news.
+  // null until there has been one: an inbox she has cleared is empty, and that
+  // is not the same fact as never having looked (isNew, shared/notify-rules).
+  const prevInboxIds = useRef<Set<string> | null>(null);
+  const prevAskIds = useRef<Set<string> | null>(null);
   // After resolving an item FROM INSIDE IT, advance to the next one instead of
   // dropping back to the list: processing the inbox is a flow, not a round trip
   // per item. Resolving from the LIST leaves her in the list, which is
@@ -2084,10 +2089,22 @@ export default function App() {
   // Measured on a real store of 550 tasks: a full scan in 2.2ms. So there
   // is no index, no debounce and no worker, and the list narrows on the
   // keystroke.
+  const searchContext = useMemo(() => ({
+    products: snap?.products ?? [], people: snap?.team?.people ?? [], me: team?.me ?? null,
+  }), [snap?.products, snap?.team?.people, team?.me]);
   const hits = useMemo(
-    () => (search === null ? null : searchItems(items, search)),
-    [items, search],
+    () => (search === null ? null : searchThreads(items, search, searchContext)),
+    [items, search, searchContext],
   );
+  const searchDetails = useMemo(
+    () => search === null ? undefined : new Map((hits ?? []).map(h => [h.item.id, threadSearchDetails(h.item, searchContext)])),
+    [hits, search, searchContext],
+  );
+  // Read older pages one at a time while search is open. A conversation that
+  // was put away should be findable without first scrolling through All.
+  useEffect(() => {
+    if (search !== null && olderMore !== false) loadOlder();
+  }, [search, olderMore, loadOlder]);
   const searchSummaries = useMemo(
     () => new Map((hits ?? []).map((h) => [h.item.id, h.summary])),
     [hits],
@@ -2718,15 +2735,14 @@ export default function App() {
   useEffect(() => {
     if (!snap) return;
     const ids = new Set(inbox.map((i) => i.id));
-    const first = prevInboxIds.current.size === 0;
-    const fresh = first ? [] : inbox.filter((i) => !prevInboxIds.current.has(i.id));
+    const known = prevInboxIds.current;
+    const fresh = inbox.filter((i) => isNew(known, i.id));
     prevInboxIds.current = ids;
     window.zero?.badge?.(inbox.length);
 
     const askIds = new Set((snap.approvals ?? []).map((a) => a.id));
-    const freshAsks = prevAskIds.current.size === 0 && first
-      ? []
-      : (snap.approvals ?? []).filter((a) => !prevAskIds.current.has(a.id));
+    const knownAsks = prevAskIds.current;
+    const freshAsks = (snap.approvals ?? []).filter((a) => isNew(knownAsks, a.id));
     prevAskIds.current = askIds;
 
     const arrivals = [
@@ -4973,11 +4989,6 @@ export default function App() {
        */}
       {reviewLab && <div className="review-lab-controls"><span>Review exploration</span><select aria-label="Focus controls" value={focusControlStyle} onChange={e=>setFocusControlStyle(e.target.value as FocusControlStyle)}><option value="text">Focus · Text only</option><option value="corners">Focus · Frame corners + label</option><option value="corners-icon">Focus · Frame corners button</option><option value="corners-bare">Focus · Bare frame corners</option><option value="layout">Focus · Workspace layout</option></select><select aria-label="Review file type" value={artifactPreviewSample} onChange={e=>{setArtifactPreviewSample(e.target.value);setOpenDoc(null);}}><option value="code">Code</option><option value="design">Design</option><option value="notes">Text</option><option value="multiple">All three</option></select><select aria-label="Review actions" value={reviewStyle} onChange={e=>setReviewStyle(e.target.value)}><option value="header-balanced-open">1 · Balanced · open only</option><option value="header-tools-open">2 · Compact · open only</option><option value="header-card-only">3 · Clickable card · no controls</option><option value="header-feedback-only">4 · Clickable card · feedback tools</option><option value="header-balanced">Compare · all controls</option></select>{artifactPreviewSample !== "code" &&<select aria-label="Text surface" value={textReviewStyle} onChange={e=>setTextReviewStyle(e.target.value)}><option value="clear">Text · Fully transparent</option><option value="glass">Text · Matched glass</option></select>}</div>}
       {!reviewLab && api.isFixtures && new URLSearchParams(location.search).has('artifactTweaks') && <div className="artifact-tweaks"><select aria-label="Design toolbar" value={designToolbar} onChange={e => setDesignToolbar(e.target.value)}><option value="floating">Floating bar</option><option value="corner">Corner controls</option><option value="edge">Top edge</option><option value="always">Always visible</option></select>{focused && <select aria-label="Sample artifact" value={artifactPreviewSample} onChange={e => { setArtifactPreviewSample(e.target.value); setOpenDoc(null); }}><option value="multiple">Multiple artifacts</option><option value="design">Design sample</option><option value="code">Code sample</option><option value="notes">Notes sample</option></select>}</div>}
-      {/* AND THE FOOT SAYS WHAT ALL OF THIS IS RUNNING ON (w-e217e577e5,
-          2026-10-07): "He didn't realize it auto-connected to Claude/Codex; he
-          wasn't sure how it was even running." `onAccounts` opens that agent's
-          own page in Settings, which is where the accounts live and where a
-          second login is added. */}
       {/* EVERY SETTINGS PANE LIGHTS SETTINGS. The team pane used to light
           Invite people, its shortcut row (w-8415594d19), until that row left
           the sidebar for the single-player launch (w-1b574413db, 2026-10-04).
@@ -4988,8 +4999,6 @@ export default function App() {
         page={settingsOpen ? 'settings' : null} onFeedback={() => setFeedbackOpen(true)} teamPage={teamOpen && !settingsOpen} hasTeam={!!snap?.team?.configured} team={snap?.team ?? null}
         onInvite={() => { setTeamOpen(false); setOpenCard(null); closeSearch(); setFocused(null); setInviteFocus(true); setSettingsPane('team'); setSettingsVisit((n) => n + 1); setSettingsOpen(true); }}
         onAccount={() => { setTeamOpen(false); setOpenCard(null); closeSearch(); setFocused(null); setInviteFocus(false); setSettingsPane('team'); setSettingsVisit((n) => n + 1); setSettingsOpen(true); }}
-        runsOn={snap?.runsOn ?? null}
-        onAccounts={(pane) => { setTeamOpen(false); setOpenCard(null); closeSearch(); setFocused(null); setSettingsPane(pane); setSettingsVisit((n) => n + 1); setSettingsOpen(true); }}
         onSignOut={() => { void api.teamSignOut().then(() => refresh()); }}
         onTeam={() => { setSettingsOpen(false); setSettingsPane(null); closeSearch(); setFocused(null); setOpenCard(null); setTeamOpen(true); }} onSettings={() => { setTeamOpen(false); setSettingsPane(null); setSettingsVisit((n) => n + 1); setSettingsOpen(true); }} inboxCount={inbox.length} scheduledCount={scheduledCount} view={view} collapsed={workspaceCollapsed} onToggle={toggleWorkspace} onSearch={openSearch} onCompose={() => setModal('compose')} onView={next => { setTeamOpen(false); setSettingsOpen(false); setSettingsPane(null); closeSearch(); setView(next); setFocused(null); setFocusedRepeat(null); setSelected(0); setMultiSel(new Set()); }} />}
       {/* THE REACH (w-5dcff78971). The corner is transparent and it is the
@@ -5053,7 +5062,7 @@ export default function App() {
               // is a string. The fallback is what the compiler wants now that
               // the test is a named rule and not an inline `search !== null`.
               value={search ?? ''}
-              placeholder="Search threads"
+              placeholder="Search people or messages"
               spellCheck={false}
               autoComplete="off"
               aria-label="Search threads"
@@ -5712,6 +5721,7 @@ export default function App() {
                   terms={query?.terms}
                   phrase={query?.phrase}
                   summaries={searchSummaries}
+                  searchDetails={searchDetails}
                   ranked={ranked}
                   /*
                    * A ROW MAY NOT PROMISE A KEY THE WALK IS ABOUT TO EAT. See
@@ -5721,7 +5731,7 @@ export default function App() {
                   // Only a typed query can empty this list now: with the field
                   // blank every task is in it, so the old "type to search" line
                   // has nothing left to describe.
-                  emptyText={search ? `Nothing matches “${search}”.` : undefined}
+                  emptyText={olderMore !== false && search !== null ? 'Searching older threads…' : search ? `Nothing matches “${search}”.` : undefined}
                   keyView={view}
                   hoveredId={hoveredId}
                   onHover={keyHints ? setHoveredId : undefined}
@@ -5899,6 +5909,16 @@ export default function App() {
             ? (snap.update?.newVersion ?? null)
             : null}
           onInstallUpdate={() => { setModal(null); void api.updateInstall(); }}
+          /* LOOKING NOW, FROM ⌘K (w-39d6c237f7). The palette closes and the
+             answer arrives as a toast in the Settings row's own words, so the
+             two surfaces can never disagree about what was found. A check takes
+             a second or two against GitHub, so the toast says it is looking
+             first rather than leaving the press unanswered. */
+          onCheckUpdate={() => {
+            setModal(null);
+            showToast(CHECK_SAY.looking);
+            void api.updateCheck().then((got) => showToast(updateLook(got).sentence));
+          }}
           panelUp={panelShownNow}
           onTogglePanel={() => { setModal(null); togglePanel(); }}
           boardUp={inboxDisplay.view === 'board'}
@@ -6122,6 +6142,9 @@ export default function App() {
           // SIGN OUT AT THE FOOT OF SETTINGS (w-a09476712f): "should be at
           // bottom of settings page". Only while someone is signed in.
           account={snap?.team?.signedIn && snap.team.me ? { email: snap.team.me.email, team: snap.team.team?.name ?? null, onSignOut: () => { void api.teamSignOut().then(() => refresh()); } } : undefined}
+          // THE VERSION AND THE CHECK FOR A NEWER ONE (w-39d6c237f7), off the
+          // same snapshot field the sidebar card and ⌘K read.
+          update={snap?.update ?? null}
           onClose={() => { setSettingsOpen(false); setSettingsPane(null); setSettingsPage(null); }}
         />
       )}

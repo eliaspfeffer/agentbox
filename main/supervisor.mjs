@@ -96,6 +96,7 @@ import {
   summarizeCodexEvent, traceCodexEvent, SAYING_CAP,
 } from './codex.mjs';
 import { createCodexAppServer } from './codex-app-server.mjs';
+import { codexLaunchEnv } from './codex-launch-env.mjs';
 import { CodexUsage } from './codex-usage.mjs';
 import { createCodexWorker, codexTranscriptFile, mcpServerNames, workerThreadParams } from './codex-session.mjs';
 import { CODEX_DEFAULT_MODE, isCodexMode } from '../shared/codex-modes.mjs';
@@ -5491,17 +5492,17 @@ export class Supervisor {
   }
 
   /**
-   * WHICH SUBSCRIPTION THE FLEET IS SPENDING, for the one line that says so
-   * (w-e217e577e5, 2026-10-07). Null on a Mac where nothing readable is signed
-   * in, and then nothing is drawn anywhere.
+   * WHICH SUBSCRIPTION THE FLEET IS SPENDING, for the one line the walk says
+   * about it (w-e217e577e5, 2026-10-07). Null on a Mac where nothing readable is
+   * signed in, and then nothing is said anywhere.
    *
    * IT IS ANSWERED HERE FOR THE REASON `engineFacts` IS. Which engine a row runs
    * on needs the capability gate, and which ACCOUNT it runs on needs
    * `_narrowToChosen`, the rule that one account picked in Settings is the only
    * one the fleet uses. A corner that worked either out for itself could name
    * the subscription this app is deliberately not spending, which is the one
-   * mistake this line must never make: somebody reads it to find out whose money
-   * is going.
+   * mistake this line must never make: somebody reads it to find out whether any
+   * account of theirs got connected at all.
    *
    * THE FIRST OF THE POOL, which is the account the next spawn goes to on a Mac
    * with nothing picked (`_pickProfile` round-robins from there). Two accounts
@@ -6143,7 +6144,7 @@ export class Supervisor {
         // The socket its threads' commands ask on, and no row: see
         // `codexMemoryGateEnv`. One app-server is every Codex thread of this
         // login, so a row named here would be the wrong row for all but one.
-        env: { ...this._workerEnv('codex'), CODEX_HOME: home, ...this.codexMemoryGateEnv() },
+        env: codexLaunchEnv(this.config.codexBin, { ...this._workerEnv('codex'), CODEX_HOME: home, ...this.codexMemoryGateEnv() }),
         stdio: ['pipe', 'pipe', 'pipe'],
       }),
       // WHAT IS LEFT OF THIS LOGIN'S LIMIT, ARRIVING UNBIDDEN. `onNotification`
@@ -7770,6 +7771,13 @@ export class Supervisor {
           // server denies everything rather than believing a file, which is the
           // right way round. main/approvals.mjs holds the argument.
           ZERO_APPROVALS_PUBKEY: approvalPublicKey(),
+          // THE RUNTIME THAT SERVER IS STARTED ON, which is this app's own
+          // binary. Run from source the launcher used to need node on PATH and
+          // fell back to nvm only, so a Mac with Homebrew node, or none, lost
+          // every approval card and with it every agent (issue 21, 2026-10-07).
+          // Electron run with ELECTRON_RUN_AS_NODE=1 is a node, so handing the
+          // path down asks nothing of the machine.
+          ZERO_APPROVALS_RUNTIME: process.execPath,
         },
       },
     };
