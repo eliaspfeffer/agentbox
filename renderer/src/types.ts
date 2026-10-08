@@ -762,6 +762,12 @@ export interface ProjectSettings {
   permissionArgs: string[] | null;
   /** This project's own Codex mode, or 'workspace' when it has no opinion. */
   codexMode: CodexModeId | 'workspace';
+  /**
+   * The one Claude account this project's agents run on, or 'any' when it runs
+   * on whichever has room. Never a login that has since been signed out: the
+   * supervisor answers 'any' for a tie it can no longer honour.
+   */
+  account?: string;
   // The user's rules for this project, as they sit on disk. Empty means the file does
   // not exist, and a project without one is briefed exactly as it always was.
   instructions: string;
