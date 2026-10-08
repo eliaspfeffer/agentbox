@@ -137,7 +137,7 @@ export function createNotifier({ window, Notification, powerMonitor, icon = null
     // two-minute diagnosis.
     n.on('failed', (_e, err) => {
       live = null;
-      console.warn(`zero: macOS refused the notification (${err}). Check ${NAME} in System Settings > Notifications.`);
+      console.warn(`zero: the system refused the notification (${err}). Check ${NAME} in the system notification settings.`);
     });
     live = n;
     try {

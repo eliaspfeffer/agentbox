@@ -72,7 +72,8 @@ import { DONE } from './done-word';
 import { modalAfterLeavingATask } from './modal-scope';
 import { NOTHING_OVER_THE_APP, afterTheWalk, type OpenOverTheApp } from './walk-scope';
 import { splitMessage } from './message-split';
-import { parseQuery, searchItems } from './search';
+import { parseQuery } from './search';
+import { searchThreads, threadSearchDetails } from './threads/search';
 import { applyTheme, machineTheme, onMachineTheme, resolvePick, resolveTheme, THEME_KEY, type ThemePick } from './theme';
 import { hintScheduler, type HintScheduler } from './hint-timing';
 import { HINTS } from './hint-plate';
@@ -1628,18 +1629,15 @@ export default function App() {
   // cannot flash a row it is about to drop.
   const agentMode = snap?.config?.outsideAgents ?? 'off';
 
-  // When work may next START on an item, whoever deferred it. `runAt` is the
-  // durable answer and lives in the ledger; the localStorage map is the OLD
-  // snooze, read for one release so nothing she already deferred pops back,
-  // never written. The authority for this rule is isDue in
-  // shared/work-items.mjs; this is the view's copy of it.
-  const dueAt = useCallback((i: WorkItem) => Math.max(i.runAt ?? 0, snoozes[i.id] ?? 0), [snoozes]);
+  // Execution schedules gate work; inbox snoozes only gate her attention.
+  const dueAt = useCallback((i: WorkItem) => i.runAt ?? 0, []);
 
   // When SHE put it away, which is a different question, and the difference is
   // the whole of parkedByAgent in list-rules: a moment an agent wrote brakes
   // workers and never hides a row from her. The rule itself is over there, pure
   // and pinned, so the inbox and Scheduled cannot read it two different ways.
   const hiddenAt = useCallback((i: WorkItem) => hiddenUntil(i, snoozes[i.id] ?? 0), [snoozes]);
+  const returnAt = useCallback((i: WorkItem) => Math.max(dueAt(i), hiddenAt(i)), [dueAt, hiddenAt]);
 
   // THE TEAM, as the window reads it: who is signed in, their people, and
   // which projects are shared. Null when nobody is signed in, and then every
@@ -1949,6 +1947,7 @@ export default function App() {
     ...items.filter((i) => {
       if (scope && i.product !== scope) return false;
       const deferredUntil = dueAt(i);
+      if (hiddenAt(i) > now && !liveIds.has(i.id)) return false;
       // The grace window: the write waits for Z, the signal must not, because a
       // sent thing still sitting in the inbox reads as not sent. A deferred row
       // is the exception, and it has somewhere to be: Scheduled.
@@ -1974,7 +1973,7 @@ export default function App() {
     // Same score as the inbox and as the supervisor, so the top of this list is
     // what the fleet takes next. Recency only breaks a tie now.
   ].sort(byRunningOrder(score)),
-  [items, agentList, agentMode, scope, pendingId, dueAt, score, now, team, teamProgress, liveIds]);
+  [items, agentList, agentMode, scope, pendingId, dueAt, hiddenAt, score, now, team, teamProgress, liveIds]);
 
   // NOT A ROW THAT STILL NEEDS HER (2026-10-01): an agent's done on her own
   // thread waits in Needs you until she closes it, and Done counted it too,
@@ -2017,7 +2016,7 @@ export default function App() {
   // the inbox, which is the whole point: "I only see things that need me."
   const snoozed = useMemo(() => [
     ...items.filter((i) => (notStarted(i) || isProposal(i) || hiddenAt(i) > now)
-      && i.status !== 'done'
+      && (i.status !== 'done' || i.wrote?.status?.source !== 'founder')
       && (!scope || i.product === scope)),
     ...agentList.filter((r) => (r.runAt ?? 0) > now),
   ].sort((a, b) => whenShown(a) - whenShown(b)), [items, agentList, hiddenAt, whenShown, scope, now]);
@@ -2091,10 +2090,22 @@ export default function App() {
   // Measured on a real store of 550 tasks: a full scan in 2.2ms. So there
   // is no index, no debounce and no worker, and the list narrows on the
   // keystroke.
+  const searchContext = useMemo(() => ({
+    products: snap?.products ?? [], people: snap?.team?.people ?? [], me: team?.me ?? null,
+  }), [snap?.products, snap?.team?.people, team?.me]);
   const hits = useMemo(
-    () => (search === null ? null : searchItems(items, search)),
-    [items, search],
+    () => (search === null ? null : searchThreads(items, search, searchContext)),
+    [items, search, searchContext],
   );
+  const searchDetails = useMemo(
+    () => search === null ? undefined : new Map((hits ?? []).map(h => [h.item.id, threadSearchDetails(h.item, searchContext)])),
+    [hits, search, searchContext],
+  );
+  // Read older pages one at a time while search is open. A conversation that
+  // was put away should be findable without first scrolling through All.
+  useEffect(() => {
+    if (search !== null && olderMore !== false) loadOlder();
+  }, [search, olderMore, loadOlder]);
   const searchSummaries = useMemo(
     () => new Map((hits ?? []).map((h) => [h.item.id, h.summary])),
     [hits],
@@ -3634,6 +3645,7 @@ export default function App() {
     // something and still wanting it to run Monday at 6am costs one Z.
     const wasScheduled = replyClearsSchedule(item, Date.now());
     const priorRunAt = item.runAt ?? 0;
+    const priorSnooze = item.snoozedUntil ?? 0;
     // AND A COMMAND KEEPS HER ON THE ROW IT IS ABOUT TO ANSWER.Every other
     // reply hands work to somebody else and takes seconds to hours; this one
     // prints a table in four seconds and the table is the entire reason she
@@ -3674,14 +3686,16 @@ export default function App() {
       });
       if (talking) setTimeout(() => setSending((q) => q.filter((s) => s !== mine)), LANDED_MS);
       if (wasScheduled) {
-        await api.schedule({ product: item.product, id: item.id, runAt: 0 });
+        if (priorRunAt > Date.now()) await api.schedule({ product: item.product, id: item.id, runAt: 0 });
+        if (priorSnooze > Date.now()) await api.snooze({ product: item.product, id: item.id, snoozedUntil: 0 });
         // The legacy localStorage snooze hides a row on read all by itself, so
         // clearing only the ledger would leave her reply behind a schedule the
         // window still believes in.
         setSnoozes((s) => { const next = { ...s }; delete next[item.id]; return next; });
       }
       pushUndo({ label: 'Reply withdrawn, back in your inbox', undoes: 'take back that reply and stop the agent', restore, undid, run: async () => {
-        if (wasScheduled) await api.schedule({ product: item.product, id: item.id, runAt: priorRunAt });
+        if (wasScheduled && priorRunAt) await api.schedule({ product: item.product, id: item.id, runAt: priorRunAt });
+        if (wasScheduled && priorSnooze) await api.snooze({ product: item.product, id: item.id, snoozedUntil: priorSnooze });
         await (window.zero as any)?.stopSession?.({ product: item.product, id: item.id });
         // Put the thread back exactly where the reply found it. The rule and
         // what it cost are in list-rules (`withdrawReply`): restoring the
@@ -3868,22 +3882,14 @@ export default function App() {
     setModal('snooze');
   }, [run, showToast]);
 
-  // WHERE A DEFERRAL GOES depends on what the row is, and that is the only
-  // difference between the two. A work item's moment belongs in the ledger,
-  // where the supervisor reads it and a restore onto another machine carries
-  // it; an agent's belongs beside the reading of the machine it is running on,
-  // because there is no ledger it could live in and nothing to defer but the
-  // interruption. One writer for both, so no caller has to know.
+  // Both kinds of snooze defer the interruption, leaving the work alone.
+  // Threads keep their reminder in the ledger; outside agents have no ledger.
   const writeMoment = useCallback(async (item: WorkItem, ts: number) => {
     if (item.agent) await api.scheduleAgent({ key: agentKey(item.agent), runAt: ts });
-    else await api.schedule({ product: item.product, id: item.id, runAt: ts });
+    else await api.snooze({ product: item.product, id: item.id, snoozedUntil: ts });
   }, []);
 
-  // The moment goes into the LEDGER, not this window. That is what makes it
-  // survive an app restart, a reboot, and a store restored onto another
-  // machine, and it is what makes the deferral real rather than cosmetic: the
-  // supervisor reads the same field, so a scheduled item does not start until
-  // its time. The old localStorage map hid a row and deferred no work at all.
+  // The reminder survives restarts without stopping or restarting an agent.
   const snoozeUntil = useCallback(async (target: WorkItem | WorkItem[], ts: number, label: string) => {
     const picked = Array.isArray(target) ? target : [target];
     // A ROW SHE PICKED IS A THREAD, NOT AN ITEM. The rule and the measurement
@@ -3902,7 +3908,7 @@ export default function App() {
     try {
       for (const item of list) await writeMoment(item, ts);
     } catch (err) {
-      showToast(`Could not schedule: ${(err as Error)?.message ?? 'the store refused the write'}`);
+      showToast(`Could not snooze: ${(err as Error)?.message ?? 'the store refused the write'}`);
       refresh();
       return;
     }
@@ -3916,19 +3922,10 @@ export default function App() {
     // The COUNT IS WHAT SHE PICKED. A thread she moved as one row is one row to
     // her, so saying 13 after she selected 12 would report the repair as a
     // miscount and put the old doubt back in different words.
-    showToast(picked.length > 1 ? `${picked.length} scheduled for ${label}` : `Scheduled for ${label}`);
-    // Undo puts every moment back where it was rather than clearing it. A
-    // parent that came along may have been parked by its own agent, and zeroing
-    // that on her behalf would restart the respawn loop the park exists to stop.
-    const prior = new Map(list.map((i) => [i.id, i.runAt ?? 0]));
-    // `canceled`, one L, because this label is read out loud in a toast and the
-    // app spells for its reader, not for the dictionary. The walk's button had
-    // the same slip. This one and the repeating-task label below were the
-    // last two British spellings anywhere a person can read; the sweep that
-    // found them is in decisions.md under that item. And no em dash, which is
-    // the OTHER half of what was wrong with this label. See the note on the
-    // approval label above for the sweep.
-    pushUndo({ label: 'Schedule canceled, back in the inbox', undoes: 'cancel that schedule', undid: list.filter((i) => !i.agent).map((i) => ({ product: i.product, id: i.id, words: 'Undid the snooze' })), run: async () => {
+    showToast(picked.length > 1 ? `${picked.length} snoozed. Back ${label.toLowerCase()}` : `Snoozed. Back ${label.toLowerCase()}`);
+    // Undo restores only inbox reminders. Execution schedules stay intact.
+    const prior = new Map(list.map((i) => [i.id, (i.agent ? i.runAt : i.snoozedUntil) ?? 0]));
+    pushUndo({ label: 'Snooze undone', undoes: 'undo that snooze', undid: list.filter((i) => !i.agent).map((i) => ({ product: i.product, id: i.id, words: 'Undid the snooze' })), run: async () => {
       for (const item of list) await writeMoment(item, prior.get(item.id) ?? 0);
       refresh();
     } });
@@ -3939,7 +3936,8 @@ export default function App() {
     // An agent row belongs here for the same reason it belongs in the picker:
     // the way back has to exist wherever the way out did.
     const list = Array.isArray(target) ? target : [target];
-    const prior = new Map(list.map((i) => [i.id, i.runAt ?? 0]));
+    const prior = new Map(list.map((i) => [i.id, (i.agent ? i.runAt : i.snoozedUntil) ?? 0]));
+    const priorRun = new Map(list.filter((i) => !i.agent && (i.runAt ?? 0) > Date.now()).map((i) => [i.id, i.runAt!]));
     setModal(null);
     setSnoozeItem(null);
     setFocused(null);
@@ -3962,14 +3960,22 @@ export default function App() {
       for (const item of list) delete next[item.id];
       return next;
     });
-    for (const item of list) await writeMoment(item, 0);
+    for (const item of list) {
+      if (item.agent || item.snoozedUntil) await writeMoment(item, 0);
+    }
+    for (const item of list) {
+      if (priorRun.has(item.id)) await api.schedule({ product: item.product, id: item.id, runAt: 0 });
+    }
     // AND A THREAD IN LATER IS STARTED BY THE SAME PRESS (w-afb66e6661). It has
     // no moment to clear; what it has is `start`, and 'now' is what makes the
     // supervisor see it. The undo puts it back in Later.
     const wasHeld = list.filter((i) => notStarted(i));
     for (const item of wasHeld) await api.threadEdit(item.product, item.id, { start: 'now' });
-    pushUndo({ label: 'Scheduled again', undoes: 'put that schedule back', undid: list.filter((i) => !i.agent).map((i) => ({ product: i.product, id: i.id, words: notStarted(i) ? 'Undid starting it' : 'Undid bringing it back' })), run: async () => {
+    pushUndo({ label: 'Returned to Later', undoes: 'put it back in Later', undid: list.filter((i) => !i.agent).map((i) => ({ product: i.product, id: i.id, words: notStarted(i) ? 'Undid starting it' : 'Undid bringing it back' })), run: async () => {
       for (const item of list) await writeMoment(item, prior.get(item.id) ?? 0);
+      for (const item of list) {
+        if (priorRun.has(item.id)) await api.schedule({ product: item.product, id: item.id, runAt: priorRun.get(item.id)! });
+      }
       for (const item of wasHeld) await api.threadEdit(item.product, item.id, { start: 'later' });
       refresh();
     } });
@@ -4984,6 +4990,11 @@ export default function App() {
        */}
       {reviewLab && <div className="review-lab-controls"><span>Review exploration</span><select aria-label="Focus controls" value={focusControlStyle} onChange={e=>setFocusControlStyle(e.target.value as FocusControlStyle)}><option value="text">Focus · Text only</option><option value="corners">Focus · Frame corners + label</option><option value="corners-icon">Focus · Frame corners button</option><option value="corners-bare">Focus · Bare frame corners</option><option value="layout">Focus · Workspace layout</option></select><select aria-label="Review file type" value={artifactPreviewSample} onChange={e=>{setArtifactPreviewSample(e.target.value);setOpenDoc(null);}}><option value="code">Code</option><option value="design">Design</option><option value="notes">Text</option><option value="multiple">All three</option></select><select aria-label="Review actions" value={reviewStyle} onChange={e=>setReviewStyle(e.target.value)}><option value="header-balanced-open">1 · Balanced · open only</option><option value="header-tools-open">2 · Compact · open only</option><option value="header-card-only">3 · Clickable card · no controls</option><option value="header-feedback-only">4 · Clickable card · feedback tools</option><option value="header-balanced">Compare · all controls</option></select>{artifactPreviewSample !== "code" &&<select aria-label="Text surface" value={textReviewStyle} onChange={e=>setTextReviewStyle(e.target.value)}><option value="clear">Text · Fully transparent</option><option value="glass">Text · Matched glass</option></select>}</div>}
       {!reviewLab && api.isFixtures && new URLSearchParams(location.search).has('artifactTweaks') && <div className="artifact-tweaks"><select aria-label="Design toolbar" value={designToolbar} onChange={e => setDesignToolbar(e.target.value)}><option value="floating">Floating bar</option><option value="corner">Corner controls</option><option value="edge">Top edge</option><option value="always">Always visible</option></select>{focused && <select aria-label="Sample artifact" value={artifactPreviewSample} onChange={e => { setArtifactPreviewSample(e.target.value); setOpenDoc(null); }}><option value="multiple">Multiple artifacts</option><option value="design">Design sample</option><option value="code">Code sample</option><option value="notes">Notes sample</option></select>}</div>}
+      {/* AND THE FOOT SAYS WHAT ALL OF THIS IS RUNNING ON (w-e217e577e5,
+          2026-10-07): "He didn't realize it auto-connected to Claude/Codex; he
+          wasn't sure how it was even running." `onAccounts` opens that agent's
+          own page in Settings, which is where the accounts live and where a
+          second login is added. */}
       {/* EVERY SETTINGS PANE LIGHTS SETTINGS. The team pane used to light
           Invite people, its shortcut row (w-8415594d19), until that row left
           the sidebar for the single-player launch (w-1b574413db, 2026-10-04).
@@ -4994,6 +5005,8 @@ export default function App() {
         page={settingsOpen ? 'settings' : null} onFeedback={() => setFeedbackOpen(true)} teamPage={teamOpen && !settingsOpen} hasTeam={!!snap?.team?.configured} team={snap?.team ?? null}
         onInvite={() => { setTeamOpen(false); setOpenCard(null); closeSearch(); setFocused(null); setInviteFocus(true); setSettingsPane('team'); setSettingsVisit((n) => n + 1); setSettingsOpen(true); }}
         onAccount={() => { setTeamOpen(false); setOpenCard(null); closeSearch(); setFocused(null); setInviteFocus(false); setSettingsPane('team'); setSettingsVisit((n) => n + 1); setSettingsOpen(true); }}
+        runsOn={snap?.runsOn ?? null}
+        onAccounts={(pane) => { setTeamOpen(false); setOpenCard(null); closeSearch(); setFocused(null); setSettingsPane(pane); setSettingsVisit((n) => n + 1); setSettingsOpen(true); }}
         onSignOut={() => { void api.teamSignOut().then(() => refresh()); }}
         onTeam={() => { setSettingsOpen(false); setSettingsPane(null); closeSearch(); setFocused(null); setOpenCard(null); setTeamOpen(true); }} onSettings={() => { setTeamOpen(false); setSettingsPane(null); setSettingsVisit((n) => n + 1); setSettingsOpen(true); }} inboxCount={inbox.length} scheduledCount={scheduledCount} view={view} collapsed={workspaceCollapsed} onToggle={toggleWorkspace} onSearch={openSearch} onCompose={() => setModal('compose')} onView={next => { setTeamOpen(false); setSettingsOpen(false); setSettingsPane(null); closeSearch(); setView(next); setFocused(null); setFocusedRepeat(null); setSelected(0); setMultiSel(new Set()); }} />}
       {/* THE REACH (w-5dcff78971). The corner is transparent and it is the
@@ -5057,7 +5070,7 @@ export default function App() {
               // is a string. The fallback is what the compiler wants now that
               // the test is a named rule and not an inline `search !== null`.
               value={search ?? ''}
-              placeholder="Search threads"
+              placeholder="Search people or messages"
               spellCheck={false}
               autoComplete="off"
               aria-label="Search threads"
@@ -5566,8 +5579,8 @@ export default function App() {
                   selectedOption={optionSel}
                   interruptedFrom={heldByUrgent && heldByUrgent.id !== focused.id ? heldByUrgent.title : null}
                   onBackToInterrupted={() => setFocused(null)}
-                  returnedFromSnooze={dueAt(focused) > 0 && dueAt(focused) <= now}
-                  scheduledUntil={dueAt(focused) > now ? dueAt(focused) : 0}
+                  returnedFromSnooze={returnAt(focused) > 0 && returnAt(focused) <= now}
+                  scheduledUntil={returnAt(focused) > now ? returnAt(focused) : 0}
                   scheduledByAgent={parkedByAgent(focused, now)}
                   onUnschedule={() => unsnooze(focused)}
                   replyOpen={modal === 'reply'}
@@ -5642,6 +5655,9 @@ export default function App() {
                     cards={cards} picked={team ? picked : undefined}
                     onOpenCard={openTeammateCard}
                     selected={current} selectedCard={keyCard ? cardSel : null} columnOrder={columnOrder} onReorderColumns={reorderColumns}
+                    // THE SAME PICK THE LIST'S BOXES FILL (w-2e3819913c), so
+                    // ⌘K, E, L and Escape act on board cards with no copy.
+                    marked={multiSel} onMark={setMultiSel}
                     // A click puts the keyboard where the click was, so J
                     // and the arrows carry on from that card on the way back.
                     onOpenItem={(item) => { const i = list.indexOf(item); setCardSel(null); if (i >= 0) setSelected(i); setFocused(item); markSeen(item); }} />
@@ -5713,6 +5729,7 @@ export default function App() {
                   terms={query?.terms}
                   phrase={query?.phrase}
                   summaries={searchSummaries}
+                  searchDetails={searchDetails}
                   ranked={ranked}
                   /*
                    * A ROW MAY NOT PROMISE A KEY THE WALK IS ABOUT TO EAT. See
@@ -5722,7 +5739,7 @@ export default function App() {
                   // Only a typed query can empty this list now: with the field
                   // blank every task is in it, so the old "type to search" line
                   // has nothing left to describe.
-                  emptyText={search ? `Nothing matches “${search}”.` : undefined}
+                  emptyText={olderMore !== false && search !== null ? 'Searching older threads…' : search ? `Nothing matches “${search}”.` : undefined}
                   keyView={view}
                   hoveredId={hoveredId}
                   onHover={keyHints ? setHoveredId : undefined}
@@ -5922,7 +5939,7 @@ export default function App() {
                   ? [{ id: 'done', label: `Close (${n} selected)`, keyHint: 'E', run: () => { setModal(null); batchDone(multiSel); } }]
                   : []),
                 { id: 'snooze', label: `Remind Me (Snooze ${n} selected)`, keyHint: 'L', run: () => openSnooze(sel) },
-                ...(sel.some((i) => dueAt(i) > Date.now())
+                ...(sel.some((i) => returnAt(i) > Date.now())
                   ? [{ id: 'unsnooze', label: `Back to Inbox (${n} selected)`, run: () => unsnooze(sel) }]
                   : []),
                 { id: 'read', label: `Mark Read (${n} selected)`, run: () => {
@@ -5998,7 +6015,7 @@ export default function App() {
               seen.has(target.id)
                 ? { id: 'unread', label: 'Mark Unread', run: () => { setSeen((s) => { const c = new Set(s); c.delete(target.id); return c; }); setModal(null); } }
                 : { id: 'read', label: 'Mark Read', run: () => { markSeen(target); setModal(null); } },
-              ...(dueAt(target) > Date.now()
+              ...(returnAt(target) > Date.now()
                 ? [{
                     id: 'unsnooze',
                     label: parkedByAgent(target, now) ? 'Let It Run Now' : 'Back to Inbox',
@@ -6230,6 +6247,10 @@ export default function App() {
           run={run}
           claude={claude}
           home={home}
+          /* AND ONE LINE SAYING WHAT IT FOUND ON THIS MAC (w-e217e577e5,
+             2026-10-07). Null is the Mac that gets the plan question instead,
+             which already says all of this out loud. */
+          runsOn={snap?.runsOn ?? null}
           opened={!!focused}
           waiting={waitingId(run, WAITING_AT)}
           later={laterId(run, LATER_AT)}
@@ -6571,7 +6592,7 @@ export default function App() {
           item={Array.isArray(snoozeItem) ? snoozeItem[0] : snoozeItem}
           count={Array.isArray(snoozeItem) ? snoozeItem.length : 1}
           onPick={(ts, label) => snoozeUntil(snoozeItem, ts, label)}
-          onNow={(Array.isArray(snoozeItem) ? snoozeItem : [snoozeItem]).some((i) => dueAt(i) > Date.now())
+          onNow={(Array.isArray(snoozeItem) ? snoozeItem : [snoozeItem]).some((i) => returnAt(i) > Date.now())
             ? () => unsnooze(snoozeItem)
             : undefined}
           onClose={() => { setModal(null); setSnoozeItem(null); }}

@@ -54,6 +54,7 @@ export interface InboxItem {
   result?: string;
   answeredThrough?: number;
   runAt?: number;
+  snoozedUntil?: number;
   /** 'later' while a thread sits in Later, written down and not begun. */
   start?: 'later' | 'now';
   /** The thread this one was filed under: what makes it a proposal. */
@@ -163,7 +164,8 @@ export function parkedByAgent(i: InboxItem, now = Date.now()): boolean {
 // release and never written. It is hers by definition, so it counts.
 export function hiddenUntil(i: InboxItem, legacySnooze = 0): number {
   const mine = i.wrote?.runAt?.source === 'founder' ? i.runAt ?? 0 : 0;
-  return Math.max(mine, legacySnooze);
+  const reminder = i.wrote?.snoozedUntil?.source === 'founder' ? i.snoozedUntil ?? 0 : 0;
+  return Math.max(mine, reminder, legacySnooze);
 }
 
 // `hiddenUntil` is HER deferral only: the caller passes the founder-set runAt
@@ -451,7 +453,7 @@ export function withdrawReply(statusWhenReplied: string): { answer: string; stat
 // So replying clears the schedule, whoever set it. It costs the approve-Friday-run-Monday case, which is now made by answering and
 // then pressing S, and the undo on the reply puts the old moment back.
 export function replyClearsSchedule(i: InboxItem, now = Date.now()): boolean {
-  return (i.runAt ?? 0) > now;
+  return Math.max(i.runAt ?? 0, i.snoozedUntil ?? 0) > now;
 }
 
 /* --------------------- one thread, one row, ONE ACTION -------------------- */
