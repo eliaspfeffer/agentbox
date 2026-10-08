@@ -642,13 +642,13 @@ const CLAUDE = {
   // the rest of its words, so binding a card to a table binds its heading too.
   name: 'Claude Code',
   connected: 'Claude Code is connected',
-  connectedSay: `${Name} can see it on this Mac, so your agents have something to run on. There is nothing for you to set up.`,
-  missing: 'Claude Code is not on this Mac',
+  connectedSay: `${Name} can see it on this computer, so your agents have something to run on. There is nothing for you to set up.`,
+  missing: 'Claude Code is not on this computer',
   // Not "your agents run on it": with Codex here they run on Codex instead.
-  missingSay: `${Name} could not find Claude Code on this Mac. Install it, then check again.`,
+  missingSay: `${Name} could not find Claude Code on this computer. Install it, then check again.`,
   missingLink: 'Get Claude Code',
   unsure: `${Name} could not check`,
-  unsureSay: `${Name} has not been able to look for Claude Code on this Mac. That is not the same as it being missing, only that the answer never came back. Try again in a moment.`,
+  unsureSay: `${Name} has not been able to look for Claude Code on this computer. That is not the same as it being missing, only that the answer never came back. Try again in a moment.`,
   check: 'Check again',
   checking: 'Looking',
   // The row under the missing one, which is the only place on this screen that
@@ -680,12 +680,12 @@ const CLAUDE = {
 const CODEX = {
   name: 'Codex',
   connected: 'Codex is connected',
-  connectedSay: `${Name} can see it on this Mac, so you can put a task on Codex instead of Claude Code. There is nothing for you to set up.`,
-  missing: 'Codex is not on this Mac',
-  missingSay: `${Name} could not find Codex on this Mac, so every task runs on Claude Code. Install it, then check again.`,
+  connectedSay: `${Name} can see it on this computer, so you can put a task on Codex instead of Claude Code. There is nothing for you to set up.`,
+  missing: 'Codex is not on this computer',
+  missingSay: `${Name} could not find Codex on this computer, so every task runs on Claude Code. Install it, then check again.`,
   missingLink: 'Get Codex',
   unsure: `${Name} could not check`,
-  unsureSay: `${Name} has not been able to look for Codex on this Mac. That is not the same as it being missing, only that the answer never came back. Try again in a moment.`,
+  unsureSay: `${Name} has not been able to look for Codex on this computer. That is not the same as it being missing, only that the answer never came back. Try again in a moment.`,
   check: 'Check again',
   checking: 'Looking',
   getSay: 'It takes a few minutes. Come back here and press Check again, and Codex is a choice on every task.',
@@ -1469,7 +1469,7 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
                 heading about folders. Where Claude Code lives on disk is not
                 here: it is the grey note under that agent's status, which only
                 speaks when something is wrong. */}
-            <Group id="storage" label={`Where ${NAME} keeps things on this Mac`}>
+            <Group id="storage" label={`Where ${NAME} keeps things on this computer`}>
               <Row label="Your projects, tasks and documents" desc={w.storePath} />
             </Group>
             {/* THE VERSION AND THE WAY TO ASK FOR A NEWER ONE (w-39d6c237f7).
@@ -1526,8 +1526,8 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
                 desc={w.sessionsAtOnceFromPlan
                   ? `Your plan is ${w.sessionsAtOnceFromPlan}, so ${NAME} starts one ${twoEngines ? 'Claude Code agent ' : ''}at a time.`
                   : w.agentsAuto
-                    ? 'From this Mac’s memory, kept there as you add accounts or turn the memory check on.'
-                    : `You set this. Automatic would run ${w.agentsAutoTotal ?? w.sessionsAtOnce} on this Mac.`}
+                    ? 'From this computer’s memory, kept there as you add accounts or turn the memory check on.'
+                    : `You set this. Automatic would run ${w.agentsAutoTotal ?? w.sessionsAtOnce} on this computer.`}
               >
                 {/* ONE DROPDOWN, NOT A CHOICE AND THEN A NUMBER (2026-10-05, her
                     note). Automatic and every number it could be are the same
@@ -1569,8 +1569,8 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
                 <Row
                   label="Heavy commands at once"
                   desc={w.memoryGate.slots === null
-                    ? `Auto: ${w.memoryGate.slotsAuto} on this Mac, one for every 8 GB of memory.`
-                    : `You picked ${w.memoryGate.slots}. Auto is ${w.memoryGate.slotsAuto} on this Mac.`}
+                    ? `Auto: ${w.memoryGate.slotsAuto} on this computer, one for every 8 GB of memory.`
+                    : `You picked ${w.memoryGate.slots}. Auto is ${w.memoryGate.slotsAuto} on this computer.`}
                 >
                   <Stepper
                     label="Heavy commands at once"
@@ -1606,7 +1606,7 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
               {w.leftovers && (
                 <Row
                   label="Stop programs agents leave behind"
-                  desc={`Dev servers, previews and test runs an agent started and left running are stopped two hours after its run ends, or ten minutes while memory is short. Never stopped: anything you started yourself, apps installed on this Mac, and what an agent was asked to keep.${twoEngines ? ' Codex agents’ programs are not found yet.' : ''}${w.leftovers.now ? ` ${w.leftovers.now}` : ''}`}
+                  desc={`Dev servers, previews and test runs an agent started and left running are stopped two hours after its run ends, or ten minutes while memory is short. Never stopped: anything you started yourself, apps installed on this computer, and what an agent was asked to keep.${twoEngines ? ' Codex agents’ programs are not found yet.' : ''}${w.leftovers.now ? ` ${w.leftovers.now}` : ''}`}
                 >
                   <Switch label="Stop programs agents leave behind" on={w.leftovers.on} onChange={(v) => setWorkspace('cleanupLeftovers', v)} />
                 </Row>
@@ -1620,7 +1620,7 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
                 <Row
                   label="Something felt slow"
                   desc={w.agentsNudge
-                    ? `${NAME} is running ${w.agentsNudge} fewer than this Mac suggests.`
+                    ? `${NAME} is running ${w.agentsNudge} fewer than this computer suggests.`
                     : `${NAME} runs one fewer from now on, and remembers that it did.`}
                 >
                   {!!w.agentsNudge && <button type="button" className="set-ghost" onClick={() => setWorkspace('agentsFeltSlow', 'reset')}>Undo</button>}
@@ -1768,6 +1768,34 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
               >
                 <Switch label="Let agents start the tasks they file here" on={current.autonomous} onChange={(v) => setProject(current.slug, 'autonomous', v)} />
               </Row>
+              {/* ONE LOGIN, NO ROW. The choice is only a choice with a second
+                  account signed in, and on the one-account Mac -- which is
+                  nearly every Mac -- this page reads exactly as it did.
+
+                  UNLESS SOMETHING IS ALREADY TIED, and then it shows however few
+                  accounts are left. Signing out of the second login would
+                  otherwise hide the row with the tie still written in the config,
+                  leaving a setting nothing on any screen could undo. The
+                  supervisor ignores a tie whose account has gone (`_projectProfile`),
+                  so what this row can show is always a login that is really here. */}
+              {((w?.accounts ?? []).length > 1 || (current.account ?? 'any') !== 'any') && (
+                <Row
+                  label="Claude account"
+                  desc="Every Claude Code agent on this project runs on this account and on no other. If the account cannot run, the work waits."
+                >
+                  <Picker
+                    bare
+                    label="Claude account"
+                    title="The Claude account this project's agents run on."
+                    value={current.account ?? 'any'}
+                    options={[
+                      { value: 'any', label: 'Any account' },
+                      ...(w?.accounts ?? []).map((a) => ({ value: a.profile, label: a.email ? `${a.email} (${a.label})` : a.label })),
+                    ]}
+                    onChange={(v) => setProject(current.slug, 'account', v)}
+                  />
+                </Row>
+              )}
               {current.permission !== 'workspace' && (
                 <Row
                   label={twoEngines ? 'This project has its own Claude Code permissions' : 'This project has its own permissions'}
@@ -1798,7 +1826,7 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
               </Row>
             </Group>
 
-            <Group label="Where this project is kept on this Mac">
+            <Group label="Where this project is kept on this computer">
               <Row label="Documents" desc={current.dir} />
               <Row label="Repository" desc={current.repoPath ?? 'No code repo registered for this project.'} />
             </Group>

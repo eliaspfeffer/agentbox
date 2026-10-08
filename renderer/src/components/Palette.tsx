@@ -341,7 +341,7 @@ export function Palette({ products, supervisorPaused, itemCommands = [], batch =
     {
       id: 'import-agents',
       label: 'Import agents from Claude Code or Codex',
-      hint: 'your last ten days on this Mac · they land in your inbox',
+      hint: 'your last ten days on this computer · they land in your inbox',
       keywords: 'import agents claude code codex conversations threads sessions subagents existing mine bring across add my recent',
       run: onImportAgents,
     },

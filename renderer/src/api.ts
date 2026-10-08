@@ -13,6 +13,7 @@ import { fixtureAgents, fixtureSnapshot, fixtureDashboards, fixtureRepeats, fixt
 import { fixtureEngineWorld, fixtureEngineSettings, fixtureSecondEngine } from './fixtures';
 import { fixtureFolders } from './fixtures';
 import { NAME, Name } from '../../shared/product-name.mjs';
+import { checkProjectFolder } from '../../shared/project-folder-check.mjs';
 // THE SECOND FRONT DOOR, AND IT HAS TO BE BUILT BEFORE THE LINE BELOW RUNS.
 // `useFixtures` reads `window.zero` once, at module load, and on the desktop
 // preload.cjs has already put it there. In a browser tab nothing has, so this
@@ -448,7 +449,7 @@ export const api = {
     return window.zero.terminal(p);
   },
   async commandCatalog(p: {product: string; id: string}): Promise<string[]> {
-    if (useFixtures) return ['code-review','simplify','verify'];
+    if (useFixtures) return ['code-review','loop','simplify','verify'];
     return window.zero!.commandCatalog(p);
   },
   async command(p: {product: string; id: string; text: string}): Promise<{state: string; at: number; text?: string; name?: string}> {
@@ -670,6 +671,12 @@ export const api = {
   async schedule(p: { product: string; id: string; runAt: number }): Promise<WorkItem | null> {
     if (useFixtures) return null;
     return window.zero!.schedule(p);
+  },
+
+  async snooze(p: { product: string; id: string; snoozedUntil: number }): Promise<WorkItem | null> {
+    if (useFixtures) return null;
+    if (!window.zero?.snooze) throw new Error('Restart the app to use inbox snooze');
+    return window.zero.snooze(p);
   },
 
   // Defer an AGENT to a moment: the same gesture, on a row that lives in no
@@ -1019,7 +1026,8 @@ export const api = {
     // exists" state be SHOT IN THE REAL APP rather than hand drawn.
     if (useFixtures) {
       if (params.has('refusedFolder')) {
-        return { path: null, refused: 'That is your whole home folder. Agents would work across everything on this Mac, and macOS will ask you about Downloads, Music and every app you have. Pick the folder your project\u2019s code is in.' };
+        const turnedDown = checkProjectFolder('~');
+        return { path: null, refused: turnedDown.ok ? undefined : turnedDown.say };
       }
       return { path: '/Users/you/Desktop/dev/house' };
     }

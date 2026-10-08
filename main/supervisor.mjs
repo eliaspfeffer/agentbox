@@ -10,7 +10,7 @@ import { hookFailure } from '../shared/hook-failure.mjs';
 import { taskCommand } from './task-commands.mjs';
 import { providerCommand, reviewTarget, nativeCommandNames } from '../shared/provider-commands.mjs';
 import { compactCodexThread } from './codex-compaction.mjs';
-import {readSystemTemplate} from './instruction-settings.mjs';
+import {agentInstructionsUnified, readSystemTemplate, writeInstruction} from './instruction-settings.mjs';
 import {fillName} from '../shared/product-name.mjs';
 // The supervisor: deterministic, boring, and the only part of the app that talks
 // to the brain. It spawns headless claude sessions on the founder's plan, one
@@ -96,6 +96,7 @@ import {
   summarizeCodexEvent, traceCodexEvent, SAYING_CAP,
 } from './codex.mjs';
 import { createCodexAppServer } from './codex-app-server.mjs';
+import { codexLaunchEnv } from './codex-launch-env.mjs';
 import { CodexUsage } from './codex-usage.mjs';
 import { createCodexWorker, codexTranscriptFile, mcpServerNames, workerThreadParams } from './codex-session.mjs';
 import { CODEX_DEFAULT_MODE, isCodexMode } from '../shared/codex-modes.mjs';
@@ -106,6 +107,7 @@ import { nameRow, wantsName } from './row-label.mjs';
 import { LEVELS, latestMessage, sortMessage, wantsPriority } from './message-priority.mjs';
 import { NAME, Name, envName, nameSlug, isOurSlug } from '../shared/product-name.mjs';
 import { signInFiles, signInStamp } from './sign-in-files.mjs';
+import { runsOn } from './runs-on.mjs';
 import { MemoryGateServer, defaultSocketPath as memoryGateSocketPath } from './memory-gate-server.mjs';
 import { autoSlots, DEFAULTS as MEMORY_GATE } from './memory-gate.mjs';
 import { LeftoverCleaner } from './leftovers.mjs';
@@ -762,10 +764,19 @@ export class Supervisor {
     const out = { resumed: 0, queued: 0, working: 0, missing: 0 };
     if (!only.size) return out;
     this.liftBrakeForHer();
+    // RESUMING IS STILL ASKING TO RUN ON THIS MAC, so it obeys the same team
+    // rule the tick does (w-7fc38861be). It did not: on 2026-10-05 "Resume
+    // Agents" over a handful of ticked rows reached two conversations with
+    // teammates, and an agent turned up in the middle of each, reading the
+    // last thread reply as an instruction. Asking by name outranks a delivery
+    // mark and the attempt cap below; it does not make a row this Mac's to run.
+    const productBySlug = new Map((this.store.listProducts?.() ?? []).map((p) => [p.slug, p]));
+    const me = process.env.AGENTBOX_PERSON_ID || null;
 
     for (const item of this.store.listItems(Date.now())) {
       if (!only.has(item.id)) continue;
       only.delete(item.id);
+      if (!mayRunHere(item, productBySlug.get(item.product), me)) continue;
       // A row with a worker on it is already resumed. Saying so is the honest
       // answer; killing the session to restart it would throw away the work in
       // flight, which is never what "resume" meant.
@@ -1325,7 +1336,7 @@ export class Supervisor {
     const word = engineLabel(engine);
     try {
       this.store.recordSessionResult(item.product, item.id, {
-        result: `This task was being worked on in ${word}, which is not installed on this Mac, so ${NAME} has not put a session back on it. It is not lost: install ${word} and the same session picks up where it stopped.`,
+        result: `This task was being worked on in ${word}, which is not installed on this computer, so ${NAME} has not put a session back on it. It is not lost: install ${word} and the same session picks up where it stopped.`,
         status: 'open',
       });
     } catch (e) { console.warn('zero: could not say the harness is missing:', e.message); }
@@ -1893,6 +1904,20 @@ export class Supervisor {
     // throw away every chat she is in the middle of.
     const folders = product ? this.workFolders(item, product) : [];
     if (folders.length && rec.cwd && !folders.includes(rec.cwd)) return null;
+    // A CHAT ON THE WRONG LOGIN IS NOT RESUMED IN A TIED PROJECT, and this is
+    // the one question asked ahead of the health of the account. A chat started
+    // before the project was tied lives on whatever account the rotation gave
+    // it, and resuming it there would send the next reply -- and everything the
+    // transcript already holds -- to exactly the login the tie exists to keep it
+    // off. Dropped here, the row is briefed fresh on the right account.
+    //
+    // AND A TIED PROJECT KEEPS ITS CHAT WHILE THE PINNED ACCOUNT IS ILL, which
+    // is why the test below is not simply "also check `_profileCannotHoldAChat`".
+    // That guard moves a chat to a HEALTHIER account; a tied project has none to
+    // move to, so firing it would throw the thread away and buy nothing.
+    if (this._projectProfile(item.product, rec.engine)) {
+      return this._profileFitsProject(rec.profile, item.product, rec.engine) ? rec : null;
+    }
     // The account this chat lives on cannot run anything until somebody acts.
     // Null here is the fresh brief, which is exactly what this row needs: it
     // goes to a working account carrying its own thread.
@@ -2630,7 +2655,7 @@ export class Supervisor {
       .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0];
     if (!next) return undefined;
     this._naming = true;
-    return this._askSmall((opts) => nameRow(next, opts))
+    return this._askSmall((opts) => nameRow(next, opts), { product: next.product })
       .then((label) => {
         if (!label) { this._nameMisses.set(key(next), now); return; }
         this._nameMisses.delete(key(next));
@@ -2656,13 +2681,26 @@ export class Supervisor {
    * one call per account and then waits for the next pass. The environment is
    * a worker's (`_workerEnv`), so no API key from the app's own shell reaches
    * the call, and the account rides it the way it does on a worker's spawn.
+   *
+   * A PROJECT TIED TO ONE ACCOUNT IS NOT WALKED, AND THAT IS THE WHOLE POINT OF
+   * THE TIE. The prompt here carries the row's own text -- its title, the first
+   * lines of its body, a teammate's message -- so a walk would put an
+   * employer's row in front of a personal subscription, which is the one thing
+   * the setting promises will not happen. So a tied project gets ONE call on
+   * ONE account: the pinned login, resting or not, and no fallback to the other
+   * engine either, because Codex is a different vendor's account and a walk
+   * onto it breaks the same promise the walk across logins does. The cost of
+   * getting nothing is the row keeping its own title, which is what every row
+   * had before the namer existed.
    */
-  async _askSmall(ask) {
+  async _askSmall(ask, { product = null } = {}) {
     const home = this._homeEngine();
     const other = home === 'codex' ? DEFAULT_ENGINE : 'codex';
-    const engines = [home, ...(this.engineChoices().some((e) => e.id === other) ? [other] : [])];
+    const engines = this._projectProfile(product)
+      ? [DEFAULT_ENGINE]
+      : [home, ...(this.engineChoices().some((e) => e.id === other) ? [other] : [])];
     for (const engine of engines) {
-      for (const env of this._smallModelEnvs(engine)) {
+      for (const env of this._smallModelEnvs(engine, product)) {
         const answer = await ask({ claudeBin: this.config?.claudeBin, codexBin: this.config?.codexBin, engine, env });
         if (answer) return answer;
       }
@@ -2670,15 +2708,19 @@ export class Supervisor {
     return '';
   }
 
-  /** One environment per account on an engine, the accounts not resting first. */
-  _smallModelEnvs(engine) {
+  /**
+   * One environment per account on an engine, the accounts not resting first --
+   * or the one account a tied project named, which is a list of one.
+   */
+  _smallModelEnvs(engine, product = null) {
     const env = this._workerEnv(engine);
     const now = Date.now();
     const resting = (p) => {
       const key = this._accountKey(engine, p);
       return (this._profileCooldown?.[key] ?? 0) >= now || !!this._profileTrouble?.[key];
     };
-    const all = this._profilesFor(engine);
+    const pinned = this._projectProfile(product, engine);
+    const all = pinned ? [pinned] : this._profilesFor(engine);
     return [...all.filter((p) => !resting(p)), ...all.filter(resting)].map((p) => {
       if (engine === 'codex') return { ...env, CODEX_HOME: this._codexProfileHome(p) };
       return p === 'default' ? env : { ...env, CLAUDE_CONFIG_DIR: p };
@@ -2704,7 +2746,7 @@ export class Supervisor {
     if (!next) return undefined;
     this._sortingMessages = true;
     this._sortedMessages.add(`${next.item.product}:${next.item.id}:${next.latest.ts}`);
-    return this._askPriority(next.latest)
+    return this._askPriority(next.latest, next.item.product)
       .then((level) => {
         if (level) this.store.prioritizeItem(next.item.product, next.item.id, LEVELS[level]);
       })
@@ -2712,8 +2754,8 @@ export class Supervisor {
       .finally(() => { this._sortingMessages = false; });
   }
 
-  _askPriority(latest) {
-    return this._askSmall((opts) => sortMessage(latest, opts));
+  _askPriority(latest, product = null) {
+    return this._askSmall((opts) => sortMessage(latest, opts), { product });
   }
 
   sayItOnEveryStrandedRow(items, now = Date.now()) {
@@ -3025,6 +3067,50 @@ export class Supervisor {
     return all.includes(chosen) ? [chosen] : all;
   }
 
+  /**
+   * THE ONE CLAUDE ACCOUNT A PROJECT IS TIED TO, when it is tied to one.
+   *
+   * `activeAccount` narrows the WHOLE app to one login, which is no use to
+   * somebody who genuinely uses two: with a personal subscription and an
+   * employer's on one Mac, round-robin runs the employer's code on the personal
+   * plan about half the time. `projectAccounts` answers per project instead, and
+   * a tied project runs there and waits rather than borrowing another login.
+   *
+   * CLAUDE ONLY, said here once. A Codex login is a different subscription on a
+   * different binary and this setting says nothing about it, so a Codex run
+   * reads null and rotates exactly as it did.
+   *
+   * IT IS IGNORED THE MOMENT IT STOPS NAMING A LOGIN THAT IS ON THIS MAC,
+   * for the reason `_narrowToChosen` gives about `activeAccount` a few lines
+   * down: a pin left over from an account since removed would otherwise hand
+   * every worker a CLAUDE_CONFIG_DIR pointing at a folder with no login in it,
+   * and the project would fail in silence while the app looked fine. A pin
+   * nobody can honour is no pin, and the project rotates as it did before
+   * anybody pinned it.
+   *
+   * AND A PIN BEATS `activeAccount`, DELIBERATELY. The two can disagree -- pick
+   * one account for the app, tie a project to the other -- and one of them has
+   * to win. It is the pin, because it is the narrower statement and the one made
+   * about THIS project on its own page, and because the other way round is the
+   * silent stop this file minds most: `activeAccount` would empty the tied
+   * project's pool of one and nothing would ever start in it, with every screen
+   * reading normal. So the check below is against the logins on the Mac
+   * (`_profiles`) and not the pool `activeAccount` has narrowed.
+   */
+  _projectProfile(product, engine = DEFAULT_ENGINE) {
+    if (engineOf(engine) !== DEFAULT_ENGINE) return null;
+    const slug = typeof product === 'string' ? product : product?.slug;
+    const pinned = slug ? this.config.projectAccounts?.[slug] : null;
+    if (typeof pinned !== 'string' || !pinned) return null;
+    return this._profiles().includes(pinned) ? pinned : null;
+  }
+
+  /** Whether a session on `profile` is allowed to carry this project's work. */
+  _profileFitsProject(profile, product, engine = DEFAULT_ENGINE) {
+    const pinned = this._projectProfile(product, engine);
+    return !pinned || (profile || 'default') === pinned;
+  }
+
   // THE ACCOUNTS ON ONE ENGINE THAT ARE NOT RESTING. Keyed through
   // `_accountKey`, which is the whole point: both engines call their primary
   // login 'default', and reading one raw name for both would let a quarantined
@@ -3332,6 +3418,33 @@ export class Supervisor {
       n += 1;
     }
     for (const p of this._preparing?.values() ?? []) if (engineOf(p.engine) === which) n += 1;
+    return n;
+  }
+
+  /**
+   * HOW MANY SESSIONS ONE ACCOUNT IS ALREADY CARRYING. `_loadFor` above is the
+   * same count for a whole engine, and a tied project needs the narrower one:
+   * the engine's cap is the per-account number times the live accounts, so with
+   * two logins a project tied to one of them would be let through at twice its
+   * account's share and spend one subscription's rate limit on both halves.
+   *
+   * A ROW STILL BEING PREPARED COUNTS, the way it does in `_loadFor`, but only
+   * when its own project is tied to this same account: that is the one case
+   * where the account is already decided before the spawn. An untied row's
+   * account is picked at the spawn and counting it here would charge it to a
+   * login it may never reach.
+   */
+  _loadOnProfile(profile, engine = DEFAULT_ENGINE) {
+    const key = this._accountKey(engine, profile);
+    let n = 0;
+    for (const s of this.sessions.values()) {
+      if (s.command || s.remoteIdle) continue;
+      if (this._accountKey(s.engine, s.profile || 'default') === key) n += 1;
+    }
+    for (const p of this._preparing?.values() ?? []) {
+      const pin = this._projectProfile(p.item?.product, p.engine);
+      if (pin && this._accountKey(p.engine, pin) === key) n += 1;
+    }
     return n;
   }
 
@@ -4624,7 +4737,14 @@ export class Supervisor {
     // round robin lands on is an id that home has never heard of, the CLI
     // prints "No conversation found" and dies in a second. So this drops both,
     // and the thread is briefed fresh instead.
-    const strandedThread = !!walkedHome && this._profileCannotHoldAChat(walkedHome, engine);
+    //
+    // IN A TIED PROJECT THE QUESTION IS NOT HEALTH BUT WHOSE ACCOUNT IT IS, the
+    // same swap `rowSessionFor` makes above and for the same reason: a thread
+    // found on the wrong login is stranded whatever that login's health, and a
+    // thread on the right one is kept however poorly it is faring.
+    const strandedThread = !!walkedHome && (this._projectProfile(product?.slug ?? item.product, engine)
+      ? !this._profileFitsProject(walkedHome, product?.slug ?? item.product, engine)
+      : this._profileCannotHoldAChat(walkedHome, engine));
     const resumeId = strandedThread ? null : resumeIdOnDisk;
     // The fork's account is the source conversation's account, for the reason
     // every line above gives: a resume is only a resume on the login whose home
@@ -5060,7 +5180,7 @@ export class Supervisor {
   // never ours.
   messageRules() {
     let theirs = '';
-    if (this.messageRulesFile() !== this.messageRulesDefaultFile()) {
+    if (!agentInstructionsUnified(this.userDir) && this.messageRulesFile() !== this.messageRulesDefaultFile()) {
       try { theirs = fs.readFileSync(this.messageRulesFile(), 'utf8').trim(); } catch {}
     }
     const ours = this.shippedMessageRules();
@@ -5116,6 +5236,7 @@ export class Supervisor {
   // What the settings box shows: the user's own words and nothing of ours
   // (w-3ec9f07978), so it opens empty until they write something.
   readMessageRules() {
+    if (agentInstructionsUnified(this.userDir)) return this.readStanding();
     try {
       return fs.readFileSync(this.messageRulesFile(), 'utf8');
     } catch (err) {
@@ -5130,6 +5251,7 @@ export class Supervisor {
   // a state on disk that nothing later mistakes for a fresh install and
   // re-seeds.
   writeMessageRules(text) {
+    if (agentInstructionsUnified(this.userDir)) return this.writeStanding(text);
     const file = this.messageRulesFile();
     const tmp = `${file}.tmp-${process.pid}`;
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -5173,11 +5295,7 @@ export class Supervisor {
   // Written whole, through a rename, because the fleet reads this file on
   // every spawn: a half-written save is a session briefed with half a rule.
   writeStanding(text) {
-    const file = this.standingFile();
-    const tmp = `${file}.tmp-${process.pid}`;
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(tmp, typeof text === 'string' ? text : '', 'utf8');
-    fs.renameSync(tmp, file);
+    return writeInstruction(this.userDir, 'rules', typeof text === 'string' ? text : '');
   }
 
   /* ---------------------------- the second engine ------------------------- */
@@ -5371,6 +5489,34 @@ export class Supervisor {
       }
     }
     return { choices, workspace, byItem };
+  }
+
+  /**
+   * WHICH SUBSCRIPTION THE FLEET IS SPENDING, for the one line the walk says
+   * about it (w-e217e577e5, 2026-10-07). Null on a Mac where nothing readable is
+   * signed in, and then nothing is said anywhere.
+   *
+   * IT IS ANSWERED HERE FOR THE REASON `engineFacts` IS. Which engine a row runs
+   * on needs the capability gate, and which ACCOUNT it runs on needs
+   * `_narrowToChosen`, the rule that one account picked in Settings is the only
+   * one the fleet uses. A corner that worked either out for itself could name
+   * the subscription this app is deliberately not spending, which is the one
+   * mistake this line must never make: somebody reads it to find out whether any
+   * account of theirs got connected at all.
+   *
+   * THE FIRST OF THE POOL, which is the account the next spawn goes to on a Mac
+   * with nothing picked (`_pickProfile` round-robins from there). Two accounts
+   * of the same plan read the same either way; two different plans and a chosen
+   * account make this exact, which is the case somebody would ask about.
+   */
+  runsOnAccount(engine = this._engineFor(null)) {
+    const home = this.config.home;
+    if (engine === 'codex') {
+      const pool = this._narrowToChosen('codex', this._codexProfiles());
+      return runsOn({ engine, home, codexHome: this._codexProfileHome(pool[0] ?? 'default') });
+    }
+    const pool = this._narrowToChosen('claude', this._profiles());
+    return runsOn({ engine: 'claude', home, claudeProfile: pool[0] ?? 'default' });
   }
 
   /**
@@ -5834,7 +5980,7 @@ export class Supervisor {
     const levels = codexModelLevels(slug, { home });
     if (!levels || levels.includes(level)) return null;
     const offers = levels.length ? `It offers ${levels.join(', ')}.` : 'It advertises no levels at all.';
-    return `this row asks "${slug}" to think at "${level}", which is not a level that model offers on this Mac. ${offers} Nothing here will pick a stand-in for her, so this run is stopping rather than doing her work at a level she did not choose`;
+    return `this row asks "${slug}" to think at "${level}", which is not a level that model offers on this computer. ${offers} Nothing here will pick a stand-in for her, so this run is stopping rather than doing her work at a level she did not choose`;
   }
 
   /**
@@ -5914,7 +6060,7 @@ export class Supervisor {
     const asked = from === 'workspace'
       ? `every Codex agent here is set to run on "${word}"`
       : `this row asks to run on "${word}"`;
-    return `${asked}, which is not a model the Codex on this Mac knows.${instead} Nothing here will pick a stand-in for her, so this run is stopping rather than doing her work on a model she did not choose`;
+    return `${asked}, which is not a model the Codex on this computer knows.${instead} Nothing here will pick a stand-in for her, so this run is stopping rather than doing her work on a model she did not choose`;
   }
 
   /**
@@ -5998,7 +6144,7 @@ export class Supervisor {
         // The socket its threads' commands ask on, and no row: see
         // `codexMemoryGateEnv`. One app-server is every Codex thread of this
         // login, so a row named here would be the wrong row for all but one.
-        env: { ...this._workerEnv('codex'), CODEX_HOME: home, ...this.codexMemoryGateEnv() },
+        env: codexLaunchEnv(this.config.codexBin, { ...this._workerEnv('codex'), CODEX_HOME: home, ...this.codexMemoryGateEnv() }),
         stdio: ['pipe', 'pipe', 'pipe'],
       }),
       // WHAT IS LEFT OF THIS LOGIN'S LIMIT, ARRIVING UNBIDDEN. `onNotification`
@@ -6250,11 +6396,37 @@ export class Supervisor {
       return;
     }
     if (!this._hasSlotFor(engine) && !continuation) return;
+    // A TIED PROJECT WAITS RATHER THAN BORROWING A LOGIN, and this is where
+    // "tied" stops being a word on a settings page. The engine's own slot check
+    // above has already passed, and it is a check about the whole engine: with
+    // two logins it says yes while the ONE account this project may use is full.
+    // So the pinned account answers for itself, and when it cannot take the work
+    // nothing starts. Waiting is the promise; running it on the other
+    // subscription is the bug the setting exists to stop.
+    //
+    // A REPLY IS HANDED BACK RATHER THAN DROPPED. A continuation skips the slot
+    // check by design, so without the `redeliverAnswer` here the queue's
+    // delivery mark would stand on a reply no worker ever carried, which records
+    // it as handed over for good.
+    //
+    // AND A FORCED PROFILE LOSES. `forcedProfile` is the wake sweep saying which
+    // account it interrupted; if that is not the pinned one, the session being
+    // resumed lives on a login this project may no longer use, so the id goes
+    // with it and the row is briefed fresh on the right account.
+    const pinned = this._projectProfile(item.product, engine);
+    if (pinned) {
+      if (forcedProfile && forcedProfile !== pinned) { forcedProfile = null; resumeSessionId = null; }
+      const full = !continuation && this._loadOnProfile(pinned, engine) >= this._slotsPerAccount(engine);
+      if (full || this._profileResting(this._accountKey(engine, pinned))) {
+        if (continuation && item.answer) this.redeliverAnswer(item, item.answer);
+        return;
+      }
+    }
     // HER REPLY WAITS FOR AN ACCOUNT THAT CAN CARRY IT. A continuation skips the
     // slot check by design, so with every account on this engine sitting out it
     // would go to one anyway, die in two seconds, and go again next tick. Held
     // here and handed back, it goes out the tick the account returns.
-    if (continuation && !this._liveProfilesFor(engine).length) {
+    if (continuation && !pinned && !this._liveProfilesFor(engine).length) {
       if (item.answer) this.redeliverAnswer(item, item.answer);
       return;
     }
@@ -6305,7 +6477,12 @@ export class Supervisor {
     // the one path that resumes on every reply the user writes, a personal
     // continuation, fell through to the pick and lost the account half of the
     // time. plan.resumeProfile is that same answer for that path.
-    const profile = forcedProfile ?? plan.resumeProfile ?? this._pickProfile(engine);
+    //
+    // A TIE OUTRANKS ALL THREE, and it can because of the two lines above: a
+    // `forcedProfile` or a `resumeProfile` that disagreed with the tie has
+    // already had its session id taken off it, so this is not a resume pointed
+    // at the wrong home, it is a fresh brief on the account the project named.
+    const profile = pinned ?? forcedProfile ?? plan.resumeProfile ?? this._pickProfile(engine);
     // A SECOND ACCOUNT ARRIVES EMPTY, AND THIS IS WHERE IT STOPS BEING EMPTY.
     // Our own Accounts page tells a person to log in with a brand new folder,
     // and Claude Code reads a session's skills, commands and subagents out of
@@ -7546,7 +7723,7 @@ export class Supervisor {
     // EVERY RUN, not only a fresh one: a conversation resumed after the switch
     // went on, and a chat, never heard it otherwise (Codex's review).
     if (cleaner.enabled) {
-      parts.push('Anything you leave running after your turn (a dev server, a preview, a background job) is stopped two hours after you finish, sooner if this Mac runs short of memory. '
+      parts.push('Anything you leave running after your turn (a dev server, a preview, a background job) is stopped two hours after you finish, sooner if this computer runs short of memory. '
         + 'If the person needs something to keep running, start it with AGENTBOX_KEEP=1 in its environment and say so in your answer. Stop anything else you started before you finish.');
     }
     const stopping = cleaner.stoppingNote(item.id);
@@ -7594,6 +7771,13 @@ export class Supervisor {
           // server denies everything rather than believing a file, which is the
           // right way round. main/approvals.mjs holds the argument.
           ZERO_APPROVALS_PUBKEY: approvalPublicKey(),
+          // THE RUNTIME THAT SERVER IS STARTED ON, which is this app's own
+          // binary. Run from source the launcher used to need node on PATH and
+          // fell back to nvm only, so a Mac with Homebrew node, or none, lost
+          // every approval card and with it every agent (issue 21, 2026-10-07).
+          // Electron run with ELECTRON_RUN_AS_NODE=1 is a node, so handing the
+          // path down asks nothing of the machine.
+          ZERO_APPROVALS_RUNTIME: process.execPath,
         },
       },
     };
@@ -7644,7 +7828,9 @@ export function unpacked(p) {
 // row, and it used to count as a word: a persona test switched a finished
 // thread to Private and the agent ran again on its own, unasked and paid for.
 // Those fields describe the thread; they never ask it anything.
-const NOT_A_WORD = new Set(['visibility', 'priority', 'problem', 'progress', 'solution', 'blockedBy', 'blocks']);
+// Moving an answer out of the inbox is not asking the agent to answer again.
+// runAt also covers snoozes written before the inbox reminder had its own field.
+const NOT_A_WORD = new Set(['visibility', 'priority', 'problem', 'progress', 'solution', 'blockedBy', 'blocks', 'runAt', 'snoozedUntil']);
 function lastFounderWrite(item) {
   let latest = 0;
   for (const [field, w] of Object.entries(item?.wrote ?? {})) {
