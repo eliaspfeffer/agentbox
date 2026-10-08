@@ -1619,7 +1619,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
             {scheduledByAgent ? 'let it run now' : 'back to inbox'}
             <span className="dim">
               {' · '}
-              {scheduledByAgent ? 'the agent paused this until' : 'scheduled for'} {whenLabel(scheduledUntil!)}
+              {(item.snoozedUntil ?? 0) > Date.now() ? 'snoozed until' : scheduledByAgent ? 'the agent paused this until' : 'scheduled for'} {whenLabel(scheduledUntil!)}
             </span>
           </button>
         )}

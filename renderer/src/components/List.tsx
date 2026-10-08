@@ -277,7 +277,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
   // time column run on that moment, not the item's last activity. `runAt` is
   // the durable one and lives in the ledger; the snoozes map is the old
   // localStorage deferral, still read so nothing already deferred pops back.
-  const deferredUntil = (item: WorkItem) => Math.max(item.runAt ?? 0, snoozes?.[item.id] ?? 0);
+  const deferredUntil = (item: WorkItem) => Math.max(item.runAt ?? 0, item.snoozedUntil ?? 0, snoozes?.[item.id] ?? 0);
   const wakeTs = (item: WorkItem) => deferredUntil(item) || item.updatedAt;
   const wake = (ts: number) => new Date(ts).toLocaleString(undefined, {
     weekday: 'short', hour: 'numeric', minute: '2-digit',

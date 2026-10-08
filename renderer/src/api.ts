@@ -653,6 +653,12 @@ export const api = {
     return window.zero!.schedule(p);
   },
 
+  async snooze(p: { product: string; id: string; snoozedUntil: number }): Promise<WorkItem | null> {
+    if (useFixtures) return null;
+    if (!window.zero?.snooze) throw new Error('Restart the app to use inbox snooze');
+    return window.zero.snooze(p);
+  },
+
   // Defer an AGENT to a moment: the same gesture, on a row that lives in no
   // ledger. Nothing is sent and no process is touched — the moment says when
   // her inbox raises the agent again, and 0 brings it back now. The key is the
