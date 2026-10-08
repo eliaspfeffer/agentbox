@@ -573,12 +573,7 @@ export class Supervisor {
    *  find at all is not worked in either: that is `spawnWorker`'s existing
    *  refusal and it stays where it is. */
   worksHere(product) {
-    // NOR IN A MESSAGE THREAD BETWEEN PEOPLE (w-7fc38861be). `mayRunHere`
-    // already keeps the tick off one, but resuming a row by name, its slot
-    // queue, the recovery sweep and a mid-flight reply never ask it, and one
-    // of them put a worker into a conversation with a teammate that nobody
-    // had asked an agent into. It is a rule about a place, like practice.
-    return !!product && product.practice !== true && product.team?.direct !== true;
+    return !!product && product.practice !== true;
   }
 
   start() {
@@ -767,15 +762,19 @@ export class Supervisor {
     const out = { resumed: 0, queued: 0, working: 0, missing: 0 };
     if (!only.size) return out;
     this.liftBrakeForHer();
-    // A conversation between people is never resumed, even ticked alongside
-    // work (w-7fc38861be): reopening it and counting it as resumed would say
-    // an agent is on its way into a chat that `spawnWorker` will refuse.
-    const chats = new Set((this.store.listProducts?.() ?? []).filter((p) => p.team?.direct).map((p) => p.slug));
+    // RESUMING IS STILL ASKING TO RUN ON THIS MAC, so it obeys the same team
+    // rule the tick does (w-7fc38861be). It did not: on 2026-10-05 "Resume
+    // Agents" over a handful of ticked rows reached two conversations with
+    // teammates, and an agent turned up in the middle of each, reading the
+    // last thread reply as an instruction. Asking by name outranks a delivery
+    // mark and the attempt cap below; it does not make a row this Mac's to run.
+    const productBySlug = new Map((this.store.listProducts?.() ?? []).map((p) => [p.slug, p]));
+    const me = process.env.AGENTBOX_PERSON_ID || null;
 
     for (const item of this.store.listItems(Date.now())) {
       if (!only.has(item.id)) continue;
       only.delete(item.id);
-      if (chats.has(item.product)) continue;
+      if (!mayRunHere(item, productBySlug.get(item.product), me)) continue;
       // A row with a worker on it is already resumed. Saying so is the honest
       // answer; killing the session to restart it would throw away the work in
       // flight, which is never what "resume" meant.
@@ -6279,8 +6278,7 @@ export class Supervisor {
     // happen in silence and read it as the app being broken: a task filed into
     // Practice was accepted and then never picked up by anything.
     if (!this.worksHere(product)) {
-      const why = product.team?.direct ? 'a message thread between people never runs an agent' : 'nothing runs in a practice project';
-      console.warn(`zero: refusing to start a session in ${product.slug}: ${why}`);
+      console.warn(`zero: refusing to start a session in ${product.slug}: nothing runs in a practice project`);
       return;
     }
     if (this._folderFirst(item, product, engine, { continuation, resumeSessionId, profile: forcedProfile, engine: forcedEngine, remoteOnly })) return;
