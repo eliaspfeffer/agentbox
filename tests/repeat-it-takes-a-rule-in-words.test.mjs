@@ -9,9 +9,17 @@
 //
 // The box is the whole phrase, never prose, so "every day 5pm" without the
 // "at" is a time, where at the start of a message it would be the task.
+//
+// ONE READER FOR EVERY BOX. The ask on shipping was that this use the same
+// reader as the rest of the app, not a second copy. So `readRule` lives beside
+// `parseRepeat` in format.ts and both boxes that take a rule alone call it:
+// this page, and the When picker on the card and the reply box (`readWhen`).
+// The first line of a message keeps calling `parseRepeat`, because there the
+// words after the rhythm are the task.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { ruleFromWords } from '../renderer/src/threads/composer-rules.ts';
+import { readRule as ruleFromWords, parseRepeat } from '../renderer/src/format.ts';
+import { readWhen } from '../renderer/src/components/When.tsx';
 
 describe('a rule typed into Repeat it', () => {
   it('reads the rhythms the app already keeps', () => {
@@ -60,10 +68,23 @@ describe('a rule typed into Repeat it', () => {
   });
 });
 
-describe('the composer', () => {
-  const src = readFileSync(new URL('../renderer/src/threads/ThreadComposer.tsx', import.meta.url), 'utf8');
+describe('one reader, shared', () => {
+  const read = (f) => readFileSync(new URL(`../renderer/src/${f}`, import.meta.url), 'utf8');
 
-  it('reads the typed rule with ruleFromWords on the Repeat it page', () => {
-    expect(src).toContain('ruleFromWords(');
+  it('is what the Repeat it page and the When picker both call', () => {
+    expect(read('threads/ThreadComposer.tsx')).toContain('readRule(');
+    expect(read('components/When.tsx')).toContain('readRule(');
+  });
+
+  it('keeps no second copy in the composer rules', () => {
+    expect(read('threads/composer-rules.ts')).not.toContain('parseRepeat');
+  });
+
+  it('gives the When picker the same answer for a time without "at"', () => {
+    expect(readWhen('every day 5pm')).toEqual({ runAt: 0, repeat: { every: 'day', at: '17:00' } });
+  });
+
+  it('leaves the first line of a message alone, where the words after the rhythm are the task', () => {
+    expect(parseRepeat('every day 5pm')).toMatchObject({ rule: { every: 'day', at: '08:00' } });
   });
 });

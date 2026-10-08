@@ -49,9 +49,10 @@ import { defaultModelFor, engineModelLabel, readLastModel, writeLastModel, type 
 import { defaultEffortFor, effortChoicesFor, effortPicked, effortShown, readLastEffort, writeLastEffort } from '../effort';
 import { readLastEngine, startingEngine, writeLastEngine } from '../engines';
 import { repeatPresets } from '../components/When';
+import { readRule } from '../format';
 import { fitMenu } from '../keep-in-window';
 import {
-  allModels, findPeople, harnessFields, laterHint, momentFromWords, mondayMorning, moreCount, ruleFromWords,
+  allModels, findPeople, harnessFields, laterHint, momentFromWords, mondayMorning, moreCount,
   joinNames, placeholderFor, projectsOffered, projectSwatch, recentModels, sameModel,
   sharingFields, startingProject, startingVisibility, startingChosen, teammates, threadMessage, tomorrowMorning, chosenWords, VISIBILITY_ROWS,
   type Harness, type ModelPick, type Visibility,
@@ -681,7 +682,7 @@ export function ThreadComposer({
   const tomorrow = tomorrowMorning(now);
   const monday = mondayMorning(now);
   const typedAt = momentFromWords(laterText, now);
-  const typedRule = ruleFromWords(repeatText);
+  const typedRule = readRule(repeatText);
   const laterMenu = (
     <div className="tc-menu tc-rise tc-right tc-wide" role="menu" aria-label="Send later" onKeyDown={menuKeys}>
       {laterPage === 'list' ? (<>
