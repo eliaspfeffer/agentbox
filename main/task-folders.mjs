@@ -34,12 +34,21 @@
 //   the lock carries the owning pid and a release from anyone else checks
 //   whether that process is still alive.
 //
+// AND THE FOLDER IS THE COMMIT PLUS WHAT THE REPOSITORY ASKED FOR (2026-10-07,
+// w-5952e6de3e). A worktree holds tracked content and nothing else, so every
+// file a repository needs and git does not track was missing: measured that day,
+// five of the seven task folders then live had no `zero.config.json`, the app's
+// own config, and ran on fallback defaults. The list of local files to carry is
+// `.worktreeinclude` at the repository root, read by `main/worktree-include.mjs`,
+// which is the same file Conductor and Claude Code read for the same purpose.
+//
 // Branches are never deleted here. Every commit survives the folder, so the
 // worst this can do is make somebody run `git worktree add` again.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { nameSlug } from '../shared/product-name.mjs';
+import { carryLocalFiles, onlyTrackedContent, trackedTopLevel } from './worktree-include.mjs';
 
 /** Where Claude Code puts its own, so both engines and a human agree. */
 const WORKTREES = ['.claude', 'worktrees'];
@@ -226,7 +235,25 @@ export function ensureTaskFolder(dir, id, { pid = process.pid, dependencies = tr
       ? tryGit(root, ['worktree', 'add', staging, branch])
       : tryGit(root, ['worktree', 'add', '-b', branch, staging, baseRef(root)]);
     if (!add.ok) throw Error(`Could not make a folder for ${name}: ${add.out}`);
-    if (dependencies) cloneDependencies(root, staging);
+  }
+
+  // AND THE LOCAL FILES THE REPOSITORY ASKS FOR, THE SAME WAY WHICHEVER PATH RAN.
+  //
+  // This is the half that was missing, and the half people were complaining
+  // about. The two paths used to disagree: the clone carried every untracked file
+  // in the checkout, the ordinary checkout carried `node_modules` and nothing
+  // else, and which one a task got depended on whether somebody happened to have
+  // an edit open. `.worktreeinclude` makes it one answer, written down, in the
+  // repository, in a file Conductor and Claude Code already read.
+  //
+  // It runs in STAGING, before the folder exists at its own path, so a folder
+  // nobody can see yet is the one that is incomplete. A failure here throws, and
+  // the staging copy goes with it: a folder quietly missing a file somebody named
+  // is the whole fault being fixed, so it may not be published.
+  let refusedLocalFiles = [];
+  if (dependencies) {
+    try { refusedLocalFiles = carryLocalFiles(root, staging).refused; }
+    catch (error) { clearUnfinished(root, staging); throw Error(`Could not make a folder for ${name}: ${error.message}`); }
   }
 
   // `worktree move` rather than a rename, so git's own record of where this
@@ -239,7 +266,7 @@ export function ensureTaskFolder(dir, id, { pid = process.pid, dependencies = tr
   }
 
   lock(root, folder, pid);
-  return { path: folder, branch, created: true, how };
+  return { path: folder, branch, created: true, how, refusedLocalFiles };
 }
 
 /**
@@ -292,13 +319,27 @@ function cloneCheckout(root, folder, branch, from, branchExists) {
   if (!add.ok) return false;
 
   try {
-    for (const entry of fs.readdirSync(root)) {
-      if (entry === '.git' || entry === WORKTREES[0]) continue;
-      execFileSync('cp', ['-c', '-R', path.join(root, entry), folder], { stdio: ['ignore', 'ignore', 'pipe'] });
+    // THE ENTRIES THAT HOLD TRACKED CONTENT, AND NOT SIMPLY EVERYTHING.
+    //
+    // It used to be every top-level entry except `.git` and `.claude`, which had
+    // two faults. The small one: every untracked file in the checkout rode along,
+    // so this path and the ordinary one produced different folders. The large
+    // one: skipping `.claude` WHOLESALE means a repository that commits a file
+    // under it (a `.claude/settings.json`, which is ordinary) failed this
+    // function's own verification every single time, because the clone was
+    // missing a tracked file. That failure is how a task ended up in the shared
+    // checkout; see the comment in `ensureTaskFolder` about asking for the
+    // branch twice.
+    for (const entry of trackedTopLevel(root)) {
+      if (entry === '.git') continue;
+      copyIn(root, folder, entry);
     }
     if (!tryGit(folder, ['reset', '-q', 'HEAD']).ok) throw Error('the index would not fill in');
     const after = tryGit(folder, ['status', '--porcelain', '--untracked-files=no']);
     if (!after.ok || after.out.length > 0) throw Error('the clone did not match the commit');
+    // An ignored file inside a tracked directory came with it (`renderer/dist`).
+    // Cleared here, and whatever is genuinely wanted arrives by name afterwards.
+    onlyTrackedContent(folder);
     return true;
   } catch {
     // Back to nothing, so the ordinary path starts from a clean sheet. What is
@@ -308,6 +349,26 @@ function cloneCheckout(root, folder, branch, from, branchExists) {
     // agent lost the ground under it.
     clearUnfinished(root, folder);
     return false;
+  }
+}
+
+/**
+ * One top-level entry, cloned into the new folder.
+ *
+ * `.claude` IS THE ONE ENTRY THAT CANNOT BE COPIED WHOLE, because the folders
+ * every other task is working in live inside it. Its children are copied one by
+ * one instead, with `worktrees` left out, so a repository that tracks a file
+ * under `.claude` gets it and no task ever receives a copy of another task's
+ * work.
+ */
+function copyIn(root, folder, entry) {
+  const clone = (from, to) => execFileSync('cp', ['-c', '-R', from, to], { stdio: ['ignore', 'ignore', 'pipe'] });
+  if (entry !== WORKTREES[0]) { clone(path.join(root, entry), folder); return; }
+  const to = path.join(folder, entry);
+  fs.mkdirSync(to, { recursive: true });
+  for (const child of fs.readdirSync(path.join(root, entry))) {
+    if (child === WORKTREES[1]) continue;
+    clone(path.join(root, entry, child), to);
   }
 }
 
@@ -330,26 +391,14 @@ function hideFromTheCheckout(root) {
   } catch { /* an unwritable git dir is not a reason to refuse the folder */ }
 }
 
-/**
- * Dependencies, cloned rather than copied. Measured 2026-09-22: `cp -c` of this
- * repository's 929 MB node_modules took 2.9 seconds and moved the volume's free
- * space by nothing at all, because APFS shares the blocks until something
- * writes. A plain copy is a minute and a real gigabyte, which is most of what
- * the 26 GB on her Mac was. Failure here is never fatal: the folder is still a
- * good folder, it just has to install for itself.
- */
-function cloneDependencies(root, folder) {
-  const from = path.join(root, 'node_modules');
-  const to = path.join(folder, 'node_modules');
-  if (!fs.existsSync(from) || fs.existsSync(to)) return false;
-  try {
-    execFileSync('cp', ['-c', '-R', from, to], { stdio: ['ignore', 'ignore', 'pipe'] });
-    return true;
-  } catch {
-    try { fs.rmSync(to, { recursive: true, force: true }); } catch { /* nothing to undo */ }
-    return false;
-  }
-}
+// DEPENDENCIES USED TO BE SPECIAL-CASED HERE, and now they are one line of a
+// list the repository writes: `main/worktree-include.mjs`, whose default when a
+// repository says nothing is `/node_modules/`, so the behaviour this paragraph
+// used to describe is still the behaviour. The measurement that justified it
+// stands and belongs with the code that does it now: `cp -c` of this
+// repository's 929 MB of dependencies took 2.9 seconds on 2026-09-22 and moved
+// the volume's free space by nothing at all, because APFS shares the blocks
+// until something writes.
 
 function lock(root, folder, pid) {
   const held = record(root, folder)?.lock;

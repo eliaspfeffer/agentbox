@@ -23,14 +23,19 @@
 // open. main/git-change.mjs says what that costs: the review card a person
 // reads can then carry another agent's edits.
 //
-// WHAT TRIGGERS STEP 3 IN REAL LIFE. The copy skips the whole `.claude`
-// directory, so a repository that COMMITS a file under `.claude` (a
-// `.claude/settings.json`, which is ordinary) fails verification every single
-// time: the clone is missing a tracked file, which is exactly the check that is
-// meant to catch a bad clone. That is the trigger used below because it is
-// deterministic. It is not the only one. Measured on this Mac the same day:
-// the volume holding the checkouts was 96% full with 21 GiB free, and an
-// out-of-space copy lands in the same place.
+// WHAT TRIGGERS STEP 3 IN REAL LIFE. Anything that stops the copy finishing.
+// Measured on this Mac the same day, the volume holding the checkouts was 96%
+// full with 21 GiB free, so running out of space mid-copy is the ordinary case
+// rather than the exotic one. The trigger used below is a directory the copy
+// cannot read, because that is the one a test can arrange exactly.
+//
+// THE FIRST TRIGGER FOUND WAS A DIFFERENT BUG AND IS NOW FIXED. The copy used to
+// skip the whole `.claude` directory, so a repository that COMMITS a file under
+// it -- a `.claude/settings.json`, which is ordinary -- failed verification every
+// single time, the clone being short a tracked file. That one is closed: the
+// directory is copied child by child now, with only the folder other tasks live
+// in left out. The last test here holds that closed, because it is the shape most
+// likely to come back.
 //
 // WHAT MUST BE TRUE INSTEAD: the branch that survived step 3 is the task's own
 // branch, so the second attempt ATTACHES to it rather than asking for it again,
@@ -57,10 +62,21 @@ function repo() {
 }
 
 /**
- * The repository commits a file under `.claude`, which the fast path's copy
- * skips wholesale. Every clone from this checkout therefore creates the branch
- * and then fails its own verification.
+ * A tracked directory the copy cannot read. The clone creates the branch first
+ * and reaches the copy second, so every clone from this checkout gets past the
+ * door and then fails -- which is the only sequence that matters here. A full
+ * disk arrives at the same line.
  */
+const UNREADABLE = 'locked-away';
+function theCopyCannotFinishIn(dir) {
+  fs.mkdirSync(path.join(dir, UNREADABLE), { recursive: true });
+  fs.writeFileSync(path.join(dir, UNREADABLE, 'kept.txt'), 'tracked all the same\n');
+  git(dir, 'add', UNREADABLE);
+  git(dir, 'commit', '-q', '-m', 'a directory that will be shut');
+  fs.chmodSync(path.join(dir, UNREADABLE), 0o000);
+}
+
+/** A repository that commits a file under `.claude`, as many do. */
 function commitsAFileUnderDotClaude(dir) {
   fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.claude', 'settings.json'), '{"permissions":{}}\n');
@@ -71,23 +87,27 @@ function commitsAFileUnderDotClaude(dir) {
 describe('a task whose first attempt at a folder failed', () => {
   let dir;
   beforeEach(() => { dir = repo(); });
-  afterEach(() => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} });
+  afterEach(() => {
+    // The shut directory has to be opened again or nothing can clean up.
+    try { fs.chmodSync(path.join(dir, UNREADABLE), 0o755); } catch {}
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  });
 
   // THE REPORTED CASE. The clone creates the branch, then fails.
   it('still gets its own folder, on its own branch', () => {
-    commitsAFileUnderDotClaude(dir);
+    theCopyCannotFinishIn(dir);
 
     const made = ensureTaskFolder(dir, 'w-halfbuilt');
 
     expect(made.path).toBe(taskFolderPath(dir, 'w-halfbuilt'));
     expect(made.branch).toBe(taskBranch('w-halfbuilt'));
     expect(git(made.path, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe(taskBranch('w-halfbuilt'));
-    // The ordinary path ran, so the folder is the commit and nothing else.
+    // The ordinary path ran, and it reads the commit rather than the disk, so
+    // the folder is whole even though the checkout beside it could not be read.
     expect(made.how).toBe('checkout');
     expect(git(made.path, 'status', '--porcelain', '--untracked-files=no')).toBe('');
-    // And the tracked file the clone could not carry IS here, which is the
-    // whole reason the clone was right to refuse itself.
-    expect(fs.existsSync(path.join(made.path, '.claude', 'settings.json'))).toBe(true);
+    expect(fs.readFileSync(path.join(made.path, UNREADABLE, 'kept.txt'), 'utf8'))
+      .toBe('tracked all the same\n');
   });
 
   // THE BOUNDARY ON ONE SIDE: the branch already existed and carries commits.
@@ -102,7 +122,7 @@ describe('a task whose first attempt at a folder failed', () => {
     git(dir, 'worktree', 'unlock', first.path);
     git(dir, 'worktree', 'remove', '--force', first.path);
     // And only NOW make every clone from this checkout fail.
-    commitsAFileUnderDotClaude(dir);
+    theCopyCannotFinishIn(dir);
 
     const again = ensureTaskFolder(dir, 'w-hascommits');
 
@@ -133,5 +153,22 @@ describe('a task whose first attempt at a folder failed', () => {
     expect(made.how).toBe('clone');
     expect(git(made.path, 'status', '--porcelain', '--untracked-files=no')).toBe('');
     expect(git(made.path, 'rev-parse', 'HEAD')).toBe(git(dir, 'rev-parse', 'refs/heads/main'));
+  });
+
+  // THE FIRST TRIGGER, HELD CLOSED. A repository that commits a file under
+  // `.claude` used to fail every clone, because the copy skipped that directory
+  // whole and the clone was then short a tracked file. It clones now, and the
+  // folder other tasks live in still does not travel.
+  it('clones a repository that commits a file under .claude', () => {
+    commitsAFileUnderDotClaude(dir);
+    const neighbour = ensureTaskFolder(dir, 'w-neighbour');
+    expect(fs.existsSync(neighbour.path)).toBe(true);
+
+    const made = ensureTaskFolder(dir, 'w-dotclaude');
+
+    expect(made.how).toBe('clone');
+    expect(fs.existsSync(path.join(made.path, '.claude', 'settings.json'))).toBe(true);
+    expect(fs.existsSync(path.join(made.path, '.claude', 'worktrees'))).toBe(false);
+    expect(git(made.path, 'status', '--porcelain', '--untracked-files=no')).toBe('');
   });
 });
