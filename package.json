@@ -1,7 +1,7 @@
 {
   "name": "agentbox-app",
   "productName": "Agentbox",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "An inbox for managing dozens of Claude Code and Codex agents.",
   "author": "Savannah Feder",
   "repository": {
@@ -122,6 +122,7 @@
       "main/**/*",
       "shared/**/*",
       "preload.cjs",
+      "build/notification-icon.png",
       "briefs/**/*",
       "!briefs/founder.md",
       "!briefs/writing-rules.md",

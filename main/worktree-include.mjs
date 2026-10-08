@@ -44,6 +44,26 @@ import path from 'node:path';
 export const INCLUDE_FILE = '.worktreeinclude';
 
 /**
+ * ONE COPY, THE PLATFORM'S OWN, FOR EVERY TREE EITHER FILE MOVES.
+ *
+ * macOS `cp -c` asks APFS for a block-sharing clone. GNU `cp` has no `-c` at
+ * all and would simply fail; `-a --reflink=auto` shares blocks where the
+ * filesystem can do it and copies where it cannot, which is the same bargain.
+ * The inbox runs on Linux too (origin/main, bec6d92), so a hardcoded `-c` is a
+ * copy that cannot work there.
+ *
+ * It lives in this file rather than in `main/task-folders.mjs`, which is the
+ * other caller, because that file imports this one and the reverse would be a
+ * circle.
+ */
+export function copyTree(from, to) {
+  const args = process.platform === 'darwin'
+    ? ['-c', '-R', from, to]
+    : ['-a', '--reflink=auto', from, to];
+  execFileSync('cp', args, { stdio: ['ignore', 'ignore', 'pipe'] });
+}
+
+/**
  * What a repository that has never heard of this gets: its dependencies, which
  * is exactly what was carried before, so nothing is worse off for not asking.
  *
@@ -314,7 +334,7 @@ export function carryLocalFiles(root, folder) {
     if (isLink(from) && !carriableLink(root, from)) { no(rel, 'it is a link to somewhere outside the repository'); continue; }
     try {
       fs.mkdirSync(path.dirname(to), { recursive: true });
-      execFileSync('cp', ['-c', '-R', from, to], { stdio: ['ignore', 'ignore', 'pipe'] });
+      copyTree(from, to);
     } catch (error) {
       no(rel, `it could not be copied: ${String(error?.stderr ?? error?.message ?? '').trim()}`);
       continue;

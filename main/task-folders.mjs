@@ -48,7 +48,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { nameSlug } from '../shared/product-name.mjs';
-import { carryLocalFiles, onlyTrackedContent, trackedTopLevel } from './worktree-include.mjs';
+import { carryLocalFiles, copyTree, onlyTrackedContent, trackedTopLevel } from './worktree-include.mjs';
 
 /** Where Claude Code puts its own, so both engines and a human agree. */
 const WORKTREES = ['.claude', 'worktrees'];
@@ -231,6 +231,9 @@ export function ensureTaskFolder(dir, id, { pid = process.pid, dependencies = tr
     // tests/a-task-whose-first-attempt-failed-still-gets-its-own-folder.
     //
     // ATTACH, NEVER `-B` AND NEVER RESET. Whatever is on that branch is work.
+    //
+    // Found twice, independently: the Linux work on main reached the same line
+    // from the other direction, because `cp` there fails differently.
     const add = hasBranch()
       ? tryGit(root, ['worktree', 'add', staging, branch])
       : tryGit(root, ['worktree', 'add', '-b', branch, staging, baseRef(root)]);
@@ -305,6 +308,12 @@ function clearUnfinished(root, staging) {
  * commit, down to an empty `git status`, the folder is thrown away and the
  * ordinary checkout runs. A fast folder that is subtly not the code would be
  * far worse than a slow one.
+ *
+ * THE COPY IS THE PLATFORM'S OWN CLONE, and it lives in
+ * `main/worktree-include.mjs` because both files need it and that one does not
+ * import this one. macOS `cp -c` is APFS clonefile; GNU `cp -a --reflink=auto`
+ * shares blocks where the filesystem can and copies where it cannot, and `-c`
+ * is not an option there at all.
  */
 function cloneCheckout(root, folder, branch, from, branchExists) {
   // TRACKED CONTENT ONLY, on both sides of this. Her checkout permanently
@@ -373,13 +382,12 @@ function cloneCheckout(root, folder, branch, from, branchExists) {
  * work.
  */
 function copyIn(root, folder, entry) {
-  const clone = (from, to) => execFileSync('cp', ['-c', '-R', from, to], { stdio: ['ignore', 'ignore', 'pipe'] });
-  if (entry !== WORKTREES[0]) { clone(path.join(root, entry), folder); return; }
+  if (entry !== WORKTREES[0]) { copyTree(path.join(root, entry), folder); return; }
   const to = path.join(folder, entry);
   fs.mkdirSync(to, { recursive: true });
   for (const child of fs.readdirSync(path.join(root, entry))) {
     if (child === WORKTREES[1]) continue;
-    clone(path.join(root, entry, child), to);
+    copyTree(path.join(root, entry, child), to);
   }
 }
 
@@ -404,12 +412,12 @@ function hideFromTheCheckout(root) {
 
 // DEPENDENCIES USED TO BE SPECIAL-CASED HERE, and now they are one line of a
 // list the repository writes: `main/worktree-include.mjs`, whose default when a
-// repository says nothing is `/node_modules/`, so the behaviour this paragraph
+// repository says nothing is `/node_modules`, so the behaviour this paragraph
 // used to describe is still the behaviour. The measurement that justified it
-// stands and belongs with the code that does it now: `cp -c` of this
-// repository's 929 MB of dependencies took 2.9 seconds on 2026-09-22 and moved
-// the volume's free space by nothing at all, because APFS shares the blocks
-// until something writes.
+// stands and belongs with the code that does it now: cloning this repository's
+// 929 MB of dependencies took 2.9 seconds on 2026-09-22 and moved the volume's
+// free space by nothing at all, because APFS shares the blocks until something
+// writes.
 
 function lock(root, folder, pid) {
   const held = record(root, folder)?.lock;
