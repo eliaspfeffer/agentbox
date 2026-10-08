@@ -106,6 +106,7 @@ import { nameRow, wantsName } from './row-label.mjs';
 import { LEVELS, latestMessage, sortMessage, wantsPriority } from './message-priority.mjs';
 import { NAME, Name, envName, nameSlug, isOurSlug } from '../shared/product-name.mjs';
 import { signInFiles, signInStamp } from './sign-in-files.mjs';
+import { runsOn } from './runs-on.mjs';
 import { MemoryGateServer, defaultSocketPath as memoryGateSocketPath } from './memory-gate-server.mjs';
 import { autoSlots, DEFAULTS as MEMORY_GATE } from './memory-gate.mjs';
 import { LeftoverCleaner } from './leftovers.mjs';
@@ -5371,6 +5372,34 @@ export class Supervisor {
       }
     }
     return { choices, workspace, byItem };
+  }
+
+  /**
+   * WHICH SUBSCRIPTION THE FLEET IS SPENDING, for the one line that says so
+   * (w-e217e577e5, 2026-10-07). Null on a Mac where nothing readable is signed
+   * in, and then nothing is drawn anywhere.
+   *
+   * IT IS ANSWERED HERE FOR THE REASON `engineFacts` IS. Which engine a row runs
+   * on needs the capability gate, and which ACCOUNT it runs on needs
+   * `_narrowToChosen`, the rule that one account picked in Settings is the only
+   * one the fleet uses. A corner that worked either out for itself could name
+   * the subscription this app is deliberately not spending, which is the one
+   * mistake this line must never make: somebody reads it to find out whose money
+   * is going.
+   *
+   * THE FIRST OF THE POOL, which is the account the next spawn goes to on a Mac
+   * with nothing picked (`_pickProfile` round-robins from there). Two accounts
+   * of the same plan read the same either way; two different plans and a chosen
+   * account make this exact, which is the case somebody would ask about.
+   */
+  runsOnAccount(engine = this._engineFor(null)) {
+    const home = this.config.home;
+    if (engine === 'codex') {
+      const pool = this._narrowToChosen('codex', this._codexProfiles());
+      return runsOn({ engine, home, codexHome: this._codexProfileHome(pool[0] ?? 'default') });
+    }
+    const pool = this._narrowToChosen('claude', this._profiles());
+    return runsOn({ engine: 'claude', home, claudeProfile: pool[0] ?? 'default' });
   }
 
   /**
