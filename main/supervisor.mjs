@@ -1514,11 +1514,29 @@ export class Supervisor {
     // Already made, off this thread, by the spawn that is asking (`_folderFirst`).
     const made = this._madeFolders?.get(item.id);
     if (made) return made;
-    try { return restoreTaskFolder(base, item.id)?.path ?? base; }
+    try { return this._folderOr(item, restoreTaskFolder(base, item.id), base); }
     catch (error) {
       console.warn(`zero: ${item.id} is running in the shared checkout:`, error.message);
       return base;
     }
+  }
+
+  /**
+   * THE FOLDER, OR THE CHECKOUT AND A WORD ABOUT WHY.
+   *
+   * Taking a task folder can now be REFUSED, and the refusal names who has it
+   * (main/task-folders.mjs). It happens when another app process over the same
+   * checkout is standing in that folder — one running from the app folder and
+   * one from a checkout — or when somebody has locked it by hand. The run still
+   * happens, in the shared checkout as every run did before folders existed,
+   * but it is said out loud: a refusal that reads like an ordinary folder is how
+   * two sessions ended up in one.
+   */
+  _folderOr(item, made, base) {
+    if (made?.taken !== false) return made?.path ?? base;
+    const who = made.heldBy ? ` by pid ${made.heldBy}` : '';
+    console.warn(`zero: ${item.id} is running in the shared checkout: its folder is ${made.reason}${who}`);
+    return base;
   }
 
   /**
@@ -1639,7 +1657,7 @@ export class Supervisor {
     const entry = { item, opts, engine };
     this._preparing.set(item.id, entry);
     folderJob('restoreTaskFolder', base, item.id)
-      .then((made) => made?.path ?? base, (error) => {
+      .then((made) => this._folderOr(item, made, base), (error) => {
         console.warn(`zero: ${item.id} is running in the shared checkout:`, error.message);
         return base;
       })
