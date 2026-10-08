@@ -1698,9 +1698,8 @@ export default function App() {
   // A THREAD WHOSE PROPOSALS HAVE BEEN WAITING A DAY (w-9cf2b43110). Later is
   // where things are lost — "sometimes the tab later is not meant to be looked
   // at" — so silence has a deadline, and what comes back is the THREAD rather
-  // than the agent-to-agent rows it filed. It comes back even if it was closed:
-  // filing a thread away with E answers nothing, and forgetting must cost
-  // nothing. Rejecting them all is what makes it stop.
+  // than the agent-to-agent rows it filed. The rule respects a thread you
+  // closed yourself; finishing by an agent still allows a reminder.
   const owedAnAnswer = useMemo(() => threadsOwedAnAnswer(items, now), [items, now]);
 
   // AND THAT ROW READS AS WORKING, because it is: the app itself is reading the
