@@ -958,15 +958,7 @@ body {
 }
 .search-q::placeholder { color: var(--text-faint); font-weight: 500; }
 
-.search-scopes { display: flex; flex: 0 0 auto; gap: 2px; -webkit-app-region: no-drag; }
-.search-scope {
-  border: 0; background: none; border-radius: var(--radius); padding: 5px 9px;
-  font: inherit; font-size: 13px; color: var(--text-dim); cursor: pointer;
-}
-.search-scope:hover { background: var(--wash); color: var(--text); }
-.search-scope[aria-pressed="true"] { color: var(--text); text-decoration: underline; text-underline-offset: 7px; }
-.search-scope:focus-visible { outline: 1px solid var(--text-dim); outline-offset: 1px; }
-.search-kind { color: var(--text-dim); }
+.search-faces { margin-right: 9px; vertical-align: middle; position: relative; top: -1px; }
 
 /* A bare glyph. The chrome was doing the work the shape already does. */
 .icon-btn {

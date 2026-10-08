@@ -20,7 +20,7 @@ const other = row('other', 'other', 'Catch up');
 const mention = row('mention', 'work', 'Maya Rowan gave feedback', { updatedAt: 100 });
 const plain = row('plain', 'work', 'Update the website');
 const items = [mention, plain, other, group, chat];
-const ids = (query, scope) => searchThreads(items, query, context, scope).map(h => h.item.id);
+const ids = query => searchThreads(items, query, context).map(h => h.item.id);
 
 describe('search by the person in a conversation', () => {
   it('puts the pair and group ahead of agent mentions, including closed chats', () => {
@@ -65,17 +65,15 @@ describe('search by the person in a conversation', () => {
     expect(searchThreads([chat], 'Lee', context)).toEqual([]);
     expect(searchThreads([plain], 'Maya', context)).toEqual([]);
   });
-  it('filters chats and agent threads independently, including a blank search', () => {
-    expect(ids('Maya', 'chats')).toEqual(['group', 'chat']);
-    expect(ids('Maya', 'agents')).toEqual(['mention']);
-    expect(new Set(ids('', 'chats'))).toEqual(new Set(['chat', 'group', 'other']));
-    expect(new Set(ids('', 'agents'))).toEqual(new Set(['mention', 'plain']));
+  it('keeps chats and agent threads together, including completed chats in a blank search', () => {
+    expect(new Set(ids(''))).toEqual(new Set(items.map(item => item.id)));
   });
-  it('labels chats with their people and agent threads with their project', () => {
-    expect(threadSearchDetails(chat, context)).toEqual({ title: 'Maya Rowan', kind: 'chat', where: 'Maya Rowan' });
+  it('provides each conversation participant for the same photos used in the inbox', () => {
+    expect(threadSearchDetails(chat, context)).toEqual({ title: 'Maya Rowan', kind: 'chat', people: ['maya'] });
     expect(threadSearchDetails(group, context).title).toBe('Maya Rowan, Lee Chen');
     expect(threadSearchDetails(mention, context).kind).toBe('agent');
-    expect(threadSearchDetails(mention, context).where).toBe('Northwind');
+    expect(threadSearchDetails(group, context).people).toEqual(['maya', 'lee']);
+    expect(threadSearchDetails(mention, context).people).toEqual([]);
   });
   it('leaves ordinary single-person searches working and returns original objects', () => {
     const hits = searchThreads([plain], 'website', { products: [], people: [], me: null });

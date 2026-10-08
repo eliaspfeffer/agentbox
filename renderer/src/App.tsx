@@ -73,7 +73,7 @@ import { modalAfterLeavingATask } from './modal-scope';
 import { NOTHING_OVER_THE_APP, afterTheWalk, type OpenOverTheApp } from './walk-scope';
 import { splitMessage } from './message-split';
 import { parseQuery } from './search';
-import { searchThreads, threadSearchDetails, type SearchScope } from './threads/search';
+import { searchThreads, threadSearchDetails } from './threads/search';
 import { applyTheme, machineTheme, onMachineTheme, resolvePick, resolveTheme, THEME_KEY, type ThemePick } from './theme';
 import { hintScheduler, type HintScheduler } from './hint-timing';
 import { HINTS } from './hint-plate';
@@ -608,7 +608,6 @@ export default function App() {
   // question, and splitting them is how a field ends up open with a stale query
   // in it (design B, the corner magnifier and `/`).
   const [search, setSearch] = useState<string | null>(null);
-  const [searchScope, setSearchScope] = useState<SearchScope>('all');
   const searchRef = useRef<HTMLInputElement>(null);
   // ESC PUTS HER BACK WHERE SHE WAS. Searching crosses every tab, so leaving it
   // has to restore the one she came from AND the row she was on, or a search
@@ -2093,8 +2092,8 @@ export default function App() {
     products: snap?.products ?? [], people: snap?.team?.people ?? [], me: team?.me ?? null,
   }), [snap?.products, snap?.team?.people, team?.me]);
   const hits = useMemo(
-    () => (search === null ? null : searchThreads(items, search, searchContext, searchScope)),
-    [items, search, searchContext, searchScope],
+    () => (search === null ? null : searchThreads(items, search, searchContext)),
+    [items, search, searchContext],
   );
   const searchDetails = useMemo(
     () => search === null ? undefined : new Map((hits ?? []).map(h => [h.item.id, threadSearchDetails(h.item, searchContext)])),
@@ -2117,7 +2116,6 @@ export default function App() {
   const query = useMemo(() => (search === null ? undefined : parseQuery(search)), [search]);
 
   const openSearch = useCallback(() => {
-    if (search === null) setSearchScope('all');
     setSearch((s) => {
       if (s !== null) return s;              // already open: never restart her query
       searchReturn.current = { view, selected };
@@ -2128,7 +2126,7 @@ export default function App() {
     setSelected(0);
     // The field is mounted by this same render, so focusing has to wait for it.
     requestAnimationFrame(() => searchRef.current?.focus());
-  }, [view, selected, search]);
+  }, [view, selected]);
 
   const closeSearch = useCallback(() => {
     setSearch(null);
@@ -5084,16 +5082,6 @@ export default function App() {
                 else if (e.key === 'Enter' && current) { e.preventDefault(); setFocused(current); markSeen(current); }
               }}
             />
-            <div className="search-scopes" role="group" aria-label="Search in"
-              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); }}>
-              {(['all', 'chats', 'agents'] as const).map(scope => (
-                <button type="button" key={scope} className="search-scope"
-                  aria-pressed={searchScope === scope}
-                  onClick={() => { setSearchScope(scope); setSelected(0); }}>
-                  {scope === 'all' ? 'All' : scope === 'chats' ? 'Chats' : 'Agents'}
-                </button>
-              ))}
-            </div>
             {/* It is drawn whether or not she has typed anything, because it is the way OUT
                of the search and not a way to clear the query: an X that appears only once
                there is text would be missing at the one moment she is looking for the exit,
@@ -5745,7 +5733,7 @@ export default function App() {
                   // Only a typed query can empty this list now: with the field
                   // blank every task is in it, so the old "type to search" line
                   // has nothing left to describe.
-                  emptyText={olderMore !== false && search !== null ? 'Searching older threads…' : search ? `Nothing matches “${search}”.` : search !== null ? `No ${searchScope === 'chats' ? 'chats' : searchScope === 'agents' ? 'agent threads' : 'threads'} yet.` : undefined}
+                  emptyText={olderMore !== false && search !== null ? 'Searching older threads…' : search ? `Nothing matches “${search}”.` : undefined}
                   keyView={view}
                   hoveredId={hoveredId}
                   onHover={keyHints ? setHoveredId : undefined}

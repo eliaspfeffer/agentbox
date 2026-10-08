@@ -3,12 +3,11 @@ import { searchText } from '../format';
 import { isDirect, messageLine } from './page-rules';
 import type { Person, Product, WorkItem } from '../types';
 
-export type SearchScope = 'all' | 'chats' | 'agents';
 export interface SearchContext { products: Product[]; people: Person[]; me: string | null }
 
 // A context changes when the snapshot's projects or people change. While a
 // person types, retain the projected text so search's own cache can reuse it.
-const indexes = new WeakMap<SearchContext, WeakMap<WorkItem, { searchable: WorkItem; names: string; latest: string; chat: boolean }>>();
+const indexes = new WeakMap<SearchContext, WeakMap<WorkItem, { searchable: WorkItem; names: string; people: string[]; latest: string; chat: boolean }>>();
 
 function indexed(item: WorkItem, context: SearchContext) {
   let index = indexes.get(context);
@@ -33,17 +32,14 @@ function indexed(item: WorkItem, context: SearchContext) {
     label: [names, item.label].filter(Boolean).join(' . '),
     body: [item.body, ...history].filter(Boolean).join(' . '),
   } : item;
-  const value = { searchable, names, latest: line?.text ?? '', chat };
+  const value = { searchable, names, people: line?.people ?? [], latest: line?.text ?? '', chat };
   index.set(item, value);
   return value;
 }
 
-export function searchThreads(items: WorkItem[], query: string, context: SearchContext, scope: SearchScope = 'all') {
+export function searchThreads(items: WorkItem[], query: string, context: SearchContext) {
   const originals = new Map<WorkItem, WorkItem>();
-  const projections = items.filter(item => {
-    const { chat } = indexed(item, context);
-    return scope === 'all' || (scope === 'chats' ? chat : !chat);
-  }).map(item => {
+  const projections = items.map(item => {
     const { searchable } = indexed(item, context);
     originals.set(searchable, item);
     return searchable;
@@ -62,9 +58,9 @@ export function searchThreads(items: WorkItem[], query: string, context: SearchC
 }
 
 export function threadSearchDetails(item: WorkItem, context: SearchContext) {
-  const { chat, names } = indexed(item, context);
+  const { chat, names, people } = indexed(item, context);
   const title = chat ? (names.replace(/ \. /g, ', ') || 'Conversation') : item.label || item.title;
-  return { title, kind: chat ? 'chat' : 'agent', where: chat ? title : item.productName };
+  return { title, kind: chat ? 'chat' : 'agent', people };
 }
 
 export type ThreadSearchDetails = ReturnType<typeof threadSearchDetails>;

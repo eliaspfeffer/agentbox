@@ -19,7 +19,7 @@ import { IMPORT_KEYS, JUST_IMPORTED_WORD, NOT_IMPORTED_HEADING, NOT_IMPORTED_KEY
 import { splitHits } from '../search';
 import type { ThreadSearchDetails } from '../threads/search';
 import { clockLabel, isCleanRun, nextRunAt } from '../../../shared/repeats.mjs';
-import { TeamRowEnd, type TeamView } from '../team/people';
+import { Face, TeamRowEnd, type TeamView } from '../team/people';
 import { RepeatMark, RowCells, TableHead, ThreadCells } from '../threads/Pages';
 import type { MixedRow } from '../threads/people-rules';
 import { heldByAPerson } from '../../../shared/team-rules.mjs';
@@ -525,7 +525,13 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                       no label, which is every older row until a session
                       writes one (w-dae464cf30). The opened task's header uses
                       the same name since 2026-09-28 (w-b8c8958a12). */}
-                  <div className="subject"><Hits text={details?.title ?? rowTitle(item)} terms={terms} phrase={phrase} /></div>
+                  <div className="subject">
+                    {details?.kind === 'chat' && <span className="th-faces search-faces">
+                      {details.people.slice(0, 3).map(id => <Face key={id} person={team?.byId.get(id)} />)}
+                      {details.people.length > 3 && <span className="th-faces-more">+{details.people.length - 3}</span>}
+                    </span>}
+                    <Hits text={details?.title ?? rowTitle(item)} terms={terms} phrase={phrase} />
+                  </div>
                   {/* On anything finished the RESULT is the news; the body is the
                       ask she already knows she made. Her own directives are often
                       a single line with no body at all, so keying this on the
@@ -543,9 +549,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                    title's line: priority, then the product, then when.
                  */}
                 <div className="row-end">
-                  {details ? <>
-                    <span className="product search-kind">{details.kind === 'chat' ? 'Chat' : 'Agent'}</span>
-                    {details.kind === 'agent' && <span className="product">{details.where}</span>}
+                  {details?.kind === 'chat' ? <>
                     <span className="time">{stamp(item.updatedAt)}</span>
                   </> : <>
                   {/* THE WALK'S OWN KEY, AND ONLY THE WALK'S.
