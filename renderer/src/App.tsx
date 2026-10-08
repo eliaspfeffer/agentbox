@@ -72,7 +72,8 @@ import { DONE } from './done-word';
 import { modalAfterLeavingATask } from './modal-scope';
 import { NOTHING_OVER_THE_APP, afterTheWalk, type OpenOverTheApp } from './walk-scope';
 import { splitMessage } from './message-split';
-import { parseQuery, searchItems } from './search';
+import { parseQuery } from './search';
+import { searchThreads, threadSearchDetails, type SearchScope } from './threads/search';
 import { applyTheme, machineTheme, onMachineTheme, resolvePick, resolveTheme, THEME_KEY, type ThemePick } from './theme';
 import { hintScheduler, type HintScheduler } from './hint-timing';
 import { HINTS } from './hint-plate';
@@ -607,6 +608,7 @@ export default function App() {
   // question, and splitting them is how a field ends up open with a stale query
   // in it (design B, the corner magnifier and `/`).
   const [search, setSearch] = useState<string | null>(null);
+  const [searchScope, setSearchScope] = useState<SearchScope>('all');
   const searchRef = useRef<HTMLInputElement>(null);
   // ESC PUTS HER BACK WHERE SHE WAS. Searching crosses every tab, so leaving it
   // has to restore the one she came from AND the row she was on, or a search
@@ -2087,10 +2089,22 @@ export default function App() {
   // Measured on a real store of 550 tasks: a full scan in 2.2ms. So there
   // is no index, no debounce and no worker, and the list narrows on the
   // keystroke.
+  const searchContext = useMemo(() => ({
+    products: snap?.products ?? [], people: snap?.team?.people ?? [], me: team?.me ?? null,
+  }), [snap?.products, snap?.team?.people, team?.me]);
   const hits = useMemo(
-    () => (search === null ? null : searchItems(items, search)),
-    [items, search],
+    () => (search === null ? null : searchThreads(items, search, searchContext, searchScope)),
+    [items, search, searchContext, searchScope],
   );
+  const searchDetails = useMemo(
+    () => search === null ? undefined : new Map((hits ?? []).map(h => [h.item.id, threadSearchDetails(h.item, searchContext)])),
+    [hits, search, searchContext],
+  );
+  // Read older pages one at a time while search is open. A conversation that
+  // was put away should be findable without first scrolling through All.
+  useEffect(() => {
+    if (search !== null && olderMore !== false) loadOlder();
+  }, [search, olderMore, loadOlder]);
   const searchSummaries = useMemo(
     () => new Map((hits ?? []).map((h) => [h.item.id, h.summary])),
     [hits],
@@ -2103,6 +2117,7 @@ export default function App() {
   const query = useMemo(() => (search === null ? undefined : parseQuery(search)), [search]);
 
   const openSearch = useCallback(() => {
+    if (search === null) setSearchScope('all');
     setSearch((s) => {
       if (s !== null) return s;              // already open: never restart her query
       searchReturn.current = { view, selected };
@@ -2113,7 +2128,7 @@ export default function App() {
     setSelected(0);
     // The field is mounted by this same render, so focusing has to wait for it.
     requestAnimationFrame(() => searchRef.current?.focus());
-  }, [view, selected]);
+  }, [view, selected, search]);
 
   const closeSearch = useCallback(() => {
     setSearch(null);
@@ -5054,7 +5069,7 @@ export default function App() {
               // is a string. The fallback is what the compiler wants now that
               // the test is a named rule and not an inline `search !== null`.
               value={search ?? ''}
-              placeholder="Search threads"
+              placeholder="Search people or messages"
               spellCheck={false}
               autoComplete="off"
               aria-label="Search threads"
@@ -5069,6 +5084,16 @@ export default function App() {
                 else if (e.key === 'Enter' && current) { e.preventDefault(); setFocused(current); markSeen(current); }
               }}
             />
+            <div className="search-scopes" role="group" aria-label="Search in"
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); }}>
+              {(['all', 'chats', 'agents'] as const).map(scope => (
+                <button type="button" key={scope} className="search-scope"
+                  aria-pressed={searchScope === scope}
+                  onClick={() => { setSearchScope(scope); setSelected(0); }}>
+                  {scope === 'all' ? 'All' : scope === 'chats' ? 'Chats' : 'Agents'}
+                </button>
+              ))}
+            </div>
             {/* It is drawn whether or not she has typed anything, because it is the way OUT
                of the search and not a way to clear the query: an X that appears only once
                there is text would be missing at the one moment she is looking for the exit,
@@ -5710,6 +5735,7 @@ export default function App() {
                   terms={query?.terms}
                   phrase={query?.phrase}
                   summaries={searchSummaries}
+                  searchDetails={searchDetails}
                   ranked={ranked}
                   /*
                    * A ROW MAY NOT PROMISE A KEY THE WALK IS ABOUT TO EAT. See
@@ -5719,7 +5745,7 @@ export default function App() {
                   // Only a typed query can empty this list now: with the field
                   // blank every task is in it, so the old "type to search" line
                   // has nothing left to describe.
-                  emptyText={search ? `Nothing matches “${search}”.` : undefined}
+                  emptyText={olderMore !== false && search !== null ? 'Searching older threads…' : search ? `Nothing matches “${search}”.` : search !== null ? `No ${searchScope === 'chats' ? 'chats' : searchScope === 'agents' ? 'agent threads' : 'threads'} yet.` : undefined}
                   keyView={view}
                   hoveredId={hoveredId}
                   onHover={keyHints ? setHoveredId : undefined}

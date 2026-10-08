@@ -17,6 +17,7 @@ import { isTroubleRow, TROUBLE_ID } from '../trouble-row';
 import { isUpdateRow, UPDATE_ID } from '../update-row';
 import { IMPORT_KEYS, JUST_IMPORTED_WORD, NOT_IMPORTED_HEADING, NOT_IMPORTED_KEYS, isImportRow, isNotImportedRow, justImported, type ImportChoice } from '../import-row';
 import { splitHits } from '../search';
+import type { ThreadSearchDetails } from '../threads/search';
 import { clockLabel, isCleanRun, nextRunAt } from '../../../shared/repeats.mjs';
 import { TeamRowEnd, type TeamView } from '../team/people';
 import { RepeatMark, RowCells, TableHead, ThreadCells } from '../threads/Pages';
@@ -136,7 +137,7 @@ export function dayGroups(
   return groups;
 }
 
-export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover, onAnswerImport, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd }: {
+export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, searchDetails, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover, onAnswerImport, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd }: {
   items: WorkItem[];
   view: View;
   // WHICH VIEW'S KEYS THE ROW HINT PRINTS, which is not always the view this
@@ -195,6 +196,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
   // of three lit words with two dim gaps between them.
   phrase?: string;
   summaries?: Map<string, string>;
+  searchDetails?: Map<string, ThreadSearchDetails>;
   // These rows are in match order, not in time order, so the day labels come
   // off and nothing goes up in their place. Set only while she has typed
   // something; an open-but-empty search field is still every task newest first,
@@ -438,6 +440,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
             // neither can honestly offer a select box, and both wear the rule
             // at the left edge instead.
             const made = isTroubleRow(item) || isUpdateRow(item);
+            const details = searchDetails?.get(item.id);
             return (
               <div
                 key={item.id}
@@ -491,7 +494,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                   className={`mark${checked ? ' on' : ''}`}
                   role="checkbox"
                   aria-checked={checked}
-                  aria-label={`${checked ? 'Deselect' : 'Select'} ${rowTitle(item)}`}
+                  aria-label={`${checked ? 'Deselect' : 'Select'} ${details?.title ?? rowTitle(item)}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (clickIntent('box', { shift: e.shiftKey }) === 'range') onRange(index);
@@ -522,7 +525,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                       no label, which is every older row until a session
                       writes one (w-dae464cf30). The opened task's header uses
                       the same name since 2026-09-28 (w-b8c8958a12). */}
-                  <div className="subject"><Hits text={rowTitle(item)} terms={terms} phrase={phrase} /></div>
+                  <div className="subject"><Hits text={details?.title ?? rowTitle(item)} terms={terms} phrase={phrase} /></div>
                   {/* On anything finished the RESULT is the news; the body is the
                       ask she already knows she made. Her own directives are often
                       a single line with no body at all, so keying this on the
@@ -540,6 +543,11 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                    title's line: priority, then the product, then when.
                  */}
                 <div className="row-end">
+                  {details ? <>
+                    <span className="product search-kind">{details.kind === 'chat' ? 'Chat' : 'Agent'}</span>
+                    {details.kind === 'agent' && <span className="product">{details.where}</span>}
+                    <span className="time">{stamp(item.updatedAt)}</span>
+                  </> : <>
                   {/* THE WALK'S OWN KEY, AND ONLY THE WALK'S.
 
                       This slot used to swap the product and the time for two
@@ -741,6 +749,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                             : <span className="time">{view === 'snoozed' ? wake(wakeTs(item)) : view === 'inbox' ? stamp(item.updatedAt) : ago(item.updatedAt)}</span>}
                   </>
                   )}
+                  </>}
                 </div>
                 </>}
               </div>
