@@ -5639,6 +5639,9 @@ export default function App() {
                     cards={cards} picked={team ? picked : undefined}
                     onOpenCard={openTeammateCard}
                     selected={current} selectedCard={keyCard ? cardSel : null} columnOrder={columnOrder} onReorderColumns={reorderColumns}
+                    // THE SAME PICK THE LIST'S BOXES FILL (w-2e3819913c), so
+                    // ⌘K, E, L and Escape act on board cards with no copy.
+                    marked={multiSel} onMark={setMultiSel}
                     // A click puts the keyboard where the click was, so J
                     // and the arrows carry on from that card on the way back.
                     onOpenItem={(item) => { const i = list.indexOf(item); setCardSel(null); if (i >= 0) setSelected(i); setFocused(item); markSeen(item); }} />
