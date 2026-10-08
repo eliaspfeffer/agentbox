@@ -96,6 +96,7 @@ import {
   summarizeCodexEvent, traceCodexEvent, SAYING_CAP,
 } from './codex.mjs';
 import { createCodexAppServer } from './codex-app-server.mjs';
+import { codexLaunchEnv } from './codex-launch-env.mjs';
 import { CodexUsage } from './codex-usage.mjs';
 import { createCodexWorker, codexTranscriptFile, mcpServerNames, workerThreadParams } from './codex-session.mjs';
 import { CODEX_DEFAULT_MODE, isCodexMode } from '../shared/codex-modes.mjs';
@@ -763,10 +764,19 @@ export class Supervisor {
     const out = { resumed: 0, queued: 0, working: 0, missing: 0 };
     if (!only.size) return out;
     this.liftBrakeForHer();
+    // RESUMING IS STILL ASKING TO RUN ON THIS MAC, so it obeys the same team
+    // rule the tick does (w-7fc38861be). It did not: on 2026-10-05 "Resume
+    // Agents" over a handful of ticked rows reached two conversations with
+    // teammates, and an agent turned up in the middle of each, reading the
+    // last thread reply as an instruction. Asking by name outranks a delivery
+    // mark and the attempt cap below; it does not make a row this Mac's to run.
+    const productBySlug = new Map((this.store.listProducts?.() ?? []).map((p) => [p.slug, p]));
+    const me = process.env.AGENTBOX_PERSON_ID || null;
 
     for (const item of this.store.listItems(Date.now())) {
       if (!only.has(item.id)) continue;
       only.delete(item.id);
+      if (!mayRunHere(item, productBySlug.get(item.product), me)) continue;
       // A row with a worker on it is already resumed. Saying so is the honest
       // answer; killing the session to restart it would throw away the work in
       // flight, which is never what "resume" meant.
@@ -1326,7 +1336,7 @@ export class Supervisor {
     const word = engineLabel(engine);
     try {
       this.store.recordSessionResult(item.product, item.id, {
-        result: `This task was being worked on in ${word}, which is not installed on this Mac, so ${NAME} has not put a session back on it. It is not lost: install ${word} and the same session picks up where it stopped.`,
+        result: `This task was being worked on in ${word}, which is not installed on this computer, so ${NAME} has not put a session back on it. It is not lost: install ${word} and the same session picks up where it stopped.`,
         status: 'open',
       });
     } catch (e) { console.warn('zero: could not say the harness is missing:', e.message); }
@@ -5970,7 +5980,7 @@ export class Supervisor {
     const levels = codexModelLevels(slug, { home });
     if (!levels || levels.includes(level)) return null;
     const offers = levels.length ? `It offers ${levels.join(', ')}.` : 'It advertises no levels at all.';
-    return `this row asks "${slug}" to think at "${level}", which is not a level that model offers on this Mac. ${offers} Nothing here will pick a stand-in for her, so this run is stopping rather than doing her work at a level she did not choose`;
+    return `this row asks "${slug}" to think at "${level}", which is not a level that model offers on this computer. ${offers} Nothing here will pick a stand-in for her, so this run is stopping rather than doing her work at a level she did not choose`;
   }
 
   /**
@@ -6050,7 +6060,7 @@ export class Supervisor {
     const asked = from === 'workspace'
       ? `every Codex agent here is set to run on "${word}"`
       : `this row asks to run on "${word}"`;
-    return `${asked}, which is not a model the Codex on this Mac knows.${instead} Nothing here will pick a stand-in for her, so this run is stopping rather than doing her work on a model she did not choose`;
+    return `${asked}, which is not a model the Codex on this computer knows.${instead} Nothing here will pick a stand-in for her, so this run is stopping rather than doing her work on a model she did not choose`;
   }
 
   /**
@@ -6134,7 +6144,7 @@ export class Supervisor {
         // The socket its threads' commands ask on, and no row: see
         // `codexMemoryGateEnv`. One app-server is every Codex thread of this
         // login, so a row named here would be the wrong row for all but one.
-        env: { ...this._workerEnv('codex'), CODEX_HOME: home, ...this.codexMemoryGateEnv() },
+        env: codexLaunchEnv(this.config.codexBin, { ...this._workerEnv('codex'), CODEX_HOME: home, ...this.codexMemoryGateEnv() }),
         stdio: ['pipe', 'pipe', 'pipe'],
       }),
       // WHAT IS LEFT OF THIS LOGIN'S LIMIT, ARRIVING UNBIDDEN. `onNotification`
@@ -7713,7 +7723,7 @@ export class Supervisor {
     // EVERY RUN, not only a fresh one: a conversation resumed after the switch
     // went on, and a chat, never heard it otherwise (Codex's review).
     if (cleaner.enabled) {
-      parts.push('Anything you leave running after your turn (a dev server, a preview, a background job) is stopped two hours after you finish, sooner if this Mac runs short of memory. '
+      parts.push('Anything you leave running after your turn (a dev server, a preview, a background job) is stopped two hours after you finish, sooner if this computer runs short of memory. '
         + 'If the person needs something to keep running, start it with AGENTBOX_KEEP=1 in its environment and say so in your answer. Stop anything else you started before you finish.');
     }
     const stopping = cleaner.stoppingNote(item.id);
@@ -7761,6 +7771,13 @@ export class Supervisor {
           // server denies everything rather than believing a file, which is the
           // right way round. main/approvals.mjs holds the argument.
           ZERO_APPROVALS_PUBKEY: approvalPublicKey(),
+          // THE RUNTIME THAT SERVER IS STARTED ON, which is this app's own
+          // binary. Run from source the launcher used to need node on PATH and
+          // fell back to nvm only, so a Mac with Homebrew node, or none, lost
+          // every approval card and with it every agent (issue 21, 2026-10-07).
+          // Electron run with ELECTRON_RUN_AS_NODE=1 is a node, so handing the
+          // path down asks nothing of the machine.
+          ZERO_APPROVALS_RUNTIME: process.execPath,
         },
       },
     };

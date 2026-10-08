@@ -13,6 +13,7 @@ import { fixtureAgents, fixtureSnapshot, fixtureDashboards, fixtureRepeats, fixt
 import { fixtureEngineWorld, fixtureEngineSettings, fixtureSecondEngine } from './fixtures';
 import { fixtureFolders } from './fixtures';
 import { NAME, Name } from '../../shared/product-name.mjs';
+import { checkProjectFolder } from '../../shared/project-folder-check.mjs';
 // THE SECOND FRONT DOOR, AND IT HAS TO BE BUILT BEFORE THE LINE BELOW RUNS.
 // `useFixtures` reads `window.zero` once, at module load, and on the desktop
 // preload.cjs has already put it there. In a browser tab nothing has, so this
@@ -1006,7 +1007,8 @@ export const api = {
     // exists" state be SHOT IN THE REAL APP rather than hand drawn.
     if (useFixtures) {
       if (params.has('refusedFolder')) {
-        return { path: null, refused: 'That is your whole home folder. Agents would work across everything on this Mac, and macOS will ask you about Downloads, Music and every app you have. Pick the folder your project\u2019s code is in.' };
+        const turnedDown = checkProjectFolder('~');
+        return { path: null, refused: turnedDown.ok ? undefined : turnedDown.say };
       }
       return { path: '/Users/you/Desktop/dev/house' };
     }
