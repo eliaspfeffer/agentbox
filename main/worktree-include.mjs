@@ -174,9 +174,43 @@ function ignoredIn(cwd, paths) {
   }
 }
 
-const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; } };
+/**
+ * WHAT IS AT THIS PATH, AND "WE COULD NOT LOOK" IS NOT "NOTHING IS THERE".
+ *
+ * Every `lstat` here used to be wrapped in a bare `catch` that answered false,
+ * so a path the app has no permission to look at read exactly like a path with
+ * nothing at it. Both of the questions below are asked to decide whether
+ * something may be written, and answering them from an error nobody saw is how
+ * a folder gets built through a link that was never inspected. ENOENT and
+ * ENOTDIR are real absences: the name is not there, or a name on the way to it
+ * is a file, and either way nothing can be. Anything else is this folder
+ * failing to be made, which `carryLocalFiles` reports on the row.
+ */
+function lookAt(p) {
+  try { return fs.lstatSync(p); }
+  catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return null;
+    throw Error(`${p} could not be looked at: ${error.message}`);
+  }
+}
+
+const isLink = (p) => lookAt(p)?.isSymbolicLink() === true;
 /** On disk at all, including a link with nothing at the end of it. */
-const stillThere = (p) => { try { fs.lstatSync(p); return true; } catch { return false; } };
+const stillThere = (p) => lookAt(p) !== null;
+
+/**
+ * Where a link points, with the same division. ENOENT is the link going away
+ * under us and EINVAL is the path not being a link at all, which are both
+ * ordinary; a link we are not allowed to read is a link we cannot judge, and
+ * carrying one of those in unexamined is the whole risk this module manages.
+ */
+function linkTarget(p) {
+  try { return fs.readlinkSync(p); }
+  catch (error) {
+    if (['ENOENT', 'ENOTDIR', 'EINVAL'].includes(error?.code)) return null;
+    throw Error(`${p} is a link whose target could not be read: ${error.message}`);
+  }
+}
 
 /** Is any directory on the way to this path a link? Then nothing may be written through it. */
 function reachedThroughALink(folder, rel) {
@@ -220,7 +254,17 @@ const withinOrIs = (folder, abs) => {
 function nearestReal(abs) {
   let at = abs;
   for (;;) {
-    if (stillThere(at)) { try { return fs.realpathSync(at); } catch { return null; } }
+    if (stillThere(at)) {
+      try { return fs.realpathSync(at); }
+      catch (error) {
+        // It was there a moment ago, so the only ordinary answer left is that
+        // it went away between the two calls. Anything else is a path this
+        // process cannot follow, and a containment check skipped because the
+        // answer was unreadable is a containment check that did not happen.
+        if (error?.code === 'ENOENT') return null;
+        throw Error(`${at} could not be followed: ${error.message}`);
+      }
+    }
     const up = path.dirname(at);
     if (up === at) return null;
     at = up;
@@ -264,8 +308,8 @@ function linksThatDoNotHold(root, folder, rel) {
   const bad = [];
   for (const link of found) {
     const name = path.relative(folder, link);
-    let target;
-    try { target = fs.readlinkSync(link); } catch { continue; } // gone from under us
+    const target = linkTarget(link);
+    if (target === null) continue; // gone from under us, or no longer a link
     if (path.isAbsolute(target)) { bad.push({ path: name, why: 'it is a link to somewhere outside this folder' }); continue; }
     const resolved = path.resolve(path.dirname(link), target);
     // CONTAINMENT IS CHECKED WHETHER OR NOT ANYTHING IS THERE. A link pointing
@@ -378,8 +422,8 @@ export function carryLocalFiles(root, folder) {
  * this one keeps an obviously shared one from being copied at all.
  */
 function carriableLink(root, abs) {
-  let target;
-  try { target = fs.readlinkSync(abs); } catch { return false; }
+  const target = linkTarget(abs);
+  if (target === null) return false;
   if (path.isAbsolute(target)) return false;
   const resolved = path.resolve(path.dirname(abs), target);
   if (!within(root, resolved)) return false;
