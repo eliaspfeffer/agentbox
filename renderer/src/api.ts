@@ -429,7 +429,7 @@ export const api = {
     return window.zero.terminal(p);
   },
   async commandCatalog(p: {product: string; id: string}): Promise<string[]> {
-    if (useFixtures) return ['code-review','simplify','verify'];
+    if (useFixtures) return ['code-review','loop','simplify','verify'];
     return window.zero!.commandCatalog(p);
   },
   async command(p: {product: string; id: string; text: string}): Promise<{state: string; at: number; text?: string; name?: string}> {
@@ -651,6 +651,12 @@ export const api = {
   async schedule(p: { product: string; id: string; runAt: number }): Promise<WorkItem | null> {
     if (useFixtures) return null;
     return window.zero!.schedule(p);
+  },
+
+  async snooze(p: { product: string; id: string; snoozedUntil: number }): Promise<WorkItem | null> {
+    if (useFixtures) return null;
+    if (!window.zero?.snooze) throw new Error('Restart the app to use inbox snooze');
+    return window.zero.snooze(p);
   },
 
   // Defer an AGENT to a moment: the same gesture, on a row that lives in no
