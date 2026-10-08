@@ -366,7 +366,7 @@ export function carryLocalFiles(root, folder) {
 
   if (refused.length) {
     throw Error(`${source} names files this folder could not be given:\n${
-      refused.map((r) => `  ${r.path} — ${r.why}`).join('\n')}`);
+      refused.map((r) => `  ${r.path}: ${r.why}`).join('\n')}`);
   }
   return { carried, source };
 }
