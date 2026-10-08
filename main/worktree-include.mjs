@@ -155,7 +155,8 @@ function ignoredIn(cwd, paths) {
 }
 
 const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; } };
-const isDir = (p) => { try { return fs.statSync(p).isDirectory() && !isLink(p); } catch { return false; } };
+/** On disk at all, including a link with nothing at the end of it. */
+const stillThere = (p) => { try { fs.lstatSync(p); return true; } catch { return false; } };
 
 /** Is any directory on the way to this path a link? Then nothing may be written through it. */
 function reachedThroughALink(folder, rel) {
@@ -167,14 +168,16 @@ function reachedThroughALink(folder, rel) {
   return false;
 }
 
+/** Is this path under that folder, as a path, saying nothing about what is there? */
+function within(folder, abs) {
+  const rel = path.relative(folder, abs);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
 /** Does this path stay inside the folder, following any chain of links it is on? */
 function staysInside(folder, abs) {
-  const within = (p) => {
-    const rel = path.relative(folder, p);
-    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
-  };
-  if (!within(abs)) return false;
-  try { return within(fs.realpathSync(abs)); }
+  if (!within(folder, abs)) return false;
+  try { return within(folder, fs.realpathSync(abs)); }
   catch { return false; } // it does not resolve: broken, which is handled by the caller
 }
 
@@ -201,9 +204,12 @@ function staysInside(folder, abs) {
  */
 function linksThatDoNotHold(root, folder, rel) {
   const to = path.join(folder, rel);
-  if (!isDir(to)) return [];
   let found = [];
   try {
+    // `find <path>` on a path that is itself a link reports that link, so an
+    // entry which IS a link is checked by the same walk as the links inside a
+    // directory. That is not incidental: an entry that was a link got no
+    // destination check at all while this gated on the entry being a directory.
     found = execFileSync('find', [to, '-type', 'l', '-print0'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
       .split('\0').filter(Boolean);
   } catch (error) {
@@ -216,14 +222,24 @@ function linksThatDoNotHold(root, folder, rel) {
     try { target = fs.readlinkSync(link); } catch { continue; } // gone from under us
     if (path.isAbsolute(target)) { bad.push({ path: name, why: 'it is a link to somewhere outside this folder' }); continue; }
     const resolved = path.resolve(path.dirname(link), target);
+    // CONTAINMENT IS CHECKED WHETHER OR NOT ANYTHING IS THERE. A link pointing
+    // out of the folder is a way out of the folder even while it dangles:
+    // `node_modules/pkg/out -> ../../../w-neighbour/newfile` points into the
+    // folder the NEXT TASK is working in, and the first thing written through it
+    // lands in that task's work. Checking only when the target exists let that
+    // through (Codex's review, 2026-10-07).
+    if (!within(folder, resolved)) { bad.push({ path: name, why: 'it is a link that leads out of this folder' }); continue; }
     if (fs.existsSync(resolved)) {
-      if (!staysInside(folder, resolved)) bad.push({ path: name, why: 'it is a link that leads out of this folder' });
+      if (!staysInside(folder, resolved)) bad.push({ path: name, why: 'it is a link that leads out of this folder through another link' });
       continue;
     }
-    // Broken here. Only our business if it was NOT broken where it came from,
-    // which means the copy broke it by leaving its target behind.
+    // Dangling, and pointing inside, so it cannot reach anything that is not
+    // this folder's. Only our business if the copy BROKE it, which means the
+    // target was there in the checkout and was not carried in with it.
     const sourceSide = path.resolve(path.dirname(path.join(root, name)), target);
     if (fs.existsSync(sourceSide)) bad.push({ path: name, why: 'it points at something that was not carried in with it' });
+    // A link that was already dangling where it came from is left exactly as it
+    // was found. It is the checkout's own state, not something this made.
   }
   return bad;
 }
@@ -283,10 +299,18 @@ export function carryLocalFiles(root, folder) {
       no(rel, 'the branch in this folder does not ignore it, so closing the task would commit it');
       continue;
     }
-    const bad = linksThatDoNotHold(root, folder, rel);
-    if (bad.length) { refused.push(...bad); continue; }
     carried.push(rel);
   }
+
+  // EVERY COPY FIRST, AND ONLY THEN THE LINKS, because a link is a statement
+  // about the finished folder. Checking each entry as it landed refused a
+  // perfectly good repository: with `node_modules` and `packages` both asked for
+  // and `node_modules/thing -> ../packages/thing`, git lists `node_modules`
+  // first, so the link was judged against a folder that did not have `packages`
+  // in it yet, found dangling, and refused -- and nothing ever cleared that when
+  // `packages` arrived a moment later. No task in such a repository could have
+  // started (Codex's review, 2026-10-07).
+  for (const rel of carried) refused.push(...linksThatDoNotHold(root, folder, rel));
 
   if (refused.length) {
     throw Error(`${source} names files this folder could not be given:\n${
@@ -331,7 +355,10 @@ export function onlyTrackedContent(folder) {
     if (!keepable(rel)) continue;
     const at = path.join(folder, rel);
     try { fs.rmSync(at, { recursive: true, force: true }); }
-    catch (error) { if (fs.existsSync(at)) throw Error(`${rel} came with the clone and could not be cleared: ${error.message}`); }
+    // `lstat` and not `existsSync`: existsSync follows a link, so a DANGLING
+    // link still sitting there reads as absent and the failure to remove it
+    // would be reported as a success.
+    catch (error) { if (stillThere(at)) throw Error(`${rel} came with the clone and could not be cleared: ${error.message}`); }
     gone.push(rel);
   }
   return gone;

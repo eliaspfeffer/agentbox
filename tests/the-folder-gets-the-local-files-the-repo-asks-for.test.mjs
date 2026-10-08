@@ -263,6 +263,58 @@ describe('a dependency folder that is really a link somewhere else', () => {
     expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
     expect(read(link, 'index.js')).toBe('local package\n');
   });
+
+  // THE ORDER THE COPIES HAPPEN IN MUST NOT DECIDE THE ANSWER, and for one
+  // commit it did. With both `node_modules` and `deps` asked for and
+  // `node_modules/thing -> ../deps/thing`, git lists `node_modules` first, so
+  // the link was judged against a folder that did not have `deps` in it yet,
+  // called dangling, and refused -- and nothing cleared that when `deps` arrived
+  // a moment later. No task in a repository like this could have started.
+  it('is carried when its target is another entry copied after it', () => {
+    // `vendor` sorts AFTER `node_modules`, which is the whole point: git lists
+    // the entries in order, so the link is seen before its target arrives.
+    write(path.join(dir, 'vendor', 'thing', 'index.js'), 'a local dependency\n');
+    write(path.join(dir, '.gitignore'), 'node_modules/\nvendor/\nzero.config.json\n');
+    write(path.join(dir, '.worktreeinclude'), '/node_modules\n/vendor\n');
+    git(dir, 'add', '.gitignore', '.worktreeinclude');
+    git(dir, 'commit', '-q', '-m', 'two entries, one pointing at the other');
+    fs.symlinkSync(path.join('..', 'vendor', 'thing'), path.join(dir, 'node_modules', 'thing'));
+
+    const made = ensureTaskFolder(dir, 'w-ordered');
+
+    expect(read(made.path, 'node_modules', 'thing', 'index.js')).toBe('a local dependency\n');
+  });
+
+  // A LINK THAT POINTS OUT OF THE FOLDER IS A WAY OUT OF IT WHETHER OR NOT
+  // ANYTHING IS THERE YET. This one aims at the folder the NEXT task works in,
+  // and the first thing written through it would land in that task's work.
+  // Checking containment only when the target existed let it straight through.
+  it('is refused when it dangles out of the folder towards another task', () => {
+    const neighbour = ensureTaskFolder(dir, 'w-neighbour');
+    expect(fs.existsSync(neighbour.path)).toBe(true);
+    fs.mkdirSync(path.join(dir, 'node_modules', 'pkg'), { recursive: true });
+    fs.symlinkSync(path.join('..', '..', '..', 'w-neighbour', 'stolen.txt'),
+      path.join(dir, 'node_modules', 'pkg', 'out'));
+
+    expect(() => ensureTaskFolder(dir, 'w-escaper')).toThrow(/pkg\/out/);
+    expect(fs.existsSync(taskFolderPath(dir, 'w-escaper'))).toBe(false);
+  });
+
+  // AND AN ENTRY THAT IS ITSELF A LINK IS CHECKED IN THE FOLDER TOO. It used to
+  // get no check at all there, because the walk only ran on a real directory, so
+  // `node_modules -> .deps` with `.deps` not asked for produced a folder whose
+  // dependencies pointed at nothing, and said it had succeeded.
+  it('is refused when the entry is a link whose target was not carried in', () => {
+    fs.rmSync(path.join(dir, 'node_modules'), { recursive: true, force: true });
+    write(path.join(dir, '.deps', 'left-pad', 'index.js'), 'module.exports = 1;\n');
+    write(path.join(dir, '.gitignore'), 'node_modules\n.deps/\nzero.config.json\n');
+    git(dir, 'add', '.gitignore');
+    git(dir, 'commit', '-q', '-m', 'deps live somewhere else');
+    fs.symlinkSync('.deps', path.join(dir, 'node_modules'));
+
+    expect(() => ensureTaskFolder(dir, 'w-indirect')).toThrow(/node_modules/);
+    expect(fs.existsSync(taskFolderPath(dir, 'w-indirect'))).toBe(false);
+  });
 });
 
 // BEING NAMED IN .worktreeinclude IS NOT ENOUGH, and finding that out cost a

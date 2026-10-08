@@ -208,16 +208,23 @@ describe('a row whose folder failed on the folder thread', () => {
   // still the current one -- would reopen a row that was stopped or closed while
   // the folder was being made. Codex found this reading the first version, where
   // the report was made one `.then` too early.
+  // WAITED FOR, NOT SLEPT THROUGH. A fixed pause here can finish before the
+  // failure has even come back, which would pass whatever the code did. Two rows
+  // are started instead, both doomed, and the SECOND one being told is the signal
+  // that the first one's failure has already been through the same queue and
+  // been dropped.
   it('says nothing about a row that was stopped while its folder was being made', async () => {
     const { sup, product, spawns } = watched();
     foldersCannotBeMadeIn(dir);
 
     expect(sup._folderFirst({ id: 'w-stopped-first', product: 'agentbox' }, product, 'claude', {})).toBe(true);
+    expect(sup._folderFirst({ id: 'w-told-second', product: 'agentbox' }, product, 'claude', {})).toBe(true);
     expect(sup.stopSession('w-stopped-first')).toBe(true);
 
-    // Long enough for the failure to have come back and been dropped.
-    await new Promise((r) => setTimeout(r, 600));
-    expect(said.length).toBe(0);
+    await waitFor('the row behind it to be told it could not have a folder',
+      () => said.some((s) => s.id === 'w-told-second'));
+
+    expect(said.map((s) => s.id)).toEqual(['w-told-second']);
     expect(spawns.length).toBe(0);
   });
 
