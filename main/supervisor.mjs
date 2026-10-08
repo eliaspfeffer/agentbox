@@ -7770,6 +7770,13 @@ export class Supervisor {
           // server denies everything rather than believing a file, which is the
           // right way round. main/approvals.mjs holds the argument.
           ZERO_APPROVALS_PUBKEY: approvalPublicKey(),
+          // THE RUNTIME THAT SERVER IS STARTED ON, which is this app's own
+          // binary. Run from source the launcher used to need node on PATH and
+          // fell back to nvm only, so a Mac with Homebrew node, or none, lost
+          // every approval card and with it every agent (issue 21, 2026-10-07).
+          // Electron run with ELECTRON_RUN_AS_NODE=1 is a node, so handing the
+          // path down asks nothing of the machine.
+          ZERO_APPROVALS_RUNTIME: process.execPath,
         },
       },
     };
