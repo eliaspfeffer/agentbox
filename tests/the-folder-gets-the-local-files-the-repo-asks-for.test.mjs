@@ -300,6 +300,40 @@ describe('a dependency folder that is really a link somewhere else', () => {
     expect(fs.existsSync(taskFolderPath(dir, 'w-escaper'))).toBe(false);
   });
 
+  // THE LAST NAME BEING ABSENT SAYS NOTHING ABOUT THE ONES BEFORE IT. The commit
+  // itself tracks a link out of the repository, and a carried link aims through
+  // it at a name that is not there. Every component of that path is inside the
+  // folder to read, and the first write through it lands in the shared directory.
+  it('is refused when it dangles through a link the commit itself tracks', () => {
+    const shared = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-bridge-'));
+    fs.symlinkSync(shared, path.join(dir, 'bridge'));
+    git(dir, 'add', 'bridge');
+    git(dir, 'commit', '-q', '-m', 'a tracked link out of the repository');
+    fs.mkdirSync(path.join(dir, 'node_modules', 'pkg'), { recursive: true });
+    fs.symlinkSync(path.join('..', '..', 'bridge', 'newfile'),
+      path.join(dir, 'node_modules', 'pkg', 'cache'));
+
+    expect(() => ensureTaskFolder(dir, 'w-bridged')).toThrow(/pkg\/cache/);
+    expect(fs.existsSync(taskFolderPath(dir, 'w-bridged'))).toBe(false);
+    try { fs.rmSync(shared, { recursive: true, force: true }); } catch {}
+  });
+
+  // AND THE CASE THAT MUST NOT MATCH, which this nearly broke: `..deps` is an
+  // honest directory name, and asking whether a path starts with ".." reads it
+  // as a climb out of the folder. `..` is a component, not a prefix.
+  it('is carried when a folder on the way is honestly named ..deps', () => {
+    write(path.join(dir, '..deps', 'thing', 'index.js'), 'oddly named\n');
+    write(path.join(dir, '.gitignore'), 'node_modules/\n..deps/\nzero.config.json\n');
+    write(path.join(dir, '.worktreeinclude'), '/node_modules\n/..deps\n');
+    git(dir, 'add', '.gitignore', '.worktreeinclude');
+    git(dir, 'commit', '-q', '-m', 'a directory whose name starts with dots');
+    fs.symlinkSync(path.join('..', '..deps', 'thing'), path.join(dir, 'node_modules', 'thing'));
+
+    const made = ensureTaskFolder(dir, 'w-dotdotdeps');
+
+    expect(read(made.path, 'node_modules', 'thing', 'index.js')).toBe('oddly named\n');
+  });
+
   // AND AN ENTRY THAT IS ITSELF A LINK IS CHECKED IN THE FOLDER TOO. It used to
   // get no check at all there, because the walk only ran on a real directory, so
   // `node_modules -> .deps` with `.deps` not asked for produced a folder whose

@@ -168,17 +168,43 @@ function reachedThroughALink(folder, rel) {
   return false;
 }
 
-/** Is this path under that folder, as a path, saying nothing about what is there? */
-function within(folder, abs) {
+/**
+ * Is this path under that folder, as a path, saying nothing about what is there?
+ *
+ * `..` IS A COMPONENT AND NOT A PREFIX. `startsWith('..')` reads a directory
+ * honestly named `..deps` as a climb out of the folder, and refused the whole
+ * task over it (Codex's review, 2026-10-07).
+ */
+const climbsOut = (rel) => rel === '..' || rel.startsWith(`..${path.sep}`);
+const within = (folder, abs) => {
   const rel = path.relative(folder, abs);
-  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
-}
+  return rel !== '' && !climbsOut(rel) && !path.isAbsolute(rel);
+};
+const withinOrIs = (folder, abs) => {
+  const rel = path.relative(folder, abs);
+  return !climbsOut(rel) && !path.isAbsolute(rel);
+};
 
-/** Does this path stay inside the folder, following any chain of links it is on? */
-function staysInside(folder, abs) {
-  if (!within(folder, abs)) return false;
-  try { return within(folder, fs.realpathSync(abs)); }
-  catch { return false; } // it does not resolve: broken, which is handled by the caller
+/**
+ * The nearest ancestor of this path that is really on disk, with every link on
+ * the way to it followed.
+ *
+ * THIS IS WHAT MAKES A DANGLING LINK SAFE TO JUDGE. A target that does not exist
+ * cannot be resolved, and skipping the check for those left a hole: with a
+ * TRACKED `bridge -> /somewhere/shared` in the commit, a carried
+ * `node_modules/pkg/cache -> ../../bridge/newfile` looks like a path inside the
+ * folder, dangles, and the first write through it creates a file in the shared
+ * directory. The last component being absent says nothing about the ones before
+ * it, so the ones before it are the ones resolved.
+ */
+function nearestReal(abs) {
+  let at = abs;
+  for (;;) {
+    if (stillThere(at)) { try { return fs.realpathSync(at); } catch { return null; } }
+    const up = path.dirname(at);
+    if (up === at) return null;
+    at = up;
+  }
 }
 
 /**
@@ -229,13 +255,19 @@ function linksThatDoNotHold(root, folder, rel) {
     // lands in that task's work. Checking only when the target exists let that
     // through (Codex's review, 2026-10-07).
     if (!within(folder, resolved)) { bad.push({ path: name, why: 'it is a link that leads out of this folder' }); continue; }
-    if (fs.existsSync(resolved)) {
-      if (!staysInside(folder, resolved)) bad.push({ path: name, why: 'it is a link that leads out of this folder through another link' });
+    // AND THE LINKS ON THE WAY TO IT, WHICH DANGLING DOES NOT EXCUSE. A path
+    // inside the folder can still arrive outside it through a link on the way,
+    // and the links on the way exist even when the last name does not.
+    const home = nearestReal(folder);
+    const reached = nearestReal(resolved);
+    if (home && reached && !withinOrIs(home, reached)) {
+      bad.push({ path: name, why: 'it is a link that leads out of this folder through another link' });
       continue;
     }
-    // Dangling, and pointing inside, so it cannot reach anything that is not
-    // this folder's. Only our business if the copy BROKE it, which means the
-    // target was there in the checkout and was not carried in with it.
+    if (fs.existsSync(resolved)) continue;
+    // Dangling, and everything on the way to it is this folder's, so nothing it
+    // reaches can be anybody else's. Only our business if the copy BROKE it,
+    // which means the target was there in the checkout and was left behind.
     const sourceSide = path.resolve(path.dirname(path.join(root, name)), target);
     if (fs.existsSync(sourceSide)) bad.push({ path: name, why: 'it points at something that was not carried in with it' });
     // A link that was already dangling where it came from is left exactly as it
@@ -319,12 +351,21 @@ export function carryLocalFiles(root, folder) {
   return { carried, source };
 }
 
-/** An entry that is itself a link: relative and landing back inside the repository. */
+/**
+ * An entry that is itself a link, judged where it came FROM: relative, and
+ * landing back inside the repository. The same link is judged again in the
+ * folder once everything has been copied, which is the check that matters;
+ * this one keeps an obviously shared one from being copied at all.
+ */
 function carriableLink(root, abs) {
   let target;
   try { target = fs.readlinkSync(abs); } catch { return false; }
   if (path.isAbsolute(target)) return false;
-  return staysInside(root, path.resolve(path.dirname(abs), target));
+  const resolved = path.resolve(path.dirname(abs), target);
+  if (!within(root, resolved)) return false;
+  const home = nearestReal(root);
+  const reached = nearestReal(resolved);
+  return !home || !reached || withinOrIs(home, reached);
 }
 
 const tracksIt = (folder, rel) => {
