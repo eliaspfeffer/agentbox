@@ -122,6 +122,7 @@ import { ChatAgentsContext, type ChatAgentsValue } from './team/ChatAgents';
 import { agentLinks, chatProjects, chatTaskSharing, chatTranscript, taskBrief, taskTitle, withTask } from './team/agent-mentions';
 import { isCleanRun, ruleIdOf, ruleLabel } from '../../shared/repeats.mjs';
 import { NAME, Name } from '../../shared/product-name.mjs';
+import { isNew } from '../../shared/notify-rules.mjs';
 import { inMyInbox, isShared, heldByAPerson, runnerOf, iSpokeLast } from '../../shared/team-rules.mjs';
 import { Face, TeamContext, firstName, teamView } from './team/people';
 import { FaceHover } from './team/status';
@@ -1443,8 +1444,11 @@ export default function App() {
     setRun((r) => (r ? stepTo(r, 'done') : r));
   }, [run, modal, finishRun]);
 
-  const prevInboxIds = useRef<Set<string>>(new Set());
-  const prevAskIds = useRef<Set<string>>(new Set());
+  // The ids on the snapshot before this one, which is what makes a row news.
+  // null until there has been one: an inbox she has cleared is empty, and that
+  // is not the same fact as never having looked (isNew, shared/notify-rules).
+  const prevInboxIds = useRef<Set<string> | null>(null);
+  const prevAskIds = useRef<Set<string> | null>(null);
   // After resolving an item FROM INSIDE IT, advance to the next one instead of
   // dropping back to the list: processing the inbox is a flow, not a round trip
   // per item. Resolving from the LIST leaves her in the list, which is
@@ -2721,15 +2725,14 @@ export default function App() {
   useEffect(() => {
     if (!snap) return;
     const ids = new Set(inbox.map((i) => i.id));
-    const first = prevInboxIds.current.size === 0;
-    const fresh = first ? [] : inbox.filter((i) => !prevInboxIds.current.has(i.id));
+    const known = prevInboxIds.current;
+    const fresh = inbox.filter((i) => isNew(known, i.id));
     prevInboxIds.current = ids;
     window.zero?.badge?.(inbox.length);
 
     const askIds = new Set((snap.approvals ?? []).map((a) => a.id));
-    const freshAsks = prevAskIds.current.size === 0 && first
-      ? []
-      : (snap.approvals ?? []).filter((a) => !prevAskIds.current.has(a.id));
+    const knownAsks = prevAskIds.current;
+    const freshAsks = (snap.approvals ?? []).filter((a) => isNew(knownAsks, a.id));
     prevAskIds.current = askIds;
 
     const arrivals = [
