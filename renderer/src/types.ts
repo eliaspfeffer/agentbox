@@ -652,6 +652,14 @@ export interface Snapshot {
     workspace: string;
     byItem: Record<string, string>;
   };
+  /**
+   * WHICH SUBSCRIPTION THE AGENTS ARE RUNNING ON (w-e217e577e5, 2026-10-07), for
+   *  the line in the sidebar that says so. Answered whole by
+   *  `Supervisor#runsOnAccount`, for the reason `engines` is: which account the
+   *  fleet spends is `_narrowToChosen`'s rule, pinned to that file. Null, or
+   *  absent on an older payload, on a Mac where nothing readable is signed in,
+   *  and then nothing new is drawn. The words are shared/runs-on.mjs. */
+  runsOn?: { engine: string; plan: string | null } | null;
   // `outsideAgents` is how many of her own Claude Code sessions the inbox
   // takes: all of them, only the ones stopped on a question, or none. It rides
   // the snapshot because the inbox reads it on every draw. How much of the
@@ -762,6 +770,12 @@ export interface ProjectSettings {
   permissionArgs: string[] | null;
   /** This project's own Codex mode, or 'workspace' when it has no opinion. */
   codexMode: CodexModeId | 'workspace';
+  /**
+   * The one Claude account this project's agents run on, or 'any' when it runs
+   * on whichever has room. Never a login that has since been signed out: the
+   * supervisor answers 'any' for a tie it can no longer honour.
+   */
+  account?: string;
   // The user's rules for this project, as they sit on disk. Empty means the file does
   // not exist, and a project without one is briefed exactly as it always was.
   instructions: string;

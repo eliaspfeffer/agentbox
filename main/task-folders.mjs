@@ -194,7 +194,11 @@ export function ensureTaskFolder(dir, id, { pid = process.pid, dependencies = tr
   const branchExists = tryGit(root, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`]).ok;
   const from = branchExists ? branch : baseRef(root);
   if (!cloneCheckout(root, staging, branch, from, branchExists)) {
-    const add = branchExists
+    // The fast path may have created the branch and then failed the copy.
+    // The branch stays: this file never deletes one. The slow path uses it
+    // when it is already there, which is what `worktree add -b` would refuse.
+    const existsNow = tryGit(root, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`]).ok;
+    const add = existsNow
       ? tryGit(root, ['worktree', 'add', staging, branch])
       : tryGit(root, ['worktree', 'add', '-b', branch, staging, baseRef(root)]);
     if (!add.ok) throw Error(`Could not make a folder for ${name}: ${add.out}`);
@@ -244,7 +248,20 @@ function clearUnfinished(root, staging) {
  * commit, down to an empty `git status`, the folder is thrown away and the
  * ordinary checkout runs. A fast folder that is subtly not the code would be
  * far worse than a slow one.
+ *
+ * THE COPY IS THE PLATFORM'S OWN CLONE. macOS `cp -c` is APFS clonefile.
+ * GNU `cp -a --reflink=auto` shares blocks where the filesystem can and
+ * copies where it cannot. `-c` is not an option there, and a copy that
+ * failed used to leave the branch the fast path had just created, so the
+ * ordinary checkout then died with "a branch named … already exists".
  */
+function copyTree(from, to) {
+  const args = process.platform === 'darwin'
+    ? ['-c', '-R', from, to]
+    : ['-a', '--reflink=auto', from, to];
+  execFileSync('cp', args, { stdio: ['ignore', 'ignore', 'pipe'] });
+}
+
 function cloneCheckout(root, folder, branch, from, branchExists) {
   // TRACKED CONTENT ONLY, on both sides of this. Her checkout permanently
   // carries a couple of untracked files (a scratch `:memory:.ses`, a folder of
@@ -266,7 +283,7 @@ function cloneCheckout(root, folder, branch, from, branchExists) {
   try {
     for (const entry of fs.readdirSync(root)) {
       if (entry === '.git' || entry === WORKTREES[0]) continue;
-      execFileSync('cp', ['-c', '-R', path.join(root, entry), folder], { stdio: ['ignore', 'ignore', 'pipe'] });
+      copyTree(path.join(root, entry), folder);
     }
     if (!tryGit(folder, ['reset', '-q', 'HEAD']).ok) throw Error('the index would not fill in');
     const after = tryGit(folder, ['status', '--porcelain', '--untracked-files=no']);
@@ -315,7 +332,7 @@ function cloneDependencies(root, folder) {
   const to = path.join(folder, 'node_modules');
   if (!fs.existsSync(from) || fs.existsSync(to)) return false;
   try {
-    execFileSync('cp', ['-c', '-R', from, to], { stdio: ['ignore', 'ignore', 'pipe'] });
+    copyTree(from, to);
     return true;
   } catch {
     try { fs.rmSync(to, { recursive: true, force: true }); } catch { /* nothing to undo */ }

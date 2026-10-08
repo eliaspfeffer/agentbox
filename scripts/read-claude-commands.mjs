@@ -53,6 +53,43 @@ const ROOT = path.join(HERE, '..');
 export const OUT = path.join(ROOT, 'shared', 'claude-commands.generated.mjs');
 
 /**
+ * The file that actually holds the command table.
+ *
+ * On macOS `~/.local/bin/claude` is the bundle. On a Linux install it is often
+ * a shell wrapper (mise, asdf) that execs the real binary. The table is in
+ * that binary. A wrapper is a small file with a shebang. The bundle and the
+ * Linux ELF are both far larger than a megabyte, so size is the split.
+ */
+export function isShellWrapper(file) {
+  try {
+    const st = fs.statSync(file);
+    if (!st.isFile() || st.size > 1024 * 1024) return false;
+    const head = fs.readFileSync(file).subarray(0, 64).toString('utf8');
+    return head.startsWith('#!');
+  } catch { return false; }
+}
+
+function miseWhich(name) {
+  try {
+    const out = execFileSync('mise', ['which', name], { encoding: 'utf8', timeout: 20_000 }).trim();
+    return out || null;
+  } catch { return null; }
+}
+
+export function commandBundle(binPath, { which = miseWhich } = {}) {
+  let real = binPath;
+  try { real = fs.realpathSync(binPath); } catch { /* the path is already what we were given */ }
+  if (!isShellWrapper(real)) return real;
+  const resolved = which('claude');
+  if (resolved) {
+    let resolvedReal = resolved;
+    try { resolvedReal = fs.realpathSync(resolved); } catch { /* keep */ }
+    if (fs.existsSync(resolvedReal) && !isShellWrapper(resolvedReal)) return resolvedReal;
+  }
+  return real;
+}
+
+/**
  * HER EIGHT, IN HER ORDER. This is the one list in the pipeline that is ours,
  *  and it is the judgement she named as the cost of picking this option: "the
  *  line between 'means something here' and 'does not' is a judgement somebody
@@ -254,7 +291,7 @@ function main() {
     console.log(`[claude-commands] no Claude Code here; keeping the list read from ${from} on ${at}`);
     return;
   }
-  const next = build(found.path);
+  const next = build(commandBundle(found.path));
   let before = null;
   try { before = fs.readFileSync(OUT, 'utf8'); } catch { /* first build */ }
   const text = moduleText(next);
