@@ -14,13 +14,27 @@
 // repository already set up for either works here with nothing new to write.
 //
 // THE PATTERNS ARE MATCHED BY GIT, NEVER BY US. `git ls-files --others --ignored
-// --exclude-from=<list>` answers with the files git itself would ignore that
-// those patterns select, which gets comments, blank lines, anchoring, nested
-// globs, directory patterns and `!` negation right by construction rather than
-// by a matcher of ours that would drift. It also gives the central safety
-// property for free: `--others` never lists tracked content, so a pattern naming
-// a file the commit carries selects NOTHING and the commit can never be shadowed
-// by somebody's local copy of it.
+// --exclude-from=<list>` answers with the files those patterns select, which gets
+// comments, blank lines, anchoring, nested globs, directory patterns and `!`
+// negation right by construction rather than by a matcher of ours that would
+// drift. `--others` never lists tracked content, so a pattern naming a file the
+// commit carries selects nothing.
+//
+// AND SELECTING IS NOT THE SAME AS BEING IGNORED, which cost a review to notice.
+// That command means "untracked files matching THESE rules"; it does not consult
+// the repository's own .gitignore at all. So a `.worktreeinclude` naming an
+// untracked file that the repository does NOT ignore would have carried it in,
+// where it stays untracked -- and `parkTaskFolder` runs `git add -A`, so closing
+// the task would commit it. A credential named in this file would have been
+// committed onto a branch. Every selected path is therefore put through
+// `git check-ignore` IN BOTH CHECKOUTS, and anything the repository does not
+// actually ignore is refused rather than carried (Codex's review, 2026-10-07).
+//
+// NOTHING IS DROPPED QUIETLY. Every path this module will not carry, and every
+// link it cannot vouch for, refuses the folder and names itself. A folder
+// quietly missing a file somebody asked for by name, or quietly sharing its
+// dependencies with the checkout, is the exact fault this module exists to end,
+// so it may not be the way this module fails.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -38,9 +52,7 @@ export const INCLUDE_FILE = '.worktreeinclude';
  * not cosmetic: measured 2026-10-07, `/node_modules/` matches a directory and
  * nothing else, so a `node_modules` that is really a SYMLINK to a shared one is
  * not selected, not carried, and -- the part that matters -- not reported either.
- * Without the slash it is selected, and then the link rule below refuses it by
- * name. A folder silently sharing its dependencies with the checkout is the
- * failure; a folder saying it would not is the fix.
+ * Without the slash it is selected, and then refused by name.
  */
 export const DEFAULT_PATTERNS = ['/node_modules'];
 
@@ -52,14 +64,9 @@ export const DEFAULT_PATTERNS = ['/node_modules'];
  */
 const MANAGED = '.claude/worktrees';
 
-const run = (cwd, args) => execFileSync('git', args, {
-  cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
-}).trim();
-
-function tryRun(cwd, args) {
-  try { return { ok: true, out: run(cwd, args) }; }
-  catch (error) { return { ok: false, out: String(error?.stderr ?? error?.message ?? '').trim() }; }
-}
+const git = (cwd, args, input) => execFileSync('git', args, {
+  cwd, input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
+});
 
 /** Lines that are a pattern: not blank, not a comment. */
 const patternsIn = (text) => text.split('\n')
@@ -73,38 +80,43 @@ const patternsIn = (text) => text.split('\n')
  * decision, not an absence: without that there is no way to say "give me a bare
  * folder", and a repository that deliberately wants its dependencies installed
  * fresh would be overruled by our default.
+ *
+ * A file that exists and cannot be READ is an error and not a default. Falling
+ * back there would answer "we could not find out what you need" with "here is
+ * what we guessed", which is the shape of every bug in this module's history.
  */
 export function askedFor(root) {
   const file = path.join(root, INCLUDE_FILE);
-  if (!fs.existsSync(file)) return { patterns: DEFAULT_PATTERNS, source: 'default' };
+  if (!fs.existsSync(file)) return { patterns: DEFAULT_PATTERNS, source: 'the default list' };
   try { return { patterns: patternsIn(fs.readFileSync(file, 'utf8')), source: INCLUDE_FILE }; }
-  catch { return { patterns: DEFAULT_PATTERNS, source: 'default' }; }
+  catch (error) { throw Error(`${INCLUDE_FILE} is there and could not be read: ${error.message}`); }
 }
 
 /**
- * The paths those patterns actually select in this checkout, as git sees them.
+ * The paths those patterns select in this checkout, as git sees them.
  *
  * `--directory` collapses a wholly untracked directory to one entry, which turns
  * a node_modules of sixty thousand files into a single `cp`. `-z` because a
- * newline is a legal character in a filename and this list decides what gets
+ * newline is a legal character in a filename and this list decides what is
  * copied.
  */
 export function localFilesIn(root) {
   const { patterns, source } = askedFor(root);
   if (!patterns.length) return { paths: [], patterns, source };
-  const list = fs.mkdtempSync(path.join(os.tmpdir(), 'worktree-include-'));
-  const file = path.join(list, 'patterns');
+  const held = fs.mkdtempSync(path.join(os.tmpdir(), 'worktree-include-'));
+  const file = path.join(held, 'patterns');
   try {
     fs.writeFileSync(file, `${patterns.join('\n')}\n`);
-    const found = tryRun(root, ['ls-files', '-z', '--others', '--ignored', '--directory', `--exclude-from=${file}`]);
-    if (!found.ok) return { paths: [], patterns, source };
-    const paths = found.out.split('\0')
+    const out = git(root, ['ls-files', '-z', '--others', '--ignored', '--directory', `--exclude-from=${file}`]);
+    const paths = out.split('\0')
       .map((p) => p.replace(/\/$/, ''))
       .filter(Boolean)
       .filter(keepable);
     return { paths, patterns, source };
+  } catch (error) {
+    throw Error(`${source} could not be read against this checkout: ${String(error?.stderr ?? error?.message ?? '').trim()}`);
   } finally {
-    try { fs.rmSync(list, { recursive: true, force: true }); } catch { /* a temp dir */ }
+    try { fs.rmSync(held, { recursive: true, force: true }); } catch { /* a temp dir */ }
   }
 }
 
@@ -119,12 +131,51 @@ export function localFilesIn(root) {
  * folder, so it still comes through.
  */
 function keepable(rel) {
-  const parts = rel.split('/');
-  if (parts[0] === '.git') return false;
+  if (rel.split('/')[0] === '.git') return false;
   if (rel === MANAGED || rel.startsWith(`${MANAGED}/`)) return false;
-  // An ancestor of the managed folder: `.claude`, or the repository root itself.
-  if (MANAGED === rel || MANAGED.startsWith(`${rel}/`)) return false;
+  if (MANAGED.startsWith(`${rel}/`)) return false;
   return true;
+}
+
+/**
+ * Which of these paths the repository's OWN rules ignore, asked in whichever
+ * checkout is passed. Exit 1 means "none of them", which is an answer and not a
+ * failure; anything else is a failure and is thrown, because treating a broken
+ * git call as "not ignored" silently stops carrying everything.
+ */
+function ignoredIn(cwd, paths) {
+  if (!paths.length) return new Set();
+  try {
+    const out = git(cwd, ['check-ignore', '-z', '--stdin'], `${paths.join('\0')}\0`);
+    return new Set(out.split('\0').filter(Boolean));
+  } catch (error) {
+    if (error?.status === 1) return new Set();
+    throw Error(`git could not say what this checkout ignores: ${String(error?.stderr ?? error?.message ?? '').trim()}`);
+  }
+}
+
+const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; } };
+const isDir = (p) => { try { return fs.statSync(p).isDirectory() && !isLink(p); } catch { return false; } };
+
+/** Is any directory on the way to this path a link? Then nothing may be written through it. */
+function reachedThroughALink(folder, rel) {
+  let at = folder;
+  for (const part of rel.split('/').slice(0, -1)) {
+    at = path.join(at, part);
+    if (isLink(at)) return true;
+  }
+  return false;
+}
+
+/** Does this path stay inside the folder, following any chain of links it is on? */
+function staysInside(folder, abs) {
+  const within = (p) => {
+    const rel = path.relative(folder, p);
+    return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+  };
+  if (!within(abs)) return false;
+  try { return within(fs.realpathSync(abs)); }
+  catch { return false; } // it does not resolve: broken, which is handled by the caller
 }
 
 /**
@@ -136,19 +187,45 @@ function keepable(rel) {
  * a link forward recreates exactly that, in a folder whose whole purpose is that
  * nothing it does reaches anybody else.
  *
- * So: a RELATIVE link whose target stays inside the repository is carried, and
- * after the folder is moved into place it points at the folder's own copy, which
- * is what a workspace link is for. An ABSOLUTE link is refused even when it
- * points inside this very checkout, because absolute is exactly what survives
- * the move and keeps pointing at the original.
+ * An ABSOLUTE link is never carried, even one pointing inside this very
+ * checkout, because absolute is precisely what survives the move into place and
+ * keeps pointing at the original. A RELATIVE one is carried when it still lands
+ * inside the folder, which is what a workspace link is for: after the move it
+ * points at the folder's own copy.
+ *
+ * EVERY LINK IN THE SUBTREE IS LOOKED AT, not just the top ones. One level of
+ * children was tried first and is not enough: `node_modules/@scope/package` is
+ * an ordinary layout, and a scope directory hides every link under it. `find`
+ * does not follow links while walking, so a link cannot be used to escape the
+ * walk either.
  */
-function linkIsSafe(root, abs) {
-  let target;
-  try { target = fs.readlinkSync(abs); } catch { return false; }
-  if (path.isAbsolute(target)) return false;
-  const resolved = path.resolve(path.dirname(abs), target);
-  const inside = path.relative(root, resolved);
-  return inside !== '' && !inside.startsWith('..') && !path.isAbsolute(inside);
+function linksThatDoNotHold(root, folder, rel) {
+  const to = path.join(folder, rel);
+  if (!isDir(to)) return [];
+  let found = [];
+  try {
+    found = execFileSync('find', [to, '-type', 'l', '-print0'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+      .split('\0').filter(Boolean);
+  } catch (error) {
+    throw Error(`the links inside ${rel} could not be checked: ${String(error?.stderr ?? error?.message ?? '').trim()}`);
+  }
+  const bad = [];
+  for (const link of found) {
+    const name = path.relative(folder, link);
+    let target;
+    try { target = fs.readlinkSync(link); } catch { continue; } // gone from under us
+    if (path.isAbsolute(target)) { bad.push({ path: name, why: 'it is a link to somewhere outside this folder' }); continue; }
+    const resolved = path.resolve(path.dirname(link), target);
+    if (fs.existsSync(resolved)) {
+      if (!staysInside(folder, resolved)) bad.push({ path: name, why: 'it is a link that leads out of this folder' });
+      continue;
+    }
+    // Broken here. Only our business if it was NOT broken where it came from,
+    // which means the copy broke it by leaving its target behind.
+    const sourceSide = path.resolve(path.dirname(path.join(root, name)), target);
+    if (fs.existsSync(sourceSide)) bad.push({ path: name, why: 'it points at something that was not carried in with it' });
+  }
+  return bad;
 }
 
 /**
@@ -159,72 +236,77 @@ function linkIsSafe(root, abs) {
  * free space by nothing at all, because the blocks are shared until something
  * writes.
  *
- * WHAT IS AN ERROR AND WHAT IS NOT. A pattern that matches nothing is silent:
- * a repository may name a `.env` that this machine does not have. A file that
- * was found and could not be copied THROWS, naming it, because somebody asked
- * for it by name and a folder quietly missing it is the failure this whole
- * module exists to end. A link that is refused is named in `refused` and does
- * not stop the folder: it is a fact about the source worth reporting, and
- * leaving it out is the correct outcome rather than a partial one.
+ * A PATTERN THAT MATCHES NOTHING IS SILENT, and it is the only silence here: a
+ * repository may name a `.env` that this machine does not have. Everything else
+ * that will not or cannot be carried THROWS, with every path and reason in the
+ * message, because the caller's only honest options are a complete folder or no
+ * folder, and a list of reasons is what makes the second one actionable.
  */
 export function carryLocalFiles(root, folder) {
   const { paths, source } = localFilesIn(root);
+  const theirs = ignoredIn(root, paths);
   const carried = [];
   const refused = [];
+  const no = (rel, why) => refused.push({ path: rel, why });
+
   for (const rel of paths) {
     const from = path.join(root, rel);
     const to = path.join(folder, rel);
-    // Resolved rather than trusted: a selected path must land inside the folder.
-    const inside = path.relative(folder, to);
-    if (inside.startsWith('..') || path.isAbsolute(inside)) { refused.push(rel); continue; }
-    if (!fs.existsSync(from) && !isLink(from)) continue;
+    if (!fs.existsSync(from) && !isLink(from)) continue; // it went away; silent
+    // IGNORED BY THE REPOSITORY ITSELF, on both sides. Being named in
+    // `.worktreeinclude` is not enough: an untracked file the repository does not
+    // ignore stays untracked in the folder, and closing the task commits it.
+    if (!theirs.has(rel)) { no(rel, 'the repository does not ignore it, so carrying it in could commit it'); continue; }
     // NEVER OVER THE COMMIT. The patterns cannot select tracked content in the
-    // source, but the folder may stand on a DIFFERENT commit than the checkout
-    // beside it, and a file this branch tracks is content, not a local file.
-    if (tracksIt(folder, rel)) { refused.push(rel); continue; }
-    if (fs.existsSync(to)) continue;
-    if (isLink(from) && !linkIsSafe(root, from)) { refused.push(rel); continue; }
-    fs.mkdirSync(path.dirname(to), { recursive: true });
+    // checkout beside us, but the folder may stand on a DIFFERENT commit, and a
+    // path this branch tracks is content rather than a local file.
+    if (tracksIt(folder, rel)) { no(rel, 'this branch tracks it'); continue; }
+    if (reachedThroughALink(folder, rel)) { no(rel, 'a link stands where it would have to be written'); continue; }
+    if (fs.existsSync(to)) continue; // already there; silent
+    if (isLink(from) && !carriableLink(root, from)) { no(rel, 'it is a link to somewhere outside the repository'); continue; }
     try {
+      fs.mkdirSync(path.dirname(to), { recursive: true });
       execFileSync('cp', ['-c', '-R', from, to], { stdio: ['ignore', 'ignore', 'pipe'] });
     } catch (error) {
-      throw Error(`${source} asks for ${rel} and it could not be carried in: ${String(error?.stderr ?? error?.message ?? '').trim()}`);
+      no(rel, `it could not be copied: ${String(error?.stderr ?? error?.message ?? '').trim()}`);
+      continue;
     }
-    refused.push(...dropLinksOutOfTheFolder(root, to, rel));
+    // AND IGNORED HERE TOO, ASKED NOW IT IS HERE. This cannot be asked before
+    // the copy: `node_modules/` with a trailing slash is the way nearly every
+    // repository writes it, and a trailing slash matches directories only, so
+    // git cannot match a path that is not on disk yet and answers "not ignored"
+    // for every one of them. Asked after, the answer is the real one. A file the
+    // folder's own branch would not ignore is taken straight back out, because
+    // closing the task runs `git add -A` and would commit it.
+    if (!ignoredIn(folder, [rel]).has(rel)) {
+      try { fs.rmSync(to, { recursive: true, force: true }); } catch { /* best effort */ }
+      no(rel, 'the branch in this folder does not ignore it, so closing the task would commit it');
+      continue;
+    }
+    const bad = linksThatDoNotHold(root, folder, rel);
+    if (bad.length) { refused.push(...bad); continue; }
     carried.push(rel);
   }
-  return { carried, refused, source };
-}
 
-const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; } };
-
-const tracksIt = (folder, rel) => tryRun(folder, ['ls-files', '--error-unmatch', '-z', '--', rel]).ok;
-
-/**
- * The same link rule, one level inside a directory that was carried.
- *
- * ONE LEVEL AND NOT EVERY LEVEL, deliberately. A workspace install writes its
- * links exactly there (`node_modules/<name>` pointing at `packages/<name>`), and
- * walking sixty thousand files to find the rest would cost more than it saves.
- * A link deeper than this that points outside the folder is NOT caught, and
- * saying so here is better than implying a guarantee that is not given.
- *
- * Dropped rather than refused-and-abandoned: the directory is still worth having
- * without it, and the name is reported either way.
- */
-function dropLinksOutOfTheFolder(root, to, rel) {
-  let children = [];
-  try { children = fs.readdirSync(to, { withFileTypes: true }); } catch { return []; }
-  const dropped = [];
-  for (const child of children) {
-    if (!child.isSymbolicLink()) continue;
-    const at = path.join(to, child.name);
-    if (linkIsSafe(root, path.join(root, rel, child.name))) continue;
-    try { fs.rmSync(at, { force: true }); dropped.push(path.posix.join(rel, child.name)); }
-    catch { /* it can only have gone */ }
+  if (refused.length) {
+    throw Error(`${source} names files this folder could not be given:\n${
+      refused.map((r) => `  ${r.path} — ${r.why}`).join('\n')}`);
   }
-  return dropped;
+  return { carried, source };
 }
+
+/** An entry that is itself a link: relative and landing back inside the repository. */
+function carriableLink(root, abs) {
+  let target;
+  try { target = fs.readlinkSync(abs); } catch { return false; }
+  if (path.isAbsolute(target)) return false;
+  return staysInside(root, path.resolve(path.dirname(abs), target));
+}
+
+const tracksIt = (folder, rel) => {
+  try { git(folder, ['ls-files', '--error-unmatch', '-z', '--', rel]); return true; }
+  catch (error) { if (error?.status === 1) return false; throw Error(`git could not say whether this branch tracks ${rel}: ${String(error?.stderr ?? error?.message ?? '').trim()}`); }
+};
 
 /**
  * THE FOLDER IS THE COMMIT, PLUS WHAT WAS ASKED FOR, AND NOTHING ELSE.
@@ -237,15 +319,20 @@ function dropLinksOutOfTheFolder(root, to, rel) {
  * work", so the extras are cleared and the asked-for files are put back by name.
  *
  * Run BEFORE anything is carried in, so it can never remove what was asked for.
+ * A failure throws: leaving an extra behind would quietly hand one folder
+ * something another did not get, which is the difference being removed.
  */
 export function onlyTrackedContent(folder) {
-  const found = tryRun(folder, ['ls-files', '-z', '--others', '--directory', '--no-empty-directory']);
-  if (!found.ok) return [];
+  let found;
+  try { found = git(folder, ['ls-files', '-z', '--others', '--directory', '--no-empty-directory']); }
+  catch (error) { throw Error(`what is in this folder could not be listed: ${String(error?.stderr ?? error?.message ?? '').trim()}`); }
   const gone = [];
-  for (const rel of found.out.split('\0').map((p) => p.replace(/\/$/, '')).filter(Boolean)) {
+  for (const rel of found.split('\0').map((p) => p.replace(/\/$/, '')).filter(Boolean)) {
     if (!keepable(rel)) continue;
-    try { fs.rmSync(path.join(folder, rel), { recursive: true, force: true }); gone.push(rel); }
-    catch { /* already gone */ }
+    const at = path.join(folder, rel);
+    try { fs.rmSync(at, { recursive: true, force: true }); }
+    catch (error) { if (fs.existsSync(at)) throw Error(`${rel} came with the clone and could not be cleared: ${error.message}`); }
+    gone.push(rel);
   }
   return gone;
 }
@@ -254,11 +341,22 @@ export function onlyTrackedContent(folder) {
  * The top-level entries the clone has to copy: the ones holding tracked content.
  * Everything else in the checkout is either ignored or somebody's scratch, and
  * whichever of it is wanted arrives by name through `.worktreeinclude`.
+ *
+ * A SUBMODULE STOPS THE CLONE ALTOGETHER. `ls-files` reports one as mode 160000,
+ * a pointer rather than a directory of files, and copying whatever is on disk
+ * there hands the folder another repository's administration rather than its own.
+ * `git worktree move` also refuses a worktree holding one. The ordinary checkout
+ * knows what a submodule is, so a repository with any is left to it.
  */
 export function trackedTopLevel(root) {
-  const listed = tryRun(root, ['ls-files', '-z']);
-  if (!listed.ok) return [];
+  let listed;
+  try { listed = git(root, ['ls-files', '-s', '-z']); }
+  catch (error) { throw Error(`the tracked files could not be listed: ${String(error?.stderr ?? error?.message ?? '').trim()}`); }
   const top = new Set();
-  for (const rel of listed.out.split('\0').filter(Boolean)) top.add(rel.split('/')[0]);
-  return [...top];
+  for (const line of listed.split('\0').filter(Boolean)) {
+    const [modes, rel] = line.split('\t');
+    if (modes?.startsWith('160000')) return { entries: [], submodules: true };
+    if (rel) top.add(rel.split('/')[0]);
+  }
+  return { entries: [...top], submodules: false };
 }

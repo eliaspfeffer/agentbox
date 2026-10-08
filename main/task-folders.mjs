@@ -247,12 +247,18 @@ export function ensureTaskFolder(dir, id, { pid = process.pid, dependencies = tr
   // repository, in a file Conductor and Claude Code already read.
   //
   // It runs in STAGING, before the folder exists at its own path, so a folder
-  // nobody can see yet is the one that is incomplete. A failure here throws, and
-  // the staging copy goes with it: a folder quietly missing a file somebody named
-  // is the whole fault being fixed, so it may not be published.
-  let refusedLocalFiles = [];
+  // nobody can see yet is the one that is incomplete. A file that was named and
+  // cannot be given THROWS, and the staging copy goes with it.
+  //
+  // REFUSING THE WHOLE FOLDER IS THE REPORT. There was a version of this that
+  // made the folder anyway and returned the list of what it had refused, and
+  // nothing in the app read that list: a folder starting without its
+  // dependencies, with nobody told, is the fault this was written to end, so it
+  // cannot be how this fails. The throw reaches `_couldNotGetAFolder` in
+  // main/supervisor.mjs, which puts every path and reason on the row where
+  // somebody will read it, and the task waits instead of running wrong.
   if (dependencies) {
-    try { refusedLocalFiles = carryLocalFiles(root, staging).refused; }
+    try { carryLocalFiles(root, staging); }
     catch (error) { clearUnfinished(root, staging); throw Error(`Could not make a folder for ${name}: ${error.message}`); }
   }
 
@@ -266,7 +272,7 @@ export function ensureTaskFolder(dir, id, { pid = process.pid, dependencies = tr
   }
 
   lock(root, folder, pid);
-  return { path: folder, branch, created: true, how, refusedLocalFiles };
+  return { path: folder, branch, created: true, how };
 }
 
 /**
@@ -330,7 +336,12 @@ function cloneCheckout(root, folder, branch, from, branchExists) {
     // missing a tracked file. That failure is how a task ended up in the shared
     // checkout; see the comment in `ensureTaskFolder` about asking for the
     // branch twice.
-    for (const entry of trackedTopLevel(root)) {
+    const tracked = trackedTopLevel(root);
+    // A repository with a submodule is the ordinary checkout's business: a
+    // gitlink is a pointer, not a directory of files, and `worktree move`
+    // refuses a worktree holding one.
+    if (tracked.submodules) throw Error('this repository has submodules');
+    for (const entry of tracked.entries) {
       if (entry === '.git') continue;
       copyIn(root, folder, entry);
     }

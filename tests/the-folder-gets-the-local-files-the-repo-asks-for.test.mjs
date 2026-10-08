@@ -42,7 +42,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ensureTaskFolder } from '../main/task-folders.mjs';
+import { ensureTaskFolder, taskFolderPath } from '../main/task-folders.mjs';
 
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 const read = (...p) => fs.readFileSync(path.join(...p), 'utf8');
@@ -214,19 +214,35 @@ describe('a dependency folder that is really a link somewhere else', () => {
   // MEASURED ON THIS MAC, 2026-10-07: a hand-made worktree beside the checkout
   // had `node_modules -> ../agentbox-team/node_modules`. Every install in it
   // rewrote the dependencies of every other folder sharing that target.
-  // Carrying the link forward would recreate exactly that, so it is refused and
-  // named, and the folder is still made.
-  it('is refused rather than carried, and the folder is still made', () => {
+  //
+  // REFUSING THE FOLDER IS THE REPORT. A first version made the folder anyway
+  // and returned a list of what it had refused, and nothing read that list: a
+  // folder starting with no dependencies and nobody told is the fault this file
+  // exists to end. The throw reaches the row, with the path and the reason.
+  it('is refused, and the folder is not made behind anybody´s back', () => {
     const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-deps-'));
     write(path.join(elsewhere, 'left-pad', 'index.js'), 'shared\n');
     fs.rmSync(path.join(dir, 'node_modules'), { recursive: true, force: true });
     fs.symlinkSync(elsewhere, path.join(dir, 'node_modules'));
 
-    const made = ensureTaskFolder(dir, 'w-linked');
+    expect(() => ensureTaskFolder(dir, 'w-linked')).toThrow(/node_modules/);
+    expect(fs.existsSync(taskFolderPath(dir, 'w-linked'))).toBe(false);
+    try { fs.rmSync(elsewhere, { recursive: true, force: true }); } catch {}
+  });
 
-    expect(fs.existsSync(made.path)).toBe(true);
-    expect(fs.existsSync(path.join(made.path, 'node_modules'))).toBe(false);
-    expect(made.refusedLocalFiles).toEqual(['node_modules']);
+  // A LINK DEEP IN A SCOPE DIRECTORY IS THE ORDINARY LAYOUT, not an exotic one,
+  // and checking only a directory's immediate children misses every one of them:
+  // `@scope` is a directory, so the loop steps straight over it. The whole
+  // subtree is walked, and `find` does not follow links while walking, so a link
+  // cannot be used to escape the walk either.
+  it('is refused when the link is buried in a scope directory', () => {
+    const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-pkg-'));
+    write(path.join(elsewhere, 'index.js'), 'shared\n');
+    fs.mkdirSync(path.join(dir, 'node_modules', '@scope'), { recursive: true });
+    fs.symlinkSync(elsewhere, path.join(dir, 'node_modules', '@scope', 'thing'));
+
+    expect(() => ensureTaskFolder(dir, 'w-scoped')).toThrow(/@scope\/thing/);
+    expect(fs.existsSync(taskFolderPath(dir, 'w-scoped'))).toBe(false);
     try { fs.rmSync(elsewhere, { recursive: true, force: true }); } catch {}
   });
 
@@ -246,6 +262,45 @@ describe('a dependency folder that is really a link somewhere else', () => {
     const link = path.join(made.path, 'node_modules', 'thing');
     expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
     expect(read(link, 'index.js')).toBe('local package\n');
-    expect(made.refusedLocalFiles ?? []).toEqual([]);
+  });
+});
+
+// BEING NAMED IN .worktreeinclude IS NOT ENOUGH, and finding that out cost a
+// review (Codex, 2026-10-07). `ls-files --others --ignored --exclude-from` means
+// "untracked files matching THESE rules"; it never consults the repository's own
+// .gitignore. So a file the repository does NOT ignore would have been carried
+// in, where it stays untracked -- and `parkTaskFolder` runs `git add -A`, so
+// closing the task would COMMIT it. A credential named here would have been
+// committed onto a branch and pushed.
+describe('a local file the repository does not actually ignore', () => {
+  let dir;
+  beforeEach(() => { dir = repo(); });
+  afterEach(() => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} });
+
+  it('is refused by name rather than carried where closing the task would commit it', () => {
+    write(path.join(dir, 'credentials.json'), '{"token":"not in .gitignore"}\n');
+    write(path.join(dir, '.worktreeinclude'), 'credentials.json\n');
+    git(dir, 'add', '.worktreeinclude');
+    git(dir, 'commit', '-q', '-m', 'ask for something not ignored');
+
+    expect(() => ensureTaskFolder(dir, 'w-unignored')).toThrow(/credentials\.json/);
+    expect(fs.existsSync(taskFolderPath(dir, 'w-unignored'))).toBe(false);
+  });
+
+  // AND THE SAME FILE, ONCE THE REPOSITORY DOES IGNORE IT, comes through. This
+  // is the case that must not match: without it the rule above could be "fixed"
+  // by refusing everything.
+  it('comes through once the repository ignores it', () => {
+    write(path.join(dir, 'credentials.json'), '{"token":"now ignored"}\n');
+    write(path.join(dir, '.gitignore'), 'node_modules/\nzero.config.json\n.env\nrenderer/dist/\nsecrets/\ncredentials.json\n');
+    write(path.join(dir, '.worktreeinclude'), 'credentials.json\n');
+    git(dir, 'add', '.gitignore', '.worktreeinclude');
+    git(dir, 'commit', '-q', '-m', 'ignore it, then ask for it');
+
+    const made = ensureTaskFolder(dir, 'w-nowignored');
+
+    expect(read(made.path, 'credentials.json')).toBe('{"token":"now ignored"}\n');
+    // And it is ignored THERE too, so closing the task cannot commit it.
+    expect(git(made.path, 'status', '--porcelain')).toBe('');
   });
 });

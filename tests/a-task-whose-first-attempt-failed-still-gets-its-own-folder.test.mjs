@@ -155,6 +155,30 @@ describe('a task whose first attempt at a folder failed', () => {
     expect(git(made.path, 'rev-parse', 'HEAD')).toBe(git(dir, 'rev-parse', 'refs/heads/main'));
   });
 
+  // A SUBMODULE TURNS THE CLONE DOWN AT THE DOOR, which is not the same as
+  // failing it. `ls-files` reports one as mode 160000: a pointer, not a directory
+  // of files, so copying whatever is on disk there would hand the folder another
+  // repository's administration rather than its own, and `git worktree move`
+  // refuses a worktree holding one. The ordinary checkout knows what a submodule
+  // is, so a repository with any is left to it. Codex's review, 2026-10-07.
+  it('leaves a repository with submodules to the ordinary checkout', () => {
+    const inner = fs.mkdtempSync(path.join(os.tmpdir(), 'submodule-'));
+    git(inner, 'init', '-q', '-b', 'main');
+    git(inner, 'config', 'user.email', 'test@example.com');
+    git(inner, 'config', 'user.name', 'Test');
+    fs.writeFileSync(path.join(inner, 'lib.txt'), 'shared code\n');
+    git(inner, 'add', '.');
+    git(inner, 'commit', '-q', '-m', 'the library');
+    git(dir, '-c', 'protocol.file.allow=always', 'submodule', '--quiet', 'add', inner, 'vendor');
+    git(dir, 'commit', '-q', '-m', 'bring the library in');
+
+    const made = ensureTaskFolder(dir, 'w-submodule');
+
+    expect(made.how).toBe('checkout');
+    expect(fs.existsSync(path.join(made.path, 'app.txt'))).toBe(true);
+    try { fs.rmSync(inner, { recursive: true, force: true }); } catch {}
+  });
+
   // THE FIRST TRIGGER, HELD CLOSED. A repository that commits a file under
   // `.claude` used to fail every clone, because the copy skipped that directory
   // whole and the clone was then short a tracked file. It clones now, and the

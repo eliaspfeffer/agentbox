@@ -1399,13 +1399,16 @@ export class Supervisor {
   _couldNotGetAFolder(item, error) {
     this._folderRefused ??= new Set();
     if (this._folderRefused.has(item?.id)) return;
-    this._folderRefused.add(item?.id);
     const why = String(error?.message ?? error ?? '').trim();
     try {
       this.store.recordSessionResult(item.product, item.id, {
-        result: `This task did not start, because it could not be given a folder of its own to work in${why ? `: ${why}` : '.'}\n\nIt is not run in the checkout ${Name} itself is built from. Two agents in one folder cannot be told apart afterwards, so the change card for this task would show another task's edits as if they were this one's, and that is worse than waiting.\n\nThe usual causes are a full disk and a path the app cannot write to. Freeing some space, or clearing out old task folders, is normally all it takes; then reply here and it will try again.`,
+        result: `This task did not start, because it could not be given a folder of its own to work in${why ? `: ${why}` : '.'}\n\nIt is not run in the checkout ${Name} itself is built from. Two agents in one folder cannot be told apart afterwards, so the change card for this task would show another task's edits as if they were this one's, and that is worse than waiting.\n\nThe usual causes are a full disk, a path the app cannot write to, and a file named in .worktreeinclude that cannot be carried into a folder. Then reply here and it will try again.`,
         status: 'open',
       });
+      // MARKED AS SAID ONLY ONCE IT HAS BEEN SAID. Marking first means a store
+      // write that failed -- which is likeliest during exactly the disk trouble
+      // that caused this -- would silence every later attempt as well.
+      this._folderRefused.add(item?.id);
     } catch (e) { console.warn('zero: could not say the folder failed:', e.message); }
   }
 
@@ -1682,20 +1685,21 @@ export class Supervisor {
       // refusal through the same chain, so the bookkeeping below runs either
       // way: the slot goes back, their reply goes back in line, and the row
       // says what happened. Found 2026-10-07 reviewing with Codex.
-      .then((made) => made?.path ?? null, (error) => {
-        this._couldNotGetAFolder(entry.item, error);
-        return null;
-      })
-      .then((cwd) => {
+      // THE FAILURE IS CARRIED, NOT ACTED ON HERE. Saying it in this handler
+      // would say it about a row that may have been stopped or closed in the
+      // meantime, and `recordSessionResult` writes `status: 'open'`, so a
+      // refusal arriving late would REOPEN a row somebody had finished with.
+      // It is reported below, after the one check that knows whether this
+      // attempt is still the current one (Codex's review, 2026-10-07).
+      .then((made) => ({ cwd: made?.path ?? null, failed: null }), (error) => ({ cwd: null, failed: error }))
+      .then(({ cwd, failed }) => {
         // Stopped, or the app quit, while the folder was being made.
         if (this._preparing.get(item.id) !== entry) return;
         this._preparing.delete(item.id);
         if (!cwd) {
-          // A null that came from a null rather than from a throw still has to
-          // be said: the folder thread answers null when the repoPath is not a
-          // repository at all. `_couldNotGetAFolder` is said-once, so calling it
-          // after the rejection handler already did costs nothing.
-          this._couldNotGetAFolder(entry.item, Error('no folder could be made'));
+          // A null with no error behind it is the folder thread answering that
+          // the repoPath is not a repository at all.
+          this._couldNotGetAFolder(entry.item, failed ?? Error('no folder could be made'));
           // THEIR WORDS ARE NOT DELIVERED BY A WORKER THAT NEVER STARTED. The
           // queue writes the delivery mark before the spawn and that mark is
           // persisted, so leaving it standing records the reply as handed over

@@ -141,6 +141,22 @@ describe('a row that cannot have its own folder', () => {
     expect(sup.workFolderFor({ id: 'w-fine', product: 'agentbox' }, product))
       .toBe(taskFolderPath(dir, 'w-fine'));
   });
+
+  // REMOTE CONTROL SKIPS BOTH GATES, so the refusal has to sit on the one line
+  // every spawn passes through. It is resolved before the plan and before the
+  // per-run permission files are written, which is also why a refusal no longer
+  // leaks a pair of those every time it happens.
+  it('starts no session for a remote-control spawn either, and says why', () => {
+    const { sup, product, dir: store } = supervisorOver(dir);
+    made.push(store);
+    foldersCannotBeMadeIn(dir);
+
+    sup.spawnWorker({ id: 'w-remote', product: 'agentbox' }, { remoteOnly: true });
+
+    expect(sup.sessions.has('w-remote')).toBe(false);
+    const told = said.find((s) => s.id === 'w-remote');
+    expect(told?.result).toMatch(/folder/i);
+  });
 });
 
 describe('a row whose folder failed on the folder thread', () => {
@@ -183,6 +199,59 @@ describe('a row whose folder failed on the folder thread', () => {
     const told = said.find((s) => s.id === 'w-async-nofolder');
     expect(told.status).toBe('open');
     expect(told.result).toMatch(/folder/i);
+  });
+
+  // A ROW SOMEBODY FINISHED WITH IS NOT REOPENED BY NEWS THAT ARRIVES LATE.
+  //
+  // `recordSessionResult` writes `status: 'open'`, so saying this in the handler
+  // that catches the failure -- before anything has asked whether this attempt is
+  // still the current one -- would reopen a row that was stopped or closed while
+  // the folder was being made. Codex found this reading the first version, where
+  // the report was made one `.then` too early.
+  it('says nothing about a row that was stopped while its folder was being made', async () => {
+    const { sup, product, spawns } = watched();
+    foldersCannotBeMadeIn(dir);
+
+    expect(sup._folderFirst({ id: 'w-stopped-first', product: 'agentbox' }, product, 'claude', {})).toBe(true);
+    expect(sup.stopSession('w-stopped-first')).toBe(true);
+
+    // Long enough for the failure to have come back and been dropped.
+    await new Promise((r) => setTimeout(r, 600));
+    expect(said.length).toBe(0);
+    expect(spawns.length).toBe(0);
+  });
+
+  // SAID ONCE WHILE IT KEEPS FAILING, AND SAID AGAIN AFTER IT WORKS. A tick that
+  // asks over and over is not news, so the row is not rewritten every time; but a
+  // row that got a folder and later cannot is told again, or the second failure
+  // is the silent one.
+  it('says it once per run of failures, and again after one works', () => {
+    const { sup } = watched();
+    const item = { id: 'w-twice', product: 'agentbox' };
+
+    sup._couldNotGetAFolder(item, Error('first time'));
+    sup._couldNotGetAFolder(item, Error('and again'));
+    expect(said.length).toBe(1);
+
+    sup._gotAFolderAfterAll('w-twice');
+    sup._couldNotGetAFolder(item, Error('after it had worked'));
+    expect(said.length).toBe(2);
+    expect(said[1].result).toMatch(/after it had worked/);
+  });
+
+  // AND A REPORT THAT COULD NOT BE WRITTEN IS NOT COUNTED AS SAID. Marking it
+  // first would mean a store write that failed -- likeliest during exactly the
+  // disk trouble that caused this -- silenced every later attempt too.
+  it('does not count a report it could not write', () => {
+    const { sup } = watched();
+    const item = { id: 'w-unwritable', product: 'agentbox' };
+    sup.store.recordSessionResult = () => { throw Error('the store is not writable'); };
+
+    sup._couldNotGetAFolder(item, Error('no folder'));
+    sup.store.recordSessionResult = (slug, id, patch) => said.push({ id, ...patch });
+    sup._couldNotGetAFolder(item, Error('no folder'));
+
+    expect(said.length).toBe(1);
   });
 
   it('still starts a row whose folder can be made', async () => {
