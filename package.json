@@ -122,6 +122,7 @@
       "main/**/*",
       "shared/**/*",
       "preload.cjs",
+      "build/notification-icon.png",
       "briefs/**/*",
       "!briefs/founder.md",
       "!briefs/writing-rules.md",
