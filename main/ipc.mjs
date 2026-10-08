@@ -862,6 +862,14 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     return store.scheduleItem(product, id, runAt);
   });
 
+  // Snooze changes when a person sees the thread, never what an agent does.
+  ipcMain.handle('zero:snooze', (_e, { product, id, snoozedUntil }) => {
+    if (isAgentRow(id)) return { ok: false };
+    const item = store.snoozeItem(product, id, snoozedUntil);
+    push();
+    return item;
+  });
+
   // said about an agent instead of about a task. The row it moves stands for
   // somebody's terminal, so this writes to no ledger, sends no message and
   // stops no process: it records the moment her inbox should raise the agent
