@@ -10,7 +10,7 @@ import { hookFailure } from '../shared/hook-failure.mjs';
 import { taskCommand } from './task-commands.mjs';
 import { providerCommand, reviewTarget, nativeCommandNames } from '../shared/provider-commands.mjs';
 import { compactCodexThread } from './codex-compaction.mjs';
-import {readSystemTemplate} from './instruction-settings.mjs';
+import {agentInstructionsUnified, readSystemTemplate, writeInstruction} from './instruction-settings.mjs';
 import {fillName} from '../shared/product-name.mjs';
 // The supervisor: deterministic, boring, and the only part of the app that talks
 // to the brain. It spawns headless claude sessions on the founder's plan, one
@@ -5060,7 +5060,7 @@ export class Supervisor {
   // never ours.
   messageRules() {
     let theirs = '';
-    if (this.messageRulesFile() !== this.messageRulesDefaultFile()) {
+    if (!agentInstructionsUnified(this.userDir) && this.messageRulesFile() !== this.messageRulesDefaultFile()) {
       try { theirs = fs.readFileSync(this.messageRulesFile(), 'utf8').trim(); } catch {}
     }
     const ours = this.shippedMessageRules();
@@ -5116,6 +5116,7 @@ export class Supervisor {
   // What the settings box shows: the user's own words and nothing of ours
   // (w-3ec9f07978), so it opens empty until they write something.
   readMessageRules() {
+    if (agentInstructionsUnified(this.userDir)) return this.readStanding();
     try {
       return fs.readFileSync(this.messageRulesFile(), 'utf8');
     } catch (err) {
@@ -5130,6 +5131,7 @@ export class Supervisor {
   // a state on disk that nothing later mistakes for a fresh install and
   // re-seeds.
   writeMessageRules(text) {
+    if (agentInstructionsUnified(this.userDir)) return this.writeStanding(text);
     const file = this.messageRulesFile();
     const tmp = `${file}.tmp-${process.pid}`;
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -5173,11 +5175,7 @@ export class Supervisor {
   // Written whole, through a rename, because the fleet reads this file on
   // every spawn: a half-written save is a session briefed with half a rule.
   writeStanding(text) {
-    const file = this.standingFile();
-    const tmp = `${file}.tmp-${process.pid}`;
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(tmp, typeof text === 'string' ? text : '', 'utf8');
-    fs.renameSync(tmp, file);
+    return writeInstruction(this.userDir, 'rules', typeof text === 'string' ? text : '');
   }
 
   /* ---------------------------- the second engine ------------------------- */

@@ -32,6 +32,7 @@ import { spawn } from 'node:child_process';
 import { loadConfig } from './config.mjs';
 import { Store } from './store.mjs';
 import { Supervisor } from './supervisor.mjs';
+import { carryHerBriefsAcross, joinMessageRules, setAsideShippedMessageRules, unifyAgentInstructions } from './instruction-settings.mjs';
 import { registerIpc } from './ipc.mjs';
 import { reportFromRenderer } from './crash-report.mjs';
 import * as workItemsDisk from './store/work-items.mjs';
@@ -152,6 +153,12 @@ function answerWhatOnlyTheWindowAnswered(ipcMain) {
  */
 export async function bootHeadless({ dataDir = repoRoot, appDir = repoRoot, userDir = dataDir } = {}) {
   const config = loadConfig(dataDir);
+  // The browser editor uses the same user files as the desktop. Finish the
+  // older migrations first so only user content enters the combined file.
+  carryHerBriefsAcross(appDir, userDir);
+  joinMessageRules(appDir, userDir);
+  setAsideShippedMessageRules(appDir, userDir);
+  unifyAgentInstructions(appDir, userDir);
   // THE APP'S OWN HOME IS THE STORE ROOT, BEFORE ANYTHING OPENS THE STORE, as
   // main/main.mjs does for the desktop. The ledgers live under the home the
   // store reads from this variable, and every worker is handed `storeRoot` as

@@ -21,7 +21,7 @@ import { storeRootEnv } from './store/home.mjs';
 import { Supervisor } from './supervisor.mjs';
 import { startCodexWatch } from './codex-watch.mjs';
 import { registerIpc } from './ipc.mjs';
-import { carryHerBriefsAcross, joinMessageRules, setAsideShippedMessageRules } from './instruction-settings.mjs';
+import { carryHerBriefsAcross, joinMessageRules, setAsideShippedMessageRules, unifyAgentInstructions } from './instruction-settings.mjs';
 import * as approvals from './approvals.mjs';
 import { recoveryToast } from '../shared/recovery.mjs';
 import { dataFolderName, isNewUserBuild } from '../shared/side-build.mjs';
@@ -206,6 +206,9 @@ try {
   // AND A BOX THAT AN OLDER JOIN FILLED WITH ONLY OUR TEXT IS EMPTIED, ONCE
   // (w-3ec9f07978). Kept as a restore point; our rules ride from the checkout.
   if (setAsideShippedMessageRules(appDir, userDir)) console.log('zero: the message rules box held only the shipped rules; set aside as a restore point');
+  // Both kinds of user rules now live in founder.md. Only user content is
+  // appended; the app's message defaults continue to come from the bundle.
+  if (unifyAgentInstructions(appDir, userDir)) console.log('zero: combined the general and writing instructions');
 } catch (err) {
   console.warn(`zero: could not carry her instructions into ${userDir}: ${err.message}`);
 }
