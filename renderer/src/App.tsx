@@ -6178,9 +6178,9 @@ export default function App() {
       {newProject && (
         <NewProject
           onRefused={(say) => showToast(say)}
-          onCreate={async ({ name, repoPath }) => {
+          onCreate={async ({ name, repoPath, codexFolder }) => {
             try {
-              const made = await api.createProduct({ name, repoPath }) as { slug?: string } | null;
+              const made = await api.createProduct({ name, repoPath, codexFolder }) as { slug?: string } | null;
               setNewProject(false);
               const slug = made?.slug ?? null;
               // The composer remembers by slug, so the project just made is the
@@ -6189,7 +6189,7 @@ export default function App() {
               // The folder as the person writes it, `~` and all, the way the
               // rail and Settings write one. It is the only confirmation of
               // WHICH folder they picked, so it is worth reading.
-              showToast(`New project: ${name} · its code is in ${shortFolder(repoPath)}`);
+              showToast(`New project: ${name} · its code is in ${repoPath ? shortFolder(repoPath) : '~/Documents/Codex'}`);
               await refresh();
               /* * AND THE TUTORIAL OFFERS ITSELF HERE.
 
@@ -6227,6 +6227,7 @@ export default function App() {
               // exists". Picking the same folder twice is the common one.
               setNewProject(false);
               showToast(whyNotMade((err as Error).message, name));
+              if (codexFolder) { setNewProject(true); throw err; }
             }
           }}
           onClose={() => setNewProject(false)}

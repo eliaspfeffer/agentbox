@@ -584,7 +584,7 @@ export function ThreadComposer({
       {offered.map((p) => (
         <button key={p.slug} type="button" data-item className={`tc-row ${p.slug === product?.slug ? 'on' : ''}`} onPointerEnter={hover}
           onClick={() => { pickProject(p.slug); close('text'); }}>
-          <Swatch slug={p.slug} /><span className="tc-row-label">{p.name}</span>
+          <Swatch slug={p.slug} /><span className="tc-row-label">{p.personal ? 'Ohne Projekt' : p.name}</span>
         </button>
       ))}
       {/* MAKING A PROJECT IS A THING YOU CAN DO FROM HERE, ALWAYS (approved
@@ -875,7 +875,7 @@ export function ThreadComposer({
               <button type="button" data-trigger className={`tc-chip ${open === 'project' ? 'open' : ''}`} title={product?.name ?? 'Which project'}
                 aria-haspopup="listbox" aria-expanded={open === 'project'} onClick={() => toggle('project')} onKeyDown={triggerKeys('project')}>
                 {product && <Swatch slug={product.slug} />}
-                <span ref={projName} className={`tc-chip-name ${projCut ? 'cut' : ''}`}>{product?.name ?? 'No project'}</span>
+                <span ref={projName} className={`tc-chip-name ${projCut ? 'cut' : ''}`}>{product?.personal ? 'Ohne Projekt' : product?.name ?? 'Ohne Projekt'}</span>
               </button>
               {open === 'project' && projectMenu}
             </span>

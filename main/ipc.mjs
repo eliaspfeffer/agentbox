@@ -939,8 +939,8 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // an archive, so it does not collide with what done means on a work item.
   ipcMain.handle('zero:end-repeat', (_e, { product, id }) => store.endRepeat(product, id));
 
-  ipcMain.handle('zero:create-product', (_e, { name, repoPath }) => {
-    const out = store.createProduct({ name, repoPath });
+  ipcMain.handle('zero:create-product', (_e, { name, repoPath, codexFolder }) => {
+    const out = store.createProduct({ name, repoPath, codexFolder });
     // (privacy page 5.1). The count is the whole payload; the path it was
     // connected to never leaves.
     if (typeof repoPath === 'string' && repoPath.trim()) analytics.track('repo_connected');

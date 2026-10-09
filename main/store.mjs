@@ -5,6 +5,7 @@
 
 import fs from 'node:fs';
 import os from 'node:os';
+import { codexFolder } from './codex-folder.mjs';
 import path from 'node:path';
 import { loadStore } from './store-modules.mjs';
 import { Repeats } from './repeats.mjs';
@@ -528,7 +529,8 @@ export class Store {
     // The 'founder' label is the human-in-the-loop marker: only items the
     // founder composed (or explicitly approved) execute; agent-filed items
     // are proposals until then.
-    const allLabels = [...new Set(['founder', ...(labels ?? [])])];
+    const personal = this.listProducts().find(p => p.slug === slug)?.personal;
+    const allLabels = [...new Set(['founder', ...(personal ? ['projectless'] : []), ...(labels ?? [])])];
     const created = workItemsDisk.createWorkItem(
       dir,
       { title, kind, priority, labels: allLabels },
@@ -648,13 +650,15 @@ export class Store {
   //
   // `repoPath` is optional and stays optional. Cleared on the card, the project
   // is made without a folder, exactly as it was before this change.
-  createProduct({ name, repoPath }) {
+  createProduct({ name, repoPath, codexFolder: makeFolder = false }) {
+    if (typeof name !== 'string' || !name.trim() || name.length > 100) throw Error('Please enter a project name (up to 100 characters).');
+    name = name.trim();
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
     if (!slug) throw new Error('a product needs a name');
     const dir = path.join(this.config.accountRoot, slug);
     if (fs.existsSync(path.join(dir, 'project.json'))) throw new Error(`product ${slug} already exists`);
 
-    let repo = typeof repoPath === 'string' ? repoPath.trim() : '';
+    let repo = makeFolder ? codexFolder(name) : typeof repoPath === 'string' ? repoPath.trim() : '';
     if (repo) {
       repo = path.resolve(repo.startsWith('~') ? path.join(os.homedir(), repo.slice(1)) : repo);
       // AND IT IS NOT THE WHOLE MAC. The picker refuses these already;

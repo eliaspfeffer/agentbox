@@ -1,3 +1,4 @@
+import { codexFolder } from './codex-folder.mjs';
 import { readComposerCatalog, composerReferences, readPageReferences, readBrowserTabs } from '../shared/composer-catalog.mjs';
 import { claudeActivity, codexActivity, currentActivity } from './agent-activity.mjs';
 import { taskRemoteControl } from './task-remote-control.mjs';
@@ -1558,6 +1559,7 @@ export class Supervisor {
    * files exactly as the last session left them, uncommitted work included.
    */
   workFolderFor(item, product) {
+    if (product?.personal && !product.repoPath && item.labels?.includes('projectless')) return codexFolder(item.title || 'Chat', { at: item.createdAt, id: item.id });
     const base = this.productFolder(product);
     // A PROJECT WITH NO REPOSITORY NEVER PROMISED ISOLATION, and has run in the
     // product folder since before folders existed. That is the absence of a

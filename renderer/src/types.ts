@@ -1046,7 +1046,7 @@ declare global {
       setRepeat(p: { product: string; id: string; rule: Partial<RepeatShape & { title: string; body: string; priority: number }> }): Promise<RepeatRule>;
       endRepeat(p: { product: string; id: string }): Promise<RepeatRule>;
       pauseSupervisor(paused: boolean): Promise<SupervisorStatus>;
-      createProduct(p: { name: string; repoPath?: string | null }): Promise<{ slug: string }>;
+      createProduct(p: { name: string; repoPath?: string | null; codexFolder?: boolean }): Promise<{ slug: string }>;
       // THE FIRST RUN. Both optional for the same reason chooseFolder is: a
       // page kept alive by ⌘R can be attached to a main process built before
       // either channel existed, and the walk has to fall back rather than

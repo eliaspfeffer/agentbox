@@ -1011,7 +1011,7 @@ export const api = {
     return zero.projectInstructionsWrite({ product, text });
   },
 
-  async createProduct(p: { name: string; repoPath?: string | null }) {
+  async createProduct(p: { name: string; repoPath?: string | null; codexFolder?: boolean }) {
     if (useFixtures) return null;
     return window.zero!.createProduct(p);
   },
