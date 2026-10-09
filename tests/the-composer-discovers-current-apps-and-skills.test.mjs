@@ -51,7 +51,7 @@ it('lists only browser pages from the already configured local Chrome connection
 });
 it('never puts sign-in tokens or credential-bearing URLs into a browser reference',async()=>{
  const {readBrowserTabs}=await import('../shared/composer-catalog.mjs');
- const fetcher=async()=>({ok:true,json:async()=>[{type:'page',url:'https://example.org/#access_token=fixture'},{type:'page',url:'https://example.org/callback?code=fixture&state=fixture'},{type:'page',url:'https://user:password@example.org'},{type:'page',title:'Inbox',url:'https://example.org/#inbox'}]});
+ const fetcher=async()=>({ok:true,json:async()=>[{type:'page',url:'https://example.org/#access_token=fixture'},{type:'page',url:'https://example.org/callback?code=fixture&state=fixture'},{type:'page',url:'https://user:password@example.org'},{type:'page',title:'Inbox',url:'https://example.org/#inbox'}]}); // public-check: allow — deliberately fake credentials on example.org test URL rejection.
  expect((await readBrowserTabs({'chrome-devtools':{args:['--port','9222']}},fetcher)).map(r=>r.name)).toEqual(['Inbox']);
 });
 it('also discovers integrations before a new chat has an item id',async()=>{
