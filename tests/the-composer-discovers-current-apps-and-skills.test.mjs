@@ -54,3 +54,8 @@ it('never puts sign-in tokens or credential-bearing URLs into a browser referenc
  const fetcher=async()=>({ok:true,json:async()=>[{type:'page',url:'https://example.org/#access_token=fixture'},{type:'page',url:'https://example.org/callback?code=fixture&state=fixture'},{type:'page',url:'https://user:password@example.org'},{type:'page',title:'Inbox',url:'https://example.org/#inbox'}]});
  expect((await readBrowserTabs({'chrome-devtools':{args:['--port','9222']}},fetcher)).map(r=>r.name)).toEqual(['Inbox']);
 });
+it('also discovers integrations before a new chat has an item id',async()=>{
+ const {Supervisor}=await import('../main/supervisor.mjs');const request=vi.fn(async()=>({data:[]}));
+ const fake={config:{},store:{readItem:()=>null,listProducts:()=>[{slug:'project',dir:'/fixture'}]},_codexHome:()=>null,_codexServer:()=>({handshake:Promise.resolve(),client:{request}}),productFolder:p=>p.dir};
+ await Supervisor.prototype.composerCatalog.call(fake,'project','','codex');expect(request).toHaveBeenCalledWith('skills/list',{cwds:['/fixture'],forceReload:true});
+});

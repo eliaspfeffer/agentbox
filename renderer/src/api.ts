@@ -448,7 +448,7 @@ export const api = {
     if(!window.zero?.terminal) throw new Error(`Restart ${NAME} to use the terminal.`);
     return window.zero.terminal(p);
   },
-  async composerCatalog(p: {product: string; id: string}) {
+  async composerCatalog(p: {product: string; id: string; engine?: string}) {
     if (useFixtures) return [];
     return window.zero!.composerCatalog(p);
   },

@@ -5072,9 +5072,9 @@ export class Supervisor {
     return { args, command: !!command, ...(review ? { reviewTarget: reviewTarget(review.args) } : {}), resumeProfile, prompt, system, resumeId, model, effort, product: product?.slug ?? null, answerMode: item?.answerMode ?? null, ...(pictures.length ? { pictures } : {}) };
   }
 
-  async composerCatalog(product, id) {
-    const item = this.store.readItem(product, id);
-    if (!item || this._engineFor(item) !== 'codex') return [];
+  async composerCatalog(product, id, engine = null) {
+    const item = id ? this.store.readItem(product, id) : null;
+    if (id ? !item || this._engineFor(item) !== 'codex' : engine !== 'codex') return [];
     const entry = this._codexServer(this._codexHome());
     await entry.handshake;
     const cwd = this.productFolder(this.store.listProducts().find(p => p.slug === product)) ?? this.config.home ?? os.homedir();
