@@ -6015,6 +6015,7 @@ export class Supervisor {
       cwd,
       model: word || null,
       instructions: plan?.system ?? null,
+      plugins: this.config.codexPlugins === true,
       mcpServers,
       storeServer,
       // WHAT SHE PICKED, AND IT IS ASKED FOR HERE FOR THE SAME REASON THE MODEL
