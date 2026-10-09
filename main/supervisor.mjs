@@ -1429,7 +1429,7 @@ export class Supervisor {
     try {
       this.store.recordSessionResult(item.product, item.id, {
         result: `This task did not start, because it could not be given a folder of its own to work in${why ? `: ${why}` : '.'}\n\nIt is not run in the checkout ${Name} itself is built from. Two agents in one folder cannot be told apart afterwards, so the change card for this task would show another task's edits as if they were this one's, and that is worse than waiting.\n\nThe usual causes are a full disk, a path the app cannot write to, a file named in .worktreeinclude that cannot be carried into a folder, and another copy of ${Name} over the same checkout standing in that folder already. Then reply here and it will try again.`,
-        status: 'open',
+        status: 'blocked',
       });
       // MARKED AS SAID ONLY ONCE IT HAS BEEN SAID. Marking first means a store
       // write that failed -- which is likeliest during exactly the disk trouble
@@ -1739,7 +1739,7 @@ export class Supervisor {
         if (!cwd) {
           // A null with no error behind it is the folder thread answering that
           // the repoPath is not a repository at all.
-          this._couldNotGetAFolder(entry.item, failed ?? Error('no folder could be made'));
+          this._couldNotGetAFolder(entry.item, failed ?? Error(`The project folder is not a Git repository: ${base}. Choose the folder containing the project's code.`));
           // THEIR WORDS ARE NOT DELIVERED BY A WORKER THAT NEVER STARTED. The
           // queue writes the delivery mark before the spawn and that mark is
           // persisted, so leaving it standing records the reply as handed over

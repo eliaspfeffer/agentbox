@@ -309,7 +309,7 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
   return (
     <>
       <Thread
-        events={events}
+        events={outcome ? [...events, { at: outcome.at, who: 'it', text: clean(outcome.text) }] : events}
         omitted={omitted}
         chat={chat}
         name={THEM}

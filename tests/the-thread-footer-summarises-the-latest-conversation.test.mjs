@@ -1,6 +1,7 @@
 // A lifted Result could lag newer spoken replies. The footer must use the
 // newest message, preserve the request, and never call an unanswered reply done.
 import {describe,it,expect} from 'vitest';
+import fs from 'node:fs';
 import {threadTldr} from '../shared/thread-tldr.mjs';
 const user=(at,text)=>({at,who:'you',text});
 const agent=(at,text)=>({at,who:'it',text});
@@ -28,4 +29,9 @@ describe('current thread TL;DR',()=>{
   expect(threadTldr([agent(1,'a'.repeat(2000))]).text.length).toBeLessThanOrEqual(240);
   expect(threadTldr([],null)).toBeNull();
  });
+});
+
+it('renders the complete lifted answer in the conversation above the short footer',()=>{
+ const source=fs.readFileSync(new URL('../renderer/src/components/ItemThread.tsx',import.meta.url),'utf8');
+ expect(source).toContain("events={outcome ? [...events, { at: outcome.at, who: 'it', text: clean(outcome.text) }] : events}");
 });
