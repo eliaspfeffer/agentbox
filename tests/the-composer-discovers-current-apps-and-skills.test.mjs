@@ -59,3 +59,20 @@ it('also discovers integrations before a new chat has an item id',async()=>{
  const fake={config:{},store:{readItem:()=>null,listProducts:()=>[{slug:'project',dir:'/fixture'}]},_codexHome:()=>null,_codexServer:()=>({handshake:Promise.resolve(),client:{request}}),productFolder:p=>p.dir};
  await Supervisor.prototype.composerCatalog.call(fake,'project','','codex');expect(request).toHaveBeenCalledWith('skills/list',{cwds:['/fixture'],forceReload:true});
 });
+it('shows available skills when another provider never answers',async()=>{
+ vi.useFakeTimers();
+ try{
+  const request=async m=>m==='skills/list'?{data:[{skills:[{name:'new-skill',path:'/fixture/SKILL.md',enabled:true}]}]}:new Promise(()=>{});
+  const result=readComposerCatalog({request},'/fixture');let settled=false;result.then(()=>{settled=true});
+  await vi.advanceTimersByTimeAsync(2000);expect(settled).toBe(true);expect(await result).toEqual([expect.objectContaining({name:'new-skill'})]);
+ }finally{vi.useRealTimers()}
+});
+it('keeps the skill picker responsive when optional Pages configuration hangs',async()=>{
+ const {Supervisor}=await import('../main/supervisor.mjs');vi.useFakeTimers();
+ try{
+  const request=async m=>m==='config/read'?new Promise(()=>{}):m==='skills/list'?{data:[{skills:[{name:'fresh',path:'/fixture/SKILL.md'}]}]}:m==='plugin/installed'?{marketplaces:[]}:{data:[]};
+  const fake={config:{codexPlugins:true},store:{readItem:()=>({id:'task'}),listProducts:()=>[{slug:'project',dir:'/fixture'}]},_engineFor:()=> 'codex',_codexHome:()=>'/fixture',_codexServer:()=>({handshake:Promise.resolve(),client:{request}}),productFolder:p=>p.dir};
+  const result=Supervisor.prototype.composerCatalog.call(fake,'project','task');await vi.advanceTimersByTimeAsync(4000);
+  expect(await result).toEqual([expect.objectContaining({name:'fresh'})]);
+ }finally{vi.useRealTimers()}
+});

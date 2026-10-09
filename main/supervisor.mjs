@@ -1,5 +1,5 @@
 import { codexFolder } from './codex-folder.mjs';
-import { readComposerCatalog, composerReferences, readPageReferences, readBrowserTabs } from '../shared/composer-catalog.mjs';
+import { catalogDeadline, readComposerCatalog, composerReferences, readPageReferences, readBrowserTabs } from '../shared/composer-catalog.mjs';
 import { claudeActivity, codexActivity, currentActivity } from './agent-activity.mjs';
 import { taskRemoteControl } from './task-remote-control.mjs';
 import { taskFolderPath, real, restoreTaskFolder } from './task-folders.mjs';
@@ -5081,19 +5081,20 @@ export class Supervisor {
     await entry.handshake;
     const cwd = this.productFolder(this.store.listProducts().find(p => p.slug === product)) ?? this.config.home ?? os.homedir();
     const rows = await readComposerCatalog(entry.client, cwd);
-    try {
-      const read = await entry.client.request('config/read', {});
-      rows.push(...await readBrowserTabs(read.config?.mcp_servers));
-    } catch { /* A closed browser does not hide the other integrations. */ }
-    if (this.config.codexPlugins === true) {
-      try {
+    const extras = await Promise.allSettled([
+      catalogDeadline((async () => {
+        const read = await entry.client.request('config/read', {});
+        return readBrowserTabs(read.config?.mcp_servers);
+      })()),
+      ...(this.config.codexPlugins === true ? [catalogDeadline((async () => {
         if (!entry.catalogThread) entry.catalogThread = entry.client.request('config/read', {}).then(read =>
           entry.client.startThread({ ...workerThreadParams({ cwd, plugins: true, mcpServers: mcpServerNames(read) }), ephemeral: true })
         ).catch(error => { entry.catalogThread = null; throw error; });
         const { threadId } = await entry.catalogThread;
-        rows.push(...await readPageReferences(entry.client, threadId));
-      } catch { /* Apps and skills still work when Pages are unavailable. */ }
-    }
+        return readPageReferences(entry.client, threadId);
+      })())] : []),
+    ]);
+    rows.push(...extras.flatMap(result => result.status === 'fulfilled' ? result.value : []));
     return rows;
   }
 

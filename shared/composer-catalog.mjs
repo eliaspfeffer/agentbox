@@ -1,10 +1,15 @@
+// Optional providers must not hold the available skills hostage.
+export function catalogDeadline(promise) {
+ let timer;
+ return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Integration catalog timed out.')),1500)})]).finally(()=>clearTimeout(timer));
+}
 // Read the installed provider at use time so installs and removals need no rebuild.
 export async function readComposerCatalog(server, cwd) {
  const sources = await Promise.allSettled([
   server.request('plugin/installed',{cwds:[cwd]}).then(r=>r.marketplaces.flatMap(m=>(m.plugins??[]).filter(p=>p.installed&&p.enabled).map(p=>({kind:'plugin',name:p.interface?.displayName??p.name,description:p.interface?.shortDescription??'',insert:`[$${p.interface?.displayName??p.name}](plugin://${p.id})`,icon:p.interface?.composerIconUrl??p.interface?.logoUrlDark??p.interface?.logoUrl??null})))),
   server.request('skills/list',{cwds:[cwd],forceReload:true}).then(r=>r.data.flatMap(d=>(d.skills??[]).filter(s=>s.enabled!==false).map(s=>({kind:'skill',name:s.name,description:s.interface?.shortDescription??s.shortDescription??s.description??'',insert:`[$${s.name}](${s.path})`,icon:s.interface?.iconSmallUrl??s.interface?.iconLargeUrl??null})))),
   (async()=>{const rows=[];let cursor;do{const r=await server.request('app/list',{forceRefetch:true,...(cursor?{cursor}:{})});rows.push(...r.data.filter(a=>a.isAccessible&&a.isEnabled!==false).map(a=>({kind:'app',name:a.name,description:a.description??'',insert:`[$${a.name}](app://${a.id})`,icon:a.logoUrlDark??a.logoUrl??null})));cursor=r.nextCursor;}while(cursor);return rows;})(),
- ]);
+ ].map(catalogDeadline));
  if(sources.every(s=>s.status==='rejected'))throw new Error('Could not load installed Codex integrations.');
  return sources.flatMap(s=>s.status==='fulfilled'?s.value:[]);
 }

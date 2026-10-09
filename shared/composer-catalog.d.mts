@@ -8,3 +8,5 @@ export function insertCompletion(text: string, range: {start: number; end: numbe
 export function composerReferences(text: string): {type: string; name: string; path: string}[];
 export function readPageReferences(server: {request(method: string, params: unknown): Promise<any>}, threadId: string): Promise<CatalogEntry[]>;
 export function readBrowserTabs(mcpServers: Record<string, any>, fetcher?: typeof fetch): Promise<CatalogEntry[]>;
+
+export function catalogDeadline<T>(promise: Promise<T>): Promise<T>;
