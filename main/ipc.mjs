@@ -1,3 +1,4 @@
+import {desktopLiveSession} from './desktop-live.mjs';
 import { openSourceFile } from './open-source-file.mjs';
 import {submitReply} from './live-replies.mjs';
 import { createEngineSetup } from './engine-setup.mjs';
@@ -534,6 +535,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     }
   });
 
+  ipcMain.handle('zero:desktop-live', (_e, {sdp}) => desktopLiveSession(config.desktopLive, sdp));
   ipcMain.handle('zero:composer-catalog', (_e, { product, id, engine }) => supervisor.composerCatalog(product, id, engine));
   ipcMain.handle('zero:command-catalog', (_e, { product, id }) => supervisor.commandCatalog(product, id));
   ipcMain.handle('zero:remote-control', (_e, {product,id,action}) => supervisor.remoteControl(product,id,action));

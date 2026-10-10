@@ -1,3 +1,5 @@
+import {DesktopLive} from './components/DesktopLive';
+import {desktopLiveActions} from '../../shared/desktop-live-actions.mjs';
 import { previewFocus } from './preview-focus';
 import type {FocusControlStyle} from './focus-control';
 import {reviewLabEnabled} from './review-lab';
@@ -324,6 +326,7 @@ export default function App() {
   // that made them. A failed live reply reads it to decide whether she is
   // still on that conversation or has gone somewhere else.
   const focusedNow = useRef<WorkItem | null>(null);
+  const liveState = useRef<{current: WorkItem | null; rows: WorkItem[]}>({current:null,rows:[]});
   focusedNow.current = focused;
   // THE ROW SHE IS WATCHING A COMMAND ANSWER ON. Set when she sends one of
   // Claude Code's eight from an open task, cleared when she leaves it. It is
@@ -3889,7 +3892,7 @@ export default function App() {
   }, []);
 
   // The reminder survives restarts without stopping or restarting an agent.
-  const snoozeUntil = useCallback(async (target: WorkItem | WorkItem[], ts: number, label: string) => {
+  const snoozeUntil = useCallback(async (target: WorkItem | WorkItem[], ts: number, label: string, reportFailure = false) => {
     const picked = Array.isArray(target) ? target : [target];
     // A ROW SHE PICKED IS A THREAD, NOT AN ITEM. The rule and the measurement
     // are in list-rules. Nothing is added when she snoozes from Scheduled:
@@ -3909,6 +3912,7 @@ export default function App() {
     } catch (err) {
       showToast(`Could not snooze: ${(err as Error)?.message ?? 'the store refused the write'}`);
       refresh();
+      if(reportFailure)throw err;
       return;
     }
     // THE MOMENT IS KEPT, SO THE ROW IS GONE AND THE NEXT TASK IS HERS. The
@@ -4773,6 +4777,16 @@ export default function App() {
     }
   };
 
+  liveState.current = {current: focused, rows: list};
+  const liveExecute = desktopLiveActions({
+    state: () => liveState.current,
+    open: (item: WorkItem | null) => { liveState.current.current = item; setFocused(item); if(item)markSeen(item); },
+    details: async (item: WorkItem) => ({result: item.result, history: await api.itemHistory({product:item.product,id:item.id})}),
+    done: async (item: WorkItem) => {await markDone(item, {stay:true});await flushPending();},
+    reply: async (item: WorkItem, text: string) => {if(item.agent)throw Error('This external chat cannot receive desktop voice replies.');await answerWith(item,text);await flushPending();},
+    later: (item: WorkItem, minutes: number) => snoozeUntil(item, Date.now()+minutes*60000, `in ${minutes} minutes`, true),
+  });
+
   const clearedToday = useMemo(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
     // A quiet run of a repeating task never passed her, so counting it would
@@ -4994,6 +5008,7 @@ export default function App() {
           the sidebar for the single-player launch (w-1b574413db, 2026-10-04).
           `onInvite` is still handed in, for the account menu. */}
       {workspaceNavigation && <WorkspaceNavigation
+        live={<DesktopLive execute={liveExecute} context={{current:focused ? {id:focused.id,title:focused.title,status:focused.status}:null,latestAgentResult:focused?.result||''}} onNotice={showToast}/>}
         update={announcesUpdate(snap?.update, { walking, closed: '' }) ? { installing: !!snap?.update?.installing, version: snap?.update?.newVersion, changes: snap?.update?.changes, behind: snap?.update?.behind, error: snap?.update?.error } : null}
         onUpdate={() => { void api.updateInstall(); }}
         page={settingsOpen ? 'settings' : null} onFeedback={() => setFeedbackOpen(true)} teamPage={teamOpen && !settingsOpen} hasTeam={!!snap?.team?.configured} team={snap?.team ?? null}

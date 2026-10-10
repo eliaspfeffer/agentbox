@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('zero', {
   snapshot: () => ipcRenderer.invoke('zero:snapshot'),
   olderItems: (payload) => ipcRenderer.invoke('zero:older-items', payload),
   dashboard: (slug) => ipcRenderer.invoke('zero:dashboard', slug),
+  desktopLive: (payload) => ipcRenderer.invoke('zero:desktop-live', payload),
   composerCatalog: (payload) => ipcRenderer.invoke('zero:composer-catalog', payload),
   commandCatalog: (payload) => ipcRenderer.invoke('zero:command-catalog', payload),
   remoteControl: (payload) => ipcRenderer.invoke('zero:remote-control', payload),

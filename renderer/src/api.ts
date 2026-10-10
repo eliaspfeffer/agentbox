@@ -448,6 +448,10 @@ export const api = {
     if(!window.zero?.terminal) throw new Error(`Restart ${NAME} to use the terminal.`);
     return window.zero.terminal(p);
   },
+  async desktopLive(p: {sdp: string}) {
+    if (!window.zero?.desktopLive) throw Error(`Restart ${Name} to use GPT Live.`);
+    return window.zero.desktopLive(p);
+  },
   async composerCatalog(p: {product: string; id: string; engine?: string}) {
     if (useFixtures) return [];
     return window.zero!.composerCatalog(p);
