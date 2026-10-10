@@ -3719,7 +3719,7 @@ export default function App() {
   // a message that went nowhere is the exact failure this app cares about most:
   // when the system swallows something the user wrote, they cannot tell it
   // from the work not happening.
-  const replyToAgent = useCallback(async (item: WorkItem, text: string) => {
+  const replyToAgent = useCallback(async (item: WorkItem, text: string, reportFailure = false) => {
     const agent = item.agent;
     if (!agent) return;
     setModal(null);
@@ -3729,6 +3729,7 @@ export default function App() {
     // list instead.
     leaveResolved(item);
     const out = await api.agentReply({ pid: agent.pid, text });
+    if(reportFailure && !out?.ok)throw Error(out?.reason ?? 'The message could not be handed over.');
     // Two true sentences, never one hopeful one. A failed hand-over says so; a
     // send says Sent, which is what it says everywhere else in this app; and a
     // session seen going back to work says the better thing.
@@ -4783,7 +4784,7 @@ export default function App() {
     open: (item: WorkItem | null) => { liveState.current.current = item; setFocused(item); if(item)markSeen(item); },
     details: async (item: WorkItem) => ({result: item.result, history: await api.itemHistory({product:item.product,id:item.id})}),
     done: async (item: WorkItem) => {await markDone(item, {stay:true});await flushPending();},
-    reply: async (item: WorkItem, text: string) => {if(item.agent)throw Error('This external chat cannot receive desktop voice replies.');await answerWith(item,text);await flushPending();},
+    reply: async (item: WorkItem, text: string) => {if(item.agent)await replyToAgent(item,text,true);else await answerWith(item,text);await flushPending();},
     later: (item: WorkItem, minutes: number) => snoozeUntil(item, Date.now()+minutes*60000, `in ${minutes} minutes`, true),
   });
 
