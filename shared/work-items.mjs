@@ -705,11 +705,14 @@ export function threadOf(lines, id) {
   // and re-sends an unchanged body is the ordinary case, and the second copy is
   // not a turn: it is the store's shape leaking into what reads as a transcript.
   const out = [];
-  const seen = new Set();
+  const seen = new Map(THREAD_FIELDS.map(field => [field, new Set()]));
   for (const turn of turns) {
-    const key = `${turn.field}:${turn.text}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    // The same words after the other speaker replies are a new turn.
+    if (turn.field === 'answer') seen.get('result').clear();
+    if (turn.field === 'result') seen.get('answer').clear();
+    const fieldSeen = seen.get(turn.field);
+    if (fieldSeen.has(turn.text)) continue;
+    fieldSeen.add(turn.text);
     out.push(turn);
   }
   return out;

@@ -13,8 +13,7 @@ import {IntegrationPicker} from '../components/IntegrationPicker';
 // read it instead, because "who sees this" is the one thing a message to one
 // person has to be clear about.
 //
-// THE MODEL IS THE HARNESS. There is no Engine field: an Anthropic model runs in
-// Claude Code and a GPT model in Codex, so the two can never disagree. The rules
+// To names the harness; Model lists only that harness's models. The rules
 // for that, for the Recent list, for Send later and for the title are pure and
 // tested in ./composer-rules.ts; this file only draws them and sends.
 //
@@ -232,10 +231,10 @@ export function ThreadComposer({
   };
   const labelOf = (p: ModelPick) => engineModelLabel(p.engine, p.model, modelOpts);
   const recent = useMemo(
-    () => recentModels(items, { codexModels, codexDefault, codexOffered, claudeOffered }),
-    [items, codexModels, codexDefault, codexOffered, claudeOffered],
+    () => recentModels(items, { codexModels, codexDefault, codexOffered: codexOffered && pick.engine === 'codex', claudeOffered: claudeOffered && pick.engine === 'claude' }),
+    [items, codexModels, codexDefault, codexOffered, claudeOffered, pick.engine],
   );
-  const every = useMemo(() => allModels({ codexModels, codexOffered, claudeOffered }), [codexModels, codexOffered, claudeOffered]);
+  const every = useMemo(() => allModels({ codexModels, codexOffered: codexOffered && pick.engine === 'codex', claudeOffered: claudeOffered && pick.engine === 'claude' }), [codexModels, codexOffered, claudeOffered, pick.engine]);
   const more = moreCount(recent, every);
 
   /* ------------------------------ menus --------------------------------- */
@@ -474,11 +473,14 @@ export function ThreadComposer({
 
   const toMenu = (
     <div className="tc-menu tc-drop tc-to-menu" role="listbox" aria-label="To" onKeyDown={menuKeys}>
-      {!adding && (
-        <button type="button" data-item className={`tc-row ${person ? '' : 'on'}`} onPointerEnter={hover} onClick={() => chooseTo('agent')}>
-          <AgentFace /><span className="tc-row-label">Agent</span>
+      {!adding && engineRows.map((engine) => (
+        <button key={engine.id} type="button" data-item className={`tc-row ${!person && pick.engine === engine.id ? 'on' : ''}`} onPointerEnter={hover} onClick={() => {
+          pickModel({ engine: engine.id as Harness, model: readLastModel(undefined, engine.id, codexDefault) ?? defaultModelFor(engine.id, codexDefault) });
+          chooseTo('agent');
+        }}>
+          <AgentFace /><span className="tc-row-label">{engine.label}</span>
         </button>
-      )}
+      ))}
       {team && others.length > 0 && (<>
         {!adding && <span className="tc-sep" />}
         <span className="tc-menu-head">People</span>
@@ -778,7 +780,7 @@ export function ThreadComposer({
               <button type="button" data-trigger className={`tc-word ${open === 'to' ? 'open' : ''}`} aria-haspopup="listbox" aria-expanded={open === 'to'}
                 onClick={() => toggle('to')} onKeyDown={triggerKeys('to')}>
                 {person ? <Face person={person} /> : <AgentFace />}
-                <span className="tc-word-text">{person ? person.name : 'Agent'}</span>
+                <span className="tc-word-text">{person ? person.name : engineLabel(pick.engine)}</span>
               </button>
               {extra.map((p) => (
                 <span key={p.id} className="tc-also">
