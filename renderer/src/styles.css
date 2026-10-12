@@ -8712,3 +8712,9 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
 .row-hover-actions .row-key { display: inline-flex; align-items: flex-start; gap: 8px; white-space: normal; text-align: left; max-width: 100%; margin: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--tag-radius); background: transparent; color: var(--text-dim); font: inherit; font-size: 12px; cursor: pointer; }
 .row-hover-actions .row-key span { overflow-wrap: anywhere; min-width: 0; }
 .row-hover-actions .row-key:hover, .row-hover-actions .row-key:focus-visible { border-color: var(--text-faint); color: var(--text); }
+
+.dictation-buttons {display:inline-flex;gap:6px;align-items:center;font-size:12px;}
+.dictation-buttons button {font:inherit;background:transparent;color:var(--text-dim);border:1px solid var(--line);padding:5px 8px;cursor:pointer;}
+.dictation-jobs {position:fixed;bottom:16px;left:16px;z-index:1000;max-width:min(260px,calc(100vw - 32px));max-height:35vh;overflow:auto;padding:8px;background:var(--skin-solid);border:1px solid var(--line);font-size:12px;}
+
+.dictation-jobs textarea {display:block;width:100%;box-sizing:border-box;min-height:60px;}

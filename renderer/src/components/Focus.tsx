@@ -1,3 +1,4 @@
+import {DictationButtons} from './Dictation';
 import {completionQuery, completionMatches, insertCompletion} from '../../../shared/composer-catalog.mjs';
 import { RemoteControl } from './RemoteControl';
 import {DirectReview} from './DirectReview';
@@ -45,7 +46,9 @@ import { commandBeingWritten, enterWaitsForWords, holdingHint, rowKey, rowSays, 
 import { commandDraft } from '../../../shared/claude-commands.mjs';
 import { CompactionResult, runCompaction, runCommand } from './CompactionResult';
 import { codexCommand, COMPACTION_COPY } from '../../../shared/codex-commands.mjs';
-import { DEFAULT_ENGINE } from '../../../shared/engines.mjs';
+import { EnginePicker } from './EnginePicker';
+import {readLastModel} from '../models';
+import { DEFAULT_ENGINE, type Engine } from '../../../shared/engines.mjs';
 import { ago, dayLabel, itemOptions, offerIsLive, optionsFrom, parseOptions, parseRepeat } from '../format';
 import { ruleIdOf } from '../../../shared/repeats.mjs';
 import { WhenPicker } from './When';
@@ -64,7 +67,7 @@ import { opensInPane } from '../doc-pane';
 import { watchScrollGutter } from '../scroll-gutter';
 import { artifactUrlTransform, isMediaPath, productPath, remarkArtifactPaths } from '../remark-artifact-paths';
 import { api } from '../api';
-import { draftKey, readDraft, saveDraft, clearDraft, readDraftAttachments, saveDraftAttachments, type SentDraft } from '../drafts';
+import { draftKey, readDraft, saveDraft, restoreDraft, clearDraft, readDraftAttachments, saveDraftAttachments, type SentDraft } from '../drafts';
 import { withQuote } from '../team/chat-quote';
 import { THREAD_WIDTH, THREAD_WIDTH_KEY, clampThreadWidth, threadToOpen } from '../team/chat-threads';
 import { whatWaits } from '../../../shared/team-rules.mjs';
@@ -426,7 +429,7 @@ function ArtifactEmbed({ product, path, fallback, open, onOpen }: {
 // not the user's, and it is the part that was unnecessary. `filesFromRuns` stays,
 // because App.tsx still reads it to choose the design a card opens itself on.
 
-export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlot, inlineArtifacts, headerTarget, cornerHeaderTarget, crumbFrom, item, parent, blockedBy, filed = [], runningMode, engineChoice, runningEngine, codexModels, codexModelDefault, session, live, stoppable: stoppableIn, productDir, repoDir, selectedOption, interruptedFrom, onBackToInterrupted, returnedFromSnooze, scheduledUntil, scheduledByAgent, replyOpen, sending, stalled, openDoc, resumeAt, onScrolled, onOpenDoc, onRedeliver, onUnschedule, onClose, onResolve, onPick, onReply, onReplySend, onReplyClose, onStop, onRunNow, onReopen, onSnooze, onReveal, onOpenItem, onApproveFiled, onRejectFiled, onNotice, onHandToAgent, onAddPeople }: {
+export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlot, inlineArtifacts, headerTarget, cornerHeaderTarget, crumbFrom, item, parent, blockedBy, filed = [], runningMode, engineChoice, runningEngine, engineChoices, codexModels, codexModelDefault, session, live, stoppable: stoppableIn, productDir, repoDir, selectedOption, interruptedFrom, onBackToInterrupted, returnedFromSnooze, scheduledUntil, scheduledByAgent, replyOpen, sending, stalled, openDoc, resumeAt, onScrolled, onOpenDoc, onRedeliver, onUnschedule, onClose, onResolve, onPick, onReply, onReplySend, onReplyClose, onStop, onRunNow, onReopen, onSnooze, onReveal, onOpenItem, onApproveFiled, onRejectFiled, onNotice, onHandToAgent, onAddPeople }: {
   previewSample?: string;
   /**
    * A MESSAGE FROM A PERSON IS NOT WORK UNTIL SHE SAYS SO. The one line under
@@ -471,6 +474,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   codexModels?: ModelChoice[];
   codexModelDefault?: string | null;
   runningEngine?: string | null;
+  engineChoices?: Engine[];
   // WHERE A RELOAD SAYS SHE WAS, and only a reload: it names the task it
   // belongs to so it can never be spent on the wrong one, and clicking into a
   // task never sets it.
@@ -539,7 +543,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   onResolve: () => void;
   onPick: (n: number) => void;
   onReply: () => void;
-  onReplySend: (text: string, priority?: number, repeat?: RepeatRuleValue | null, sent?: SentDraft, mode?: AnswerMode | null, pick?: { model: string | null; effort: string | null }) => void;
+  onReplySend: (text: string, priority?: number, repeat?: RepeatRuleValue | null, sent?: SentDraft, mode?: AnswerMode | null, pick?: { model: string | null; effort: string | null; engine?: string | null; background?: boolean }) => void;
   onReplyClose: () => void;
   onStop: () => void;
   // Run now, the three-dot menu's row on a waiting task.
@@ -1740,7 +1744,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
                than beside the box: that row is where this card already keeps
                the things you press. It is handed in whole so there is one stop
                button in the app and this card cannot grow a second. */
-            <DockComposer item={item} runningMode={runningMode} runningEngine={runningEngine} codexModels={codexModels} codexModelDefault={codexModelDefault} onSend={onReplySend} onClose={onReplyClose} onNotice={onNotice} openModel={openModel} talkTo={direct ? talkNames : null} stop={stopButton} />
+            <DockComposer item={item} runningMode={runningMode} runningEngine={runningEngine} engineChoices={engineChoices} codexModels={codexModels} codexModelDefault={codexModelDefault} onSend={onReplySend} onClose={onReplyClose} onNotice={onNotice} openModel={openModel} talkTo={direct ? talkNames : null} stop={stopButton} />
           ) : (
             /*
              * THE FOLDED BOX SHOWS WHAT IS IN IT. A pill saying "Reply…" over
@@ -1961,7 +1965,7 @@ function ModePicker({ value, options, label, onChange }: {
   );
 }
 
-function DockComposer({ item, runningMode, runningEngine, codexModels = [], codexModelDefault = null, onSend, onClose, onNotice, stop, openModel = false, talkTo = null }: {
+function DockComposer({ item, runningMode, runningEngine: initialEngine, engineChoices, codexModels = [], codexModelDefault = null, onSend, onClose, onNotice, stop, openModel = false, talkTo = null }: {
   item: WorkItem;
   /** On a conversation with a person, everyone's first name: the box replies
    *  to them, and nothing about an agent, a priority or a model is offered. */
@@ -1980,6 +1984,7 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
    *  "which engine is this row on" is a copy that can disagree with the one the
    *  supervisor actually spawns. */
   runningEngine?: string | null;
+  engineChoices?: Engine[];
   /**
    * The Codex models this Mac has and the one it defaults to, for the model
    *  drawer. Empty on a Mac with no Codex on it, which is what `ModelPicker`
@@ -1987,7 +1992,7 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
    *  and the new-task card cannot show two different lists. */
   codexModels?: ModelChoice[];
   codexModelDefault?: string | null;
-  onSend: (text: string, priority?: number, repeat?: RepeatRuleValue | null, sent?: SentDraft, mode?: AnswerMode | null, pick?: { model: string | null; effort: string | null }) => void;
+  onSend: (text: string, priority?: number, repeat?: RepeatRuleValue | null, sent?: SentDraft, mode?: AnswerMode | null, pick?: { model: string | null; effort: string | null; engine?: string | null; background?: boolean }) => void;
   onClose: () => void;
   /**
    * HOW A MODE CHANGE IS ANNOUNCED NOW THAT NOTHING SITS IN THE FOOTER.So the
@@ -2002,6 +2007,8 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
    *  model drawer opens with it (w-e731ca9376). */
   openModel?: boolean;
 }) {
+  const [runningEngine,setProvider] = useState(initialEngine ?? DEFAULT_ENGINE);
+  const dictationItem=useRef<string|null>(null);dictationItem.current=`${item.product}:${item.id}`;useEffect(()=>()=>{dictationItem.current=null;},[]);
   // A CONVERSATION WITH A PERSON ASKS FOR A REPLY TO THEM, not for the
   // agent's next step. Set on the box itself so the one literal sentence the
   // reply box is pinned to stays the agent's.
@@ -2063,10 +2070,11 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
   const [model, setModel] = useState<string | null>(item.model ?? null);
   const [effort, setEffort] = useState<string | null>(item.effort ?? null);
   useEffect(() => {
+    setProvider(initialEngine ?? DEFAULT_ENGINE);
     setTouched(false);
     setModel(item.model ?? null);
     setEffort(item.effort ?? null);
-  }, [item.product, item.id, item.model, item.effort]);
+  }, [item.product, item.id]);
   const ref = useRef<HTMLTextAreaElement>(null);
   // The hidden file input the formatting bar's attach button opens.
   const filePicker = useRef<HTMLInputElement>(null);
@@ -2181,7 +2189,7 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
      runs, so reading `text` there would send the box as it stood BEFORE the
      pick. Every other caller passes nothing and sends the box, exactly as it
      always did. (w-5d1ad29efa, 2026-08-29.) */
-  const send = async (spoken?: string) => {
+  const send = async (spoken?: string, background=false) => {
     if (!(spoken ?? text).trim() && !attachments.length) return;
     // AN AGENT WITH NO PROJECT DOES NOT GO OUT. The footer already says why;
     // ⌘↵ says it again rather than doing nothing.
@@ -2217,7 +2225,7 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
     const words = (spoken ?? text).trim();
     const sent: SentDraft = { words, attachments };
     const attachedMd = await persistAttachments(item.product, attachments);
-    clearDraft(item);
+    if(!background || readDraft(item)===text)clearDraft(item);
     // AND WHAT THIS ONE MESSAGE MAY DO, if she changed it. `null` is not the
     // same as leaving it out: it CLEARS a mode set on an earlier reply and puts
     // the thread back on the project's own setting, so it is sent whenever the
@@ -2227,7 +2235,7 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
     // In a conversation, every agent mention goes out as its link, carrying the
     // project, model and effort the card holds (../team/agent-mentions.ts).
     onSend([chat.encode(words), attachedMd].filter(Boolean).join('\n\n'), prio ? priorityValueOf(prio) : undefined, repeat, sent, mode,
-      touched ? { model, effort } : undefined);
+      background ? { model, effort, engine: runningEngine, background } : touched ? { model, effort, engine: runningEngine } : undefined);
   };
   const hasDraft = !!text.trim() || attachments.length > 0;
   // THE SLASH MENU, AND THE MODE THAT IS ALWAYS ON THE SCREEN.
@@ -2282,7 +2290,7 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
   // control is honest on either engine. An external agent row still has none,
   // because that value is thrown away by the send.
   const canSetMode = !item.agent;
-  // Commands are provider-specific; canSetMode still gates every permission path.
+  // Commands are runningEngine-specific; canSetMode still gates every permission path.
   const query = !item.agent ? slashQuery(text) : null;
   /*
    * ONE LIST, AND IT IS THE ONE THE MENU DRAWS. This was `modeMatches(query)`
@@ -2694,7 +2702,9 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
               {' Mode. '}
             </>
           )}
-          {'On '}
+          <EnginePicker value={runningEngine} choices={engineChoices ?? []} title="To Agent"
+            onChange={(id)=>{const engine=id ?? DEFAULT_ENGINE;setProvider(engine);setTouched(true);setModel(readLastModel(undefined,engine,codexModelDefault));setEffort(null);setMode(null);}} />
+          {' On '}
           <ModelPicker
             value={model}
             onChange={(id) => { setTouched(true); setModel(id); }}
@@ -2754,6 +2764,9 @@ function DockComposer({ item, runningMode, runningEngine, codexModels = [], code
             rather than sitting side by side. A stop next to a live Send is two
             things to choose between; a stop INSTEAD of a dead Send is one
             thing that is always the thing she can do. */}
+        {!talkTo?.length && <DictationButtons target={item.label || item.title || 'Chat'} onNotice={onNotice}
+          onDraft={(spoken)=>{const words=[readDraft(item),spoken].filter(Boolean).join('\n\n');saveDraft(item,words);if(dictationItem.current===`${item.product}:${item.id}`)setText(words);}}
+          onSend={(spoken)=>send([text,spoken].filter(Boolean).join('\n\n'),true)} onQueued={()=>{if(readDraft(item)===text)clearDraft(item);onClose();}} />}
         {stop && !hasDraft ? stop : (
         <button
           className="dock-send"

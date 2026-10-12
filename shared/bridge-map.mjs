@@ -19,6 +19,7 @@ export const REQUEST_CHANNELS = {
   olderItems: 'zero:older-items',
   dashboard: 'zero:dashboard',
   desktopLive: 'zero:desktop-live',
+  transcribeAudio: 'zero:transcribe-audio',
   composerCatalog: 'zero:composer-catalog',
   commandCatalog: 'zero:command-catalog',
   remoteControl: 'zero:remote-control',
@@ -164,4 +165,4 @@ export const WRAPPED_ARGS = {
 // `onWriteHeld` is the desktop's ⌘R asking the page to write what the undo
 // window holds before it reloads (main/write-before-reload.mjs). A browser
 // reload asks nobody; the page writes on `pagehide` there instead.
-export const DESKTOP_ONLY = ['pathForFile', 'onWriteHeld'];
+export const DESKTOP_ONLY = ['pathForFile', 'onWriteHeld', 'transcribeAudio'];

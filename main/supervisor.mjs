@@ -6682,7 +6682,7 @@ export class Supervisor {
     // there would be a second decision that could disagree with `_engineFor`.
     const session = {
       child, itemId: item.id, product: item.product, startedAt: Date.now(), tail: [], profile,
-      command: !!plan.command, engine,
+      command: !!plan.command, engine, model: item.model ?? null,
       // AND THE FOLDER IT IS RUNNING IN, which is now the row's own rather than
       // the product's checkout. Everything that asks a live session where it
       // works reads it from here rather than deriving it from the product a

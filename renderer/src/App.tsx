@@ -1,3 +1,4 @@
+import {DictationStatus} from './components/Dictation';
 import {DesktopLive} from './components/DesktopLive';
 import {desktopLiveActions,desktopLiveView} from '../../shared/desktop-live-actions.mjs';
 import { previewFocus } from './preview-focus';
@@ -3236,7 +3237,7 @@ export default function App() {
     item: WorkItem,
     run: () => Promise<void>,
     toast: string,
-    restore?: () => Restored,
+    restore?: (failed?:boolean) => Restored,
     // ONE SEND DOES NOT LEAVE THE TASK, and it is the only one: a command she
     // sent to watch the answer come back (./stay-with-a-command). The pane
     // stays open on the row, so there is nothing to advance to and nothing to
@@ -3257,10 +3258,11 @@ export default function App() {
     // What the thread says if a Z inside the grace window takes this back,
     // when nothing has reached the ledger to say it (./undo-marks).
     undid?: UndidSpec[],
+    background=false,
   ) => {
     await flushPending(); // a new action commits the previous one immediately
-    if (!stay) leaveResolved(item);
-    setModal(null);
+    if (!stay && !background) leaveResolved(item);
+    if (!background) setModal(null);
     setPendingId(item.id); // out of the inbox NOW; the write can wait, the signal cannot
     // "PRESS Z", NOT A BARE LETTER. The toast used to read "Closed: Added the
     // sign-in route. Tests g · Z to undo": the title had been cut mid-word at
@@ -3272,14 +3274,22 @@ export default function App() {
     // A pick she is still looking at needs no way in: `stay` means the pane
     // never left the row.
     showToast(`${toast} · press Z to undo`, stay ? undefined : goes);
+    const guardedRun = async () => {
+      try { await run(); }
+      catch (error) {
+        const back = restore?.(true);
+        if (!background && back && 'item' in back) { setFocused(back.item); setModal('reply'); }
+        else if (!background && back && 'compose' in back) setModal('compose');
+        showToast(`Could not save: ${(error as Error).message}.${back ? " Your draft has been restored." : ""}`, background ? goes : undefined);
+      } finally { setPendingId((p) => (p === item.id ? null : p)); }
+      try { await refresh(); } catch { showToast('Saved, but the view could not refresh. Please reload.'); }
+    };
     const timer = setTimeout(async () => {
       if (pendingRef.current?.timer !== timer) return;
       pendingRef.current = null;
-      await run();
-      await refresh();
-      setPendingId((p) => (p === item.id ? null : p));
+      await guardedRun();
     }, UNDO_GRACE_MS);
-    pendingRef.current = { item, timer, run, restore, undid };
+    pendingRef.current = { item, timer, run: guardedRun, restore, undid };
   }, [flushPending, leaveResolved, refresh, showToast]);
 
   // It closes the ROW and touches nothing else — no message, no signal, and the
@@ -3411,7 +3421,7 @@ export default function App() {
   // lives in `leaveResolved` above and still covers every way a row leaves her
   // inbox.
 
-  const answerWith = useCallback(async (item: WorkItem, text: string, priority?: number, sent?: SentDraft, mode?: AnswerMode | null, engine?: string | null, pick?: { model: string | null; effort: string | null }) => {
+  const answerWith = useCallback(async (item: WorkItem, text: string, priority?: number, sent?: SentDraft, mode?: AnswerMode | null, engine?: string | null, pick?: { model: string | null; effort: string | null; engine?: string | null; background?: boolean }) => {
     // AN AGENT ROW IS NOT WORK OF HERS TO CLOSE, DEFER OR RESTART. It stands
     // for a session running outside Agentbox; the only two things that mean
     // anything to it are a reply and being taken to its window.
@@ -3468,8 +3478,7 @@ export default function App() {
     // true and stops saying it the moment it stops being true.
     const isRunning = snap?.supervisor.running.some((run) => run.itemId === item.id && run.product === item.product);
     if (isRunning) {
-      setFollowing({ product: item.product, id: item.id });
-      setModal(null);
+      if (!pick?.background) {setFollowing({ product: item.product, id: item.id });setModal(null);}
       // ON THE SCREEN BEFORE ANYTHING IS ASKED OF ANYBODY. The moment she
       // presses send, her message is the last thing in the conversation, where
       // she is already looking, and it says in its own head that the agent has
@@ -3532,7 +3541,7 @@ export default function App() {
           // mid-flight; the pick lands on the row and the next run reads it.
           // The drawer says "Which model this conversation runs on" rather than
           // anything about this message, for exactly this case.
-          ...(pick ? { model: pick.model, effort: pick.effort } : {}),
+          ...(pick ? { model: pick.model, effort: pick.effort, ...(pick.engine ? {engine: pick.engine} : {}) } : {}),
         }),
         // NOTHING IS TAKEN OFF THE SCREEN HERE. The row is re-read, the
         // committed copy of this message arrives with it, and `itemThread`
@@ -3628,9 +3637,10 @@ export default function App() {
     // the written copy replaces it (item-thread.ts) and Z takes it off.
     const talking = isDirect(snap?.products.find((p) => p.slug === item.product));
     const mine = { product: item.product, id: item.id, at: Date.now(), text, held: true };
-    if (talking) setSending((q) => [...q, mine]);
-    const restore = (): Restored => {
+    setSending((q) => [...q, mine]);
+    const restore = (failed=false): Restored => {
       setSending((q) => q.filter((s) => s !== mine));
+      if(failed){restoreFailedDraft(item,sent?.words ?? text,sent?.attachments ?? []);return {item};}
       return restoreDraft(item, sent?.words ?? text, sent?.attachments ?? []) ? { item } : null;
     };
     // A REPLY IS A CLAIM ON NOW, so it cancels a schedule rather than queueing
@@ -3652,8 +3662,8 @@ export default function App() {
     // up.
     // A REPLY IN A CONVERSATION STAYS IN THE CONVERSATION (2026-10-01):
     // sending a message to a person must not jump to another page.
-    const stay = staysOnTheTask(item, text, engine) || talking;
-    if (stay) setFollowing({ product: item.product, id: item.id });
+    const stay = staysOnTheTask(item, text, engine) || talking || !!pick;
+    if (stay && !pick?.background) setFollowing({ product: item.product, id: item.id });
     const undid = [{ product: item.product, id: item.id, words: 'Undid your reply' }];
     await deferCommit(item, async () => {
       // In a conversation, any agent it mentions starts now and the message is
@@ -3676,9 +3686,9 @@ export default function App() {
         // drawer; the store writes it onto the item BEFORE the answer, so the
         // run this reply starts reads the model she just chose rather than the
         // one it was on (main/store.mjs, answerItem).
-        ...(pick ? { model: pick.model, effort: pick.effort } : {}),
+        ...(pick ? { model: pick.model, effort: pick.effort, ...(pick.engine ? {engine: pick.engine} : {}) } : {}),
       });
-      if (talking) setTimeout(() => setSending((q) => q.filter((s) => s !== mine)), LANDED_MS);
+      setTimeout(() => setSending((q) => q.filter((s) => s !== mine)), LANDED_MS);
       if (wasScheduled) {
         if (priorRunAt > Date.now()) await api.schedule({ product: item.product, id: item.id, runAt: 0 });
         if (priorSnooze > Date.now()) await api.snooze({ product: item.product, id: item.id, snoozedUntil: 0 });
@@ -3700,7 +3710,7 @@ export default function App() {
         // means what it always meant.
         setFollowing(null);
       } });
-    }, talking ? 'Sent' : `Sent → ${item.productName}`, restore, stay, { product: item.product, id: item.id }, undid);
+    }, talking ? 'Sent' : `Sent → ${item.productName}`, restore, stay, { product: item.product, id: item.id }, undid, !!pick?.background);
   }, [deferCommit, snap?.supervisor.running, snap?.products, showToast, refresh, markSeen, pushUndo, startChatAgents, fire]);
 
   /* ------------------------ answering one of her agents -------------------- */
@@ -5577,6 +5587,7 @@ export default function App() {
                      byte-identical to today's. */
                   engineChoice={(snap.engines?.choices?.length ?? 1) > 1}
                   runningEngine={runningEngine}
+                  engineChoices={snap.engines?.choices}
                   productDir={snap.products.find((p) => p.slug === focused.product)?.dir ?? null}
                   repoDir={snap.products.find((p) => p.slug === focused.product)?.repoPath ?? null}
                   selectedOption={optionSel}
@@ -5831,9 +5842,9 @@ export default function App() {
           onNewProject={() => setNewProject(true)}
           onClose={() => { setModal(null); setComposeInitial(null); }}
           onSent={async (made, how) => {
-            setComposeInitial(null);
-            const sent = readComposeDraft();
-            setModal(null);
+            if (!how?.background) setComposeInitial(null);
+            const sent = how?.draft ?? readComposeDraft();
+            if (!how?.background) setModal(null);
             // THE TUTORIAL'S OWN TASK, AND IT LEAVES NO TOAST AND NO UNDO.
             // The walk goes on from here with the ringed sentence beside the
             // row, and an undo key nobody has been taught yet, over a walk it
@@ -5879,7 +5890,7 @@ export default function App() {
             // waiting on her, so it never lands in Needs you. On the Inbox the
             // tab moves to where it did land, Running or Scheduled, so she
             // sees the row arrive instead of an unchanged page.
-            if (workspaceNavigation && !teamOpen && !focused && (['inbox', 'progress', 'snoozed'] as View[]).includes(view)) {
+            if (!how?.background && workspaceNavigation && !teamOpen && !focused && (['inbox', 'progress', 'snoozed'] as View[]).includes(view)) {
               setView((how?.runAt && how.runAt > Date.now()) || how?.start === 'later' ? 'snoozed' : 'progress');
               setSelected(0);
               setMultiSel(new Set());
@@ -6664,6 +6675,7 @@ export default function App() {
       <ZoomPercent />
       {/* ⌘F, on every screen, for the same reason. */}
       <FindBar />
+      <DictationStatus />
     </div>
     </LiveContext.Provider>
     </ChatAgentsContext.Provider>

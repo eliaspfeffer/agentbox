@@ -1004,6 +1004,7 @@ declare global {
       dashboard(slug: string): Promise<any>;
       terminal(p: {product:string;id:string;action:'open'|'read'|'write'|'resize'|'close';data?:string;cols?:number;rows?:number;offset?:number}): Promise<any>;
       agentUpdate?(p:{engine:string;action:'check'|'recheck'|'start'|'status'|'refresh'}):Promise<any>;
+      transcribeAudio(p:{audio:ArrayBuffer;mime:string}):Promise<{text:string}>;
       desktopLive(p: {sdp: string}): Promise<{transport: {sdp: string}}>;
       composerCatalog(p: {product: string; id: string; engine?: string}): Promise<{kind: string; name: string; description: string; insert: string; icon: string | null}[]>;
       commandCatalog(p: {product: string; id: string}): Promise<string[]>;

@@ -1,3 +1,4 @@
+import {DictationButtons} from '../components/Dictation';
 import {IntegrationPicker} from '../components/IntegrationPicker';
 // THE NEW THREAD CARD, drawn as an email (w-e731ca9376, approved 2026-10-01).
 //
@@ -62,6 +63,8 @@ import './thread-composer.css';
 /** What went out, so the caller can say so and offer the way back. */
 export interface ThreadSent {
   kind: 'task' | 'repeat' | 'message';
+  background?: boolean;
+  draft?: ReturnType<typeof readComposeDraft>;
   product?: string;
   title?: string;
   /** A Send later moment, when there was one. */
@@ -343,6 +346,7 @@ export function ThreadComposer({
 
   /* ------------------------------- send --------------------------------- */
   const [sending, setSending] = useState(false);
+  const dictationMounted=useRef(true);useEffect(()=>{dictationMounted.current=true;return()=>{dictationMounted.current=false;};},[]);
   const [error, setError] = useState<string | null>(null);
   // THE TUTORIAL'S SEND CAN NEVER BE A DEAD END (w-9f6975906c, 2026-10-05).
   // Her screenshot: the tutorial's card open with an empty box, so Send stayed
@@ -357,8 +361,10 @@ export function ThreadComposer({
   const stopper = noProjectYet(product, { person: !!person });
   const canSend = !sending && (person ? !!text.trim() : !!message && !!product && !refusal);
 
-  const sendTask = async (when: { runAt?: number; start?: 'later'; repeat?: { every: 'day' | 'weekday' | 'week'; on?: number; at: string } } = {}) => {
-    if (!canSend || !product || !message) return;
+  const sendTask = async (when: { runAt?: number; start?: 'later'; repeat?: { every: 'day' | 'weekday' | 'week'; on?: number; at: string } } = {}, spoken?:string, background=false) => {
+    const spokenMessage=spoken===undefined?threadMessage(typed,attachments):threadMessage([text,spoken].filter(Boolean).join('\n\n'),attachments);
+    if (sending || !product || !spokenMessage || refusal) {if(background)throw Error(refusal || 'Bitte ein gültiges Projekt wählen.');return;}
+    const message=spokenMessage;
     setSending(true);
     setError(null);
     setOpen(null);
@@ -393,14 +399,15 @@ export function ThreadComposer({
           // The tutorial's own task, and only ever that one. See `scripted`.
           ...(scripted ? { labels: scripted.labels } : {}),
         });
-        onSent(made, { kind: 'task', product: product.slug, title: message.title, ...(when.runAt ? { runAt: when.runAt } : {}), ...(when.start ? { start: when.start } : {}) });
+        onSent(made, { background, ...(background?{draft:{text:[text,spoken].filter(Boolean).join('\n\n'),attachments,priority:prio,when:{runAt:0,repeat:null},dropped:0}}:{}), kind: 'task', product: product.slug, title: message.title, ...(when.runAt ? { runAt: when.runAt } : {}), ...(when.start ? { start: when.start } : {}) });
       }
-      clearComposeDraft();
+      if(!background && readComposeDraft().text===text)clearComposeDraft();
     } catch (err) {
       // The card stays open with every word in it: a send that failed and also
       // ate what she wrote is two failures, and the second is the expensive one.
       setError(`Not sent: ${String((err as Error)?.message ?? err)}`);
       setSending(false);
+      if(background)throw err;
     }
   };
 
@@ -815,6 +822,9 @@ export function ThreadComposer({
           </div>
         )}
 
+        {!person && <DictationButtons target={`Neuer Chat · ${product?.name ?? 'Ohne Projekt'}`} onNotice={setError}
+          onDraft={spoken=>{if(!dictationMounted.current)return false;const current=readComposeDraft();const words=[current.text,spoken].filter(Boolean).join('\n\n');setText(words);saveComposeDraft({...current,text:words});}}
+          onSend={spoken=>sendTask({}, spoken, true)} onQueued={()=>{if(readComposeDraft().text===text)clearComposeDraft();onClose();}} />}
         <div className="tc-reference-anchor">
         {!person && <IntegrationPicker product={product?.slug ?? ''} engine={pick.engine} text={text} setText={setText} input={textRef} />}
         <textarea

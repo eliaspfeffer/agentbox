@@ -1,4 +1,4 @@
-import {desktopLiveSession} from './desktop-live.mjs';
+import {desktopLiveSession,desktopTranscribe} from './desktop-live.mjs';
 import {openWebsite} from './open-website.mjs';
 import { openSourceFile } from './open-source-file.mjs';
 import {submitReply} from './live-replies.mjs';
@@ -536,6 +536,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     }
   });
 
+  ipcMain.handle('zero:transcribe-audio', (_e, {audio,mime}) => desktopTranscribe(config.desktopLive,audio,mime));
   ipcMain.handle('zero:desktop-live', (_e, {sdp}) => desktopLiveSession(config.desktopLive, sdp));
   ipcMain.handle('zero:composer-catalog', (_e, { product, id, engine }) => supervisor.composerCatalog(product, id, engine));
   ipcMain.handle('zero:command-catalog', (_e, { product, id }) => supervisor.commandCatalog(product, id));
@@ -548,7 +549,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // answered at once (supervisor.sendNow).
   ipcMain.handle('zero:send-now', (_e, { product, id }) => supervisor.sendNow(product, id));
 
-  ipcMain.handle('zero:answer', async (_e, { product, id, answer, status, priority, permissionMode, model, effort, now, inReplyTo }) => {
+  ipcMain.handle('zero:answer', async (_e, { product, id, answer, status, priority, permissionMode, model, effort, engine, now, inReplyTo }) => {
     if (isAgentRow(id)) return { ok: false };
     // A REPLY IN A THREAD (w-920461cbe6) only means something in a conversation
     // between people, which is the only place a thread is drawn and the only
@@ -586,7 +587,8 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     // handing them over in one call and writing the model afterwards would be a
     // race the run usually wins, so she would pick a model and watch the old one
     // take the task. `answerItem` writes both, and it writes the model first.
-    const out = await submitReply(supervisor,{product,id,answer,status,permissionMode,now:!!now},()=>store.answerItem(product, id, { answer, status, priority, permissionMode, model, effort, inReplyTo: thread }));
+    if (engine !== undefined && !supervisor.engineChoices().some((choice) => choice.id === engine)) throw Error('This agent is not available.');
+    const out = await submitReply(supervisor,{product,id,answer,status,permissionMode,engine,model,now:!!now},()=>store.answerItem(product, id, { answer, status, priority, permissionMode, model, effort, engine, inReplyTo: thread }));
     // A REPLY ON A ROW A TEAMMATE GAVE YOU HANDS IT BACK TO THEM, so the
     // conversation moves to their inbox instead of sitting in both
     // (shared/team-rules.mjs handedOnByReply). Archiving hands nothing on.
