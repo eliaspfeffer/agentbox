@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { Product, RepeatRule, RunningSession, ThreadCard, View, WorkItem } from '../types';
-import { ago, dayLabel, previewText, stamp } from '../format';
+import { ago, dayLabel, itemOptions, offerIsLive, previewText, stamp } from '../format';
 import { REST_HEADING, URGENT_HEADING, clickIntent, rowKeys, rowSummary, rowTitle, walkRowKeys } from '../list-rules';
 import { isUrgentRow } from '../interrupt';
 // THE SAME PREDICATE THE PANE USES, not a second copy of the rule. The row and
@@ -22,6 +22,7 @@ import { clockLabel, isCleanRun, nextRunAt } from '../../../shared/repeats.mjs';
 import { Face, TeamRowEnd, type TeamView } from '../team/people';
 import { RepeatMark, RowCells, TableHead, ThreadCells } from '../threads/Pages';
 import type { MixedRow } from '../threads/people-rules';
+import { threadTldr } from '../../../shared/thread-tldr.mjs';
 import { heldByAPerson } from '../../../shared/team-rules.mjs';
 
 /**
@@ -137,7 +138,7 @@ export function dayGroups(
   return groups;
 }
 
-export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, searchDetails, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover, onAnswerImport, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd }: {
+export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, searchDetails, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover, onAnswerImport, onReply, onPick, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd }: {
   items: WorkItem[];
   view: View;
   // WHICH VIEW'S KEYS THE ROW HINT PRINTS, which is not always the view this
@@ -217,6 +218,8 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
    * breaks. */
   walk?: { key: string | null; rows: string[] } | null;
   onHover?: (id: string | null) => void;
+  onReply?: (item: WorkItem) => void;
+  onPick?: (item: WorkItem, n: number) => void;
   // THE YES OR NO ON A CODEX CONVERSATION'S ROW, and the Import on one she
   // declined. A click on the keycap sends the same word the key does.
   onAnswerImport?: (item: WorkItem, choice: ImportChoice) => void;
@@ -477,6 +480,27 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                   onSelect(index); onOpen(item);
                 }}
               >
+                {hoveredId === item.id && !checked && !multiSel.size && !walk && !isImportRow(item) && (
+                  <div className="row-hover-preview" onClick={(e) => e.stopPropagation()}>
+                    <div className="row-hover-tldr"><strong>TL;DR</strong> {threadTldr(
+                      (['body', 'answer', 'note', 'result'] as const).map((field) => ({
+                        who: field === 'answer' || (field === 'body' && item.wrote?.body?.source === 'founder') ? 'you' : 'it',
+                        text: item[field], at: item.wrote?.[field]?.ts ?? 0,
+                      })), null, { running: running.some((r) => r.itemId === item.id) },
+                    )?.text || rowSummary(item, view) || 'Noch kein Ergebnis.'}</div>
+                    <div className="row-hover-actions">
+                      {offerIsLive(item) && !item.agent && !made && itemOptions(item).map((option) => (
+                        <button type="button" className="row-key" key={option.n}
+                          aria-label={`Option ${option.n}: ${option.text}`}
+                          onClick={() => onPick?.(item, option.n)}>
+                          <kbd>{option.n}</kbd><span>{option.text}</span>
+                        </button>
+                      ))}
+                      {(keyView ?? view) === 'inbox' && <button type="button" className="row-key"
+                        aria-label="Antworten (R)" onClick={() => onReply?.(item)}><kbd>R</kbd><span>Antworten</span></button>}
+                    </div>
+                  </div>
+                )}
                 {/* THE ONE THING THAT IS NOT A MESSAGE STANDS IN THE MESSAGE'S OWN
                    SELECT-BOX STRIP: a rule at the row's left edge, in the app's own faint
                    ink, beginning where the subject begins and ending where the preview

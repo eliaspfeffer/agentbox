@@ -302,15 +302,7 @@ export default function App() {
   if (!hints.current) hints.current = hintScheduler(setShownHint);
   useEffect(() => { hints.current?.point(pointedHint); }, [pointedHint]);
   useEffect(() => () => hints.current?.stop(), []);
-  // THE SWITCH OVER ALL OF IT. Off means the row keeps
-  // saying its product and its time under the pointer, the tabs say nothing,
-  // and the two corner buttons stop printing their key in the Mac's label.
-  //
-  // It takes the pointer-follows-the-keys half with it, and that is the point
-  // rather than a side effect: the keys reach the pointed row BECAUSE the row
-  // under the pointer is drawing a promise about them. With nothing drawn there
-  // is no promise, so the keyboard's own row is the honest target again, which
-  // is what the app did before this. `hoveredId` is simply never set.
+  // Cosmetic hints can be hidden; the row preview still names the keyboard target.
   const [keyHints, setKeyHints] = useState(() => localStorage.getItem(HINTS_KEY) !== '0');
   const setHints = useCallback((v: boolean) => {
     setKeyHints(v);
@@ -4542,12 +4534,15 @@ export default function App() {
           else if (pointed && view === 'inbox') markDone(pointed);
           break;
         case 'r': case 'R': if (!multiSel.size && pointed && view === 'inbox') { e.preventDefault(); setFocused(pointed); markSeen(pointed); setModal('reply'); } break;
-        // 1 AND 2 ANSWER A CODEX CONVERSATION'S ROW WITHOUT OPENING IT, and I
-        // brings a declined one back from Closed. Only on those rows: on every
-        // other row they stay dead, as they were. They were Y and N until
-        // w-fb9051e597, which freed N for a new task.
-        case '1': if (!multiSel.size && pointed && isImportRow(pointed)) { e.preventDefault(); void answerImport(pointed, 'yes'); } break;
-        case '2': if (!multiSel.size && pointed && isImportRow(pointed)) { e.preventDefault(); void answerImport(pointed, 'no'); } break;
+        case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+          if (!multiSel.size && pointed) {
+            if (isImportRow(pointed) && (e.key === '1' || e.key === '2')) {
+              e.preventDefault(); void answerImport(pointed, e.key === '1' ? 'yes' : 'no');
+            } else if (hoveredId === pointed.id && offerIsLive(pointed) && itemOptions(pointed).some((o) => o.n === Number(e.key))) {
+              e.preventDefault(); void pickOption(pointed, Number(e.key));
+            }
+          }
+          break;
         case 'i': case 'I': if (!multiSel.size && pointed && view === 'done' && isNotImportedRow(pointed)) { e.preventDefault(); void answerImport(pointed, 'yes'); } break;
         // L swallows its own keystroke up at the guard, not here: this branch
         // and the focus-mode one both open the picker (renderer/src/keys.ts).
@@ -4578,7 +4573,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [modal, newProject, focused, focusedRepeat, inFullScreen, togglePanel, current, pointed, list, view, markDone, openSnooze, pickOption, undo, markSeen, optionSel, snoozed, unsnooze, items, selectable, batchDone, selected, showToast, snap, multiSel, refresh, settingsOpen, search, openSearch, closeSearch, openDoc, artifactMode, artifactReturnBeside, teamShown, openCard, inboxDisplay, setInboxDisplay, stateTabOrder, boardCols, stops, keyCard, walkPlace, goToStop, openTeammateCard]);
+  }, [modal, newProject, hoveredId, focused, focusedRepeat, inFullScreen, togglePanel, current, pointed, list, view, markDone, openSnooze, pickOption, undo, markSeen, optionSel, snoozed, unsnooze, items, selectable, batchDone, selected, showToast, snap, multiSel, refresh, settingsOpen, search, openSearch, closeSearch, openDoc, artifactMode, artifactReturnBeside, teamShown, openCard, inboxDisplay, setInboxDisplay, stateTabOrder, boardCols, stops, keyCard, walkPlace, goToStop, openTeammateCard]);
 
   // WHO HOLDS THE KEYBOARD WHILE SEARCHING. The field is in the top bar and
   // stays mounted while a result is open, so without this the J and K that walk
@@ -5750,7 +5745,9 @@ export default function App() {
                   emptyText={olderMore !== false && search !== null ? 'Searching older threads…' : search ? `Nothing matches “${search}”.` : undefined}
                   keyView={view}
                   hoveredId={hoveredId}
-                  onHover={keyHints ? setHoveredId : undefined}
+                  onHover={setHoveredId}
+                  onReply={(item) => { setFocused(item); markSeen(item); setModal('reply'); }}
+                  onPick={pickOption}
                   onSelect={(i) => { setCardSel(null); setSelected(i); }}
                   onOpenRepeat={(rule) => { setFocused(null); setFocusedRepeat(rule); }}
                   onOpen={(item) => { setCardSel(null); setFocused(item); markSeen(item); }}

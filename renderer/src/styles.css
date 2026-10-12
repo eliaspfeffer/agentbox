@@ -8702,3 +8702,13 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
  .desktop-live-launch .live-panel.compact .live-heading {flex-direction:column;}
  .desktop-live-launch .live-panel.compact [role="status"] {display:none;}
 }
+
+/* In flow so the last row's preview stays inside the scrolling list. */
+.row:has(.row-hover-preview) { flex-wrap: wrap; row-gap: 10px; }
+.row-hover-preview { order: 1; flex: 0 0 100%; min-width: 0; padding-left: 38px; box-sizing: border-box; }
+.row-hover-tldr { color: var(--text-dim); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.row-hover-tldr strong { color: var(--text-faint); font-size: 11px; margin-right: 8px; }
+.row-hover-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.row-hover-actions .row-key { display: inline-flex; align-items: flex-start; gap: 8px; white-space: normal; text-align: left; max-width: 100%; margin: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--tag-radius); background: transparent; color: var(--text-dim); font: inherit; font-size: 12px; cursor: pointer; }
+.row-hover-actions .row-key span { overflow-wrap: anywhere; min-width: 0; }
+.row-hover-actions .row-key:hover, .row-hover-actions .row-key:focus-visible { border-color: var(--text-faint); color: var(--text); }
