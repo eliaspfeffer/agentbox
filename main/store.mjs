@@ -6,6 +6,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import { codexFolder } from './codex-folder.mjs';
+import {syncDesktopProjects} from './desktop-projects.mjs';
+import {codexHome} from './codex-models.mjs';
 import path from 'node:path';
 import { loadStore } from './store-modules.mjs';
 import { Repeats } from './repeats.mjs';
@@ -76,6 +78,10 @@ export class Store {
   // count a shared project you archived as here or it joins it a second time.
   listProducts({ includeArchived = false } = {}) {
     const root = this.config.accountRoot;
+    if(this.config.syncDesktopProjects===true && !this.config.products.length && Date.now()-(this._desktopProjectsAt??0)>2000){
+      this._desktopProjectsAt=Date.now();
+      try{syncDesktopProjects(root,codexHome({configured:this.config.codexHome,home:this.config.home}),{home:this.config.home??os.homedir()});}catch{/* keep the existing inbox available */}
+    }
     let entries = [];
     try {
       entries = fs.readdirSync(root, { withFileTypes: true });
@@ -109,6 +115,7 @@ export class Store {
         name: project.name || entry.name,
         oneLiner: project.oneLiner || '',
         repoPath: project.repoPath || null,
+        ...(project.externalProject ? {externalProject:project.externalProject} : {}),
         // THE MARK SHE CHOSE FOR THIS PROJECT, already a url the window can
         // draw, or null on every project that has never been given one, which is
         // what makes the rail draw its burst instead (main/project-identity.mjs).
@@ -529,7 +536,12 @@ export class Store {
     // The 'founder' label is the human-in-the-loop marker: only items the
     // founder composed (or explicitly approved) execute; agent-filed items
     // are proposals until then.
-    const personal = this.listProducts().find(p => p.slug === slug)?.personal;
+    const product = this.listProducts().find(p => p.slug === slug);
+    if(product?.externalProject?.source==='chatgpt'&&!product.repoPath){
+      const repoPath=codexFolder(`${product.name}-${product.slug.slice(-8)}`);
+      patchProjectAt(product.dir,{repoPath});
+    }
+    const personal = product?.personal;
     const allLabels = [...new Set(['founder', ...(personal ? ['projectless'] : []), ...(labels ?? [])])];
     const created = workItemsDisk.createWorkItem(
       dir,
