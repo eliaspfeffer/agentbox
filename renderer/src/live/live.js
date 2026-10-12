@@ -2,9 +2,9 @@ import {createToolHandler,viewCommentary} from './live-actions.js';
 export function setupLive({el,api,execute,toast,available,recording,mount=document.body}){
  let peer,channel,stream,timer,closing,active=false,connecting=false,generation=0,executing=false,lastCommentary;
  const panel=el('aside',{class:'live-panel compact',hidden:'','aria-label':'GPT Live Sprachcall'}),status=el('span',{role:'status'},'Bereit'),log=el('div',{class:'live-log','aria-live':'polite'}),audio=el('audio',{controls:'',autoplay:''});
- const button=el('button',{class:'live-start',onClick:start},'◉ GPT Live'),stop=el('button',{onClick:end,disabled:''},'Call beenden');
+ const button=el('button',{class:'live-start',onClick:start},'◉ GPT Live'),stop=el('button',{onClick:end,disabled:'','aria-label':'Call beenden',title:'Call beenden'},'×');
  const typed=el('input',{placeholder:'Optional: Nachricht an Live','aria-label':'Nachricht an Live'});const form=el('form',{onSubmit:e=>{e.preventDefault();const text=typed.value.trim();if(!active||!text)return;append('Du',text);send({type:'response.item.create',event_id:crypto.randomUUID(),item:{type:'message',role:'user',content:[{type:'input_text',text}]}});send({type:'response.create',event_id:crypto.randomUUID()});typed.value=''}},typed,el('button',{type:'submit'},'Senden'));
- panel.append(form);panel.append(el('div',{class:'live-heading'},status,el('button',{onClick:()=>panel.classList.toggle('compact'),'aria-label':'Call-Protokoll umschalten'},'↕'),stop),audio,log);mount.append(button);document.body.append(panel);
+ panel.append(form);panel.append(el('div',{class:'live-heading'},status,el('button',{onClick:()=>panel.classList.toggle('compact'),'aria-label':'Call-Protokoll umschalten'},'↕'),stop),audio,log);mount.append(button,panel);
  function append(label,text){const row=el('div',{},el('b',{},label+' · '),text);log.append(row);while(log.children.length>60)log.firstChild.remove();log.scrollTop=log.scrollHeight;return row}
  function send(event){if(active&&channel?.readyState==='open')channel.send(JSON.stringify(event))}
  function comment(result){const content=viewCommentary(result);if(content&&content!==lastCommentary){lastCommentary=content;send({type:'session.commentary.append',event_id:crypto.randomUUID(),delegation_id:null,content})}}

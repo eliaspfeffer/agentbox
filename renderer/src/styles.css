@@ -8686,6 +8686,19 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
 .live-panel button {background:transparent;color:inherit;border:1px solid var(--line);border-radius:var(--radius);padding:6px;cursor:pointer;}
 .live-panel audio {width:100%;height:32px;margin:10px 0;}
 .live-log {overflow:auto;max-height:30vh;font-size:13px;line-height:1.5;overflow-wrap:anywhere;}
-.live-panel.compact .live-log {display:none;}
+.live-panel.compact .live-log,.live-panel.compact form,.live-panel.compact audio {display:none;}
 .live-panel form {display:flex;gap:8px;margin-bottom:10px;}
 .live-panel input {min-width:0;flex:1;padding:8px;background:transparent;color:inherit;border:1px solid var(--line);border-radius:var(--radius);}
+
+.desktop-live-launch .live-panel.compact {position:static;width:auto;max-height:none;margin:4px 8px;padding:6px 8px;box-shadow:none;border-radius:var(--radius);}
+.desktop-live-launch .live-panel.compact .live-heading {gap:4px;font-size:11px;}
+.desktop-live-launch .live-panel.compact [role="status"] {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.desktop-live-launch:has(.live-panel.compact:not([hidden]))>.live-start:disabled {display:none;}
+.workspace-collapsed .desktop-live-launch .live-panel.compact {margin:4px 0;padding:4px;}
+.workspace-collapsed .desktop-live-launch .live-panel.compact .live-heading {flex-direction:column;}
+.workspace-collapsed .desktop-live-launch .live-panel.compact [role="status"] {display:none;}
+@media(max-width:700px) {
+ .desktop-live-launch .live-panel.compact {margin:4px 0;padding:4px;}
+ .desktop-live-launch .live-panel.compact .live-heading {flex-direction:column;}
+ .desktop-live-launch .live-panel.compact [role="status"] {display:none;}
+}
