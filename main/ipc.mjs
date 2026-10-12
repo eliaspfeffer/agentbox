@@ -1,4 +1,5 @@
 import {desktopLiveSession} from './desktop-live.mjs';
+import {openWebsite} from './open-website.mjs';
 import { openSourceFile } from './open-source-file.mjs';
 import {submitReply} from './live-replies.mjs';
 import { createEngineSetup } from './engine-setup.mjs';
@@ -1663,7 +1664,12 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   ipcMain.handle('zero:open-artifact', async (_e, { product, src, mode }) => {
     const { shell } = await import('electron');
     if (typeof src !== 'string' || !src) return { ok: false, error: 'no path' };
-    if (/^https?:/.test(src)) { if (mode !== 'resolve') shell.openExternal(src); return { ok: true, opened: src } }
+    if (/^https?:/.test(src)) {
+      try {
+        if (mode !== 'resolve') await openWebsite(src, {external: (url) => shell.openExternal(url)});
+        return { ok: true, opened: src, url: src };
+      } catch (error) { return {ok:false,error:error.message}; }
+    }
     const found = resolveArtifact({
       src,
       product,

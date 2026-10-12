@@ -1,9 +1,10 @@
+import {WebsiteView} from './WebsiteView';
 import {ArtifactControlGlyph} from './ArtifactControlGlyph';
 import {FocusControl} from './FocusControl';
 import type {FocusControlStyle} from '../focus-control';
 import {usePreviewReveal} from '../preview-reveal';
 import {PreviewLoading} from './PreviewLoading';
-import { isLocalPreview, type ArtifactMode } from '../artifact-layout';
+import { type ArtifactMode } from '../artifact-layout';
 import { previewShows, previewStatus, useLocalPreview } from '../local-preview';
 import { LocalPreviewStatus } from './LocalPreviewStatus';
 // THE DOCUMENT PANE. The right half of the window is the file itself.
@@ -107,9 +108,15 @@ export function DocPane({ doc, roots, split, onSplit, onClose, onNotice, mode, o
   // An html page is served from its own origin so its pictures load; see
   // main/doc-scheme.mjs for why file:// could not.
   const [url, setUrl] = useState<string | null>(null);
+  const website = !!url && /^https?:/.test(url);
+  const desktop = typeof location !== 'undefined' && location.protocol === 'file:';
+  useEffect(() => {
+    if (!website || !desktop) return;
+    return window.zero?.onEscapeBrowser?.(onClose);
+  }, [website, desktop, onClose]);
   // A local address is asked whether anything is there before the frame is
   // believed (../local-preview.ts). `attempt` gives the frame a fresh start.
-  const app = useLocalPreview(url);
+  const app = useLocalPreview(website && desktop ? null : url);
   // The key, not the address: a marker on the address would reach the app.
   const frameKey = url && app.local ? `${url} ${app.attempt}` : url;
   const [loaded, revealFrame] = usePreviewReveal(frameKey);
@@ -124,7 +131,7 @@ export function DocPane({ doc, roots, split, onSplit, onClose, onNotice, mode, o
   useEffect(() => {
     let live = true;
     setResolved(null); setText(null); setFailed(null); setMtime(0); setUrl(null); setChange(null);
-    if (isLocalPreview(doc.src)) { setResolved(doc.src); setUrl(doc.src); return () => { live = false; }; }
+    if (/^https?:/.test(doc.src)) { setResolved(doc.src); setUrl(doc.src); return () => { live = false; }; }
     api.resolveDoc({ product: doc.product, src: doc.src }).then((r) => {
       if (!live) return;
       if (!r.ok || !r.opened) { setFailed(r.error ?? 'That file could not be found.'); return; }
@@ -198,7 +205,8 @@ export function DocPane({ doc, roots, split, onSplit, onClose, onNotice, mode, o
             <button
               type="button"
               className="doc-mark"
-              title={kind === 'code' ? 'Open this file in your editor' : `Open outside ${NAME}`}
+              title={website ? 'In Chrome öffnen · vorhandene Anmeldung verwenden' : kind === 'code' ? 'Open this file in your editor' : `Open outside ${NAME}`}
+              aria-label={website ? 'In Chrome öffnen' : 'Open outside'}
               onClick={openOutside}
             >
               {focusControlStyle ? <ArtifactControlGlyph kind="open"/> : <OpenGlyph />}
@@ -276,12 +284,14 @@ export function DocPane({ doc, roots, split, onSplit, onClose, onNotice, mode, o
               {app.local
                 ? !frameReady && <LocalPreviewStatus status={liveStatus} onRetry={app.retry} />
                 : <PreviewLoading ready={frameReady} />}
-              {(!app.local || app.phase !== 'down') && <iframe
+              {(!app.local || app.phase !== 'down') && (website ? <WebsiteView
+                key={frameKey} src={url} title={crumb.join('/')} desktop={desktop} ready={frameReady}
+                onReady={revealFrame} onError={setFailed} /> : <iframe
                 key={frameKey} onLoad={revealFrame} onError={() => setFailed("This preview could not be loaded.")}
                 style={{opacity:frameReady ? 1 : 0}}
                 className="doc-view" src={url}
                 sandbox="allow-scripts allow-same-origin" title={crumb.join('/')}
-              />}</div>
+              />)}</div>
             : <div className="doc-missing">Quit and reopen {NAME} to see this page's pictures.</div>) : <PreviewLoading />
         ) : text === null ? (
           <PreviewLoading />
