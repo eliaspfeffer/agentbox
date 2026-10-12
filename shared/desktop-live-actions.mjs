@@ -1,5 +1,7 @@
+import {threadTldr} from './thread-tldr.mjs';
+export function desktopLiveView(current){return {current:current?{id:current.id,product:current.product,title:current.label||current.title,status:current.status}:null,latestAgentResult:current?threadTldr([{who:'it',text:current.result||current.note||''}])?.text||'Kein Agent-Ergebnis vorhanden.':''};}
 export function desktopLiveActions({state,open,details,done,reply,later}){
- const screen=current=>{const {rows}=state();return {now:new Date().toISOString(),current:current?{id:current.id,product:current.product,title:current.title,status:current.status,position:rows.findIndex(i=>i.id===current.id)+1,total:rows.length}:null,latestAgentResult:current?.result||current?.note||'',empty:!current}};
+ const screen=current=>{const {rows}=state();const view=desktopLiveView(current);return {now:new Date().toISOString(),...view,current:current?{...view.current,position:rows.findIndex(i=>i.id===current.id)+1,total:rows.length}:null,empty:!current}};
  return async a=>{
   const {rows,current}=state();let target=current;
   if(a.action==='read')return screen(target);

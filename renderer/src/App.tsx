@@ -1,5 +1,5 @@
 import {DesktopLive} from './components/DesktopLive';
-import {desktopLiveActions} from '../../shared/desktop-live-actions.mjs';
+import {desktopLiveActions,desktopLiveView} from '../../shared/desktop-live-actions.mjs';
 import { previewFocus } from './preview-focus';
 import type {FocusControlStyle} from './focus-control';
 import {reviewLabEnabled} from './review-lab';
@@ -5009,7 +5009,7 @@ export default function App() {
           the sidebar for the single-player launch (w-1b574413db, 2026-10-04).
           `onInvite` is still handed in, for the account menu. */}
       {workspaceNavigation && <WorkspaceNavigation
-        live={<DesktopLive execute={liveExecute} context={{current:focused ? {id:focused.id,title:focused.title,status:focused.status}:null,latestAgentResult:focused?.result||''}} onNotice={showToast}/>}
+        live={<DesktopLive execute={liveExecute} context={desktopLiveView(focused)} onNotice={showToast}/>}
         update={announcesUpdate(snap?.update, { walking, closed: '' }) ? { installing: !!snap?.update?.installing, version: snap?.update?.newVersion, changes: snap?.update?.changes, behind: snap?.update?.behind, error: snap?.update?.error } : null}
         onUpdate={() => { void api.updateInstall(); }}
         page={settingsOpen ? 'settings' : null} onFeedback={() => setFeedbackOpen(true)} teamPage={teamOpen && !settingsOpen} hasTeam={!!snap?.team?.configured} team={snap?.team ?? null}

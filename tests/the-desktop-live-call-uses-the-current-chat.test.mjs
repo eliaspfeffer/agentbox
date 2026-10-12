@@ -8,3 +8,8 @@ describe('desktop live actions',()=>{
  it('uses the existing done/reply/later callbacks and advances only once',async()=>{const {run,writes}=setup();await run({action:'review'});await run({action:'reply',id:'w-one',text:'Example response'});await run({action:'open',id:'w-one'});await run({action:'later',id:'w-one',text:'60'});await run({action:'done',id:'w-two'});expect(writes).toEqual([['reply','w-one','Example response'],['later','w-one',60],['done','w-two']])});
  it('rejects empty responses and invalid reminders without writing',async()=>{const {run,writes}=setup();await run({action:'review'});for(const text of ['0','-1','tomorrow','Infinity'])await expect(run({action:'later',id:'w-one',text})).rejects.toThrow();await expect(run({action:'reply',id:'w-one',text:' '})).rejects.toThrow();expect(writes).toEqual([])});
 });
+it('reads the displayed headline and existing two-sentence TLDR, keeping the full result behind details',async()=>{
+ const current={id:'example',product:'p',title:'A long original prompt',label:'Startup application',result:'Connection unavailable. Consent remains valid. Third sentence is only a detail.'};
+ const run=desktopLiveActions({state:()=>({current,rows:[current]}),open(){},details:async i=>i.result});const view=await run({action:'read'});
+ expect(view.current.title).toBe('Startup application');expect(view.latestAgentResult).toBe('Connection unavailable. Consent remains valid.');expect(JSON.stringify(view)).not.toContain('Third sentence');expect(await run({action:'details'})).toHaveProperty('details',current.result);
+});
