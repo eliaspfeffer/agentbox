@@ -352,6 +352,7 @@ export class Store {
     if (engine !== undefined) item = workItemsDisk.updateWorkItem(dir, id, { engine: engine ?? '' }, { source: 'founder' });
     if (model !== undefined) item = workItemsDisk.updateWorkItem(dir, id, { model: model ?? '' }, { source: 'founder' });
     if (effort !== undefined) item = workItemsDisk.updateWorkItem(dir, id, { effort: effort ?? '' }, { source: 'founder' });
+    if (answer && answer !== '(withdrawn)' && item?.start === 'manual') item = workItemsDisk.updateWorkItem(dir, id, {start: 'now'}, {source: 'founder'});
     if (answer) item = workItemsDisk.updateWorkItem(dir, id, inReplyTo ? { answer, inReplyTo } : { answer }, { source: 'founder' });
     // The pane may still show a running row after Stop or a provider result.
     // Resolve omitted reply status against the ledger that was just written.
@@ -560,6 +561,7 @@ export class Store {
       // "Add it to Later" on the card: the thread exists now and starts when
       // she says, which is the one answer on that menu with no clock in it.
       ...(start === 'later' ? { start: 'later' } : {}),
+      ...(start === 'manual' ? {start: 'manual', status: 'blocked'} : {}),
       // WHICH MODEL SHE CHOSE FOR THIS ONE, on founder authority like the rest
       // of her content (2026-08-26).It is a Claude Code alias, and the spawn
       // hands it to `--model`.

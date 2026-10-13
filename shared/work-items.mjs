@@ -402,7 +402,7 @@ function coerceField(field, value) {
     // 'later' or 'now', and 'now' is the falsy sentinel for the same reason
     // runAt keeps 0: a field that coerces to undefined is dropped by the fold,
     // so without a real value for "started" nothing could ever clear it.
-    case 'start': return value === 'later' || value === 'now' ? value : undefined;
+    case 'start': return value === 'later' || value === 'manual' || value === 'now' ? value : undefined;
     // WHICH ANSWER A SESSION HAS ALREADY ACTED ON, as that answer's own ts.
     //
     // An answer had two states and the ledger recorded one. A worker finishes
@@ -759,7 +759,7 @@ function beats(incoming, held, field) {
 // what a future moment means and never arrives on its own: not claimable, no
 // session, not in the inbox. Pressing start on the thread writes 'now'.
 export function isDue(item, now = Date.now()) {
-  if (item?.start === 'later') return false;
+  if (item?.start === 'later' || item?.start === 'manual') return false;
   return !item?.runAt || item.runAt <= now;
 }
 

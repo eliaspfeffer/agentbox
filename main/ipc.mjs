@@ -782,7 +782,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     // attempted. A row scheduled for later is not woken for, because it is not
     // due; the timer is what serves those.
     // Nothing to wake for a thread added to Later: it starts when she says.
-    if (start !== 'later' && (!runAt || runAt <= Date.now())) supervisor.wake();
+    if (start !== 'manual' && start !== 'later' && (!runAt || runAt <= Date.now())) supervisor.wake();
     return out;
   });
 

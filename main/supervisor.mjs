@@ -650,6 +650,19 @@ export class Supervisor {
    * the same file) buys one two-second try and no more: the stamp moves with
    * it, and the next lift needs the next write.
    */
+  _noticeLimitResets() {
+    let lifted = false;
+    for (const [key, trouble] of Object.entries(this._profileTrouble ?? {})) {
+      const until = this._profileCooldown?.[key] ?? 0;
+      if (trouble?.cause !== 'at-limit' || !until || until > Date.now()) continue;
+      this._clearProfileTrouble(key);
+      if (!key.startsWith('codex:')) this._spawnCooldownUntil = 0;
+      lifted = true;
+    }
+    if (lifted) this._saveState();
+    return lifted;
+  }
+
   _noticeSignIns() {
     let lifted = false;
     for (const [key, trouble] of Object.entries(this._profileTrouble ?? {})) {
@@ -797,6 +810,7 @@ export class Supervisor {
       // flight, which is never what "resume" meant.
       if (this.sessions.has(item.id)) { out.working += 1; continue; }
 
+      if (item.start === 'manual') { this.store.threadEdit(item.product, item.id, {start: 'now'}); item.start = 'now'; }
       if (item.status !== 'open') this.store.answerItem(item.product, item.id, { status: 'open' });
       const prefix = `${item.product}:${item.id}:`;
       for (const key of [...this._handledAnswers]) if (key.startsWith(prefix)) this._handledAnswers.delete(key);
@@ -3729,7 +3743,7 @@ export class Supervisor {
         this._profileCooldown[account] = resetAt + LIMIT_RESET_GRACE_MS;
       } else {
         this._strikeProfile(account, {
-          hard: needsHerHands(cause),
+          hard: needsHerHands(cause) || cause === 'at-limit',
           rest: cause === 'signed-out' ? SIGNED_OUT_REST_MS : undefined,
         });
       }
@@ -4234,7 +4248,7 @@ export class Supervisor {
     if (this.firstRunHolding()) return;
     // Has a login landed since an account was found signed out? Ahead of the
     // brake below, which would otherwise hold the fleet past the sign-in.
-    try { this._noticeSignIns(); } catch (e) { console.warn('zero: could not look for a sign-in:', e.message); }
+    try { this._noticeLimitResets(); this._noticeSignIns(); } catch (e) { console.warn('zero: could not look for a sign-in:', e.message); }
     // A COOLDOWN STOPS THE SPAWNING AND IT MUST NOT STOP THE TELLING. The brake
     // goes on when there is no healthy account left anywhere, for up to half an
     // hour, which is precisely the half hour her tasks are all stuck and the

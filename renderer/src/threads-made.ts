@@ -58,7 +58,7 @@ export const stateWord = (state: ThreadStateWord | null | undefined): string => 
  * in Needs you is not waiting on a press, whatever its fields say yet.
  */
 export function approvableFiled(
-  i: Pick<WorkItem, 'status' | 'kind' | 'labels' | 'answer'> & { start?: 'later' | 'now' },
+  i: Pick<WorkItem, 'status' | 'kind' | 'labels' | 'answer'> & { start?: 'later' | 'manual' | 'now' },
   state: ThreadStateWord | null,
 ): boolean {
   // WAITING OR LATER, since w-9cf2b43110's second half: a proposal is no

@@ -5889,6 +5889,7 @@ export default function App() {
               to: to ?? slug,
               when: how?.runAt ? whenLabel({ runAt: how.runAt, repeat: null }) : null,
               held: how?.start === 'later',
+              todo: how?.start === 'manual',
             }), made?.id ? { product: made.product, id: made.id } : undefined);
             // SHOW WHERE IT WENT (2026-10-01: a new thread looked as if it
             // was never made, since it was not in the inbox). A thread sent to an agent is not
@@ -5896,7 +5897,7 @@ export default function App() {
             // tab moves to where it did land, Running or Scheduled, so she
             // sees the row arrive instead of an unchanged page.
             if (!how?.background && workspaceNavigation && !teamOpen && !focused && (['inbox', 'progress', 'snoozed'] as View[]).includes(view)) {
-              setView((how?.runAt && how.runAt > Date.now()) || how?.start === 'later' ? 'snoozed' : 'progress');
+              setView(how?.start === 'manual' ? 'inbox' : (how?.runAt && how.runAt > Date.now()) || how?.start === 'later' ? 'snoozed' : 'progress');
               setSelected(0);
               setMultiSel(new Set());
             }

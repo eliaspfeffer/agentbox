@@ -664,6 +664,7 @@ async function createWindow() {
   let pushUpdate = () => {};
   const updater = app.isPackaged ? createUpdater({
     app,
+    repository: config.updateRepository,
     onChanged: () => pushUpdate(),
   }) : createSourceUpdater({
     app,

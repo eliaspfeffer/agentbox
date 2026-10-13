@@ -96,7 +96,13 @@ export function describe(state) {
   };
 }
 
-export function createUpdater({ app, log = console, onChanged = () => {} }) {
+export function githubUpdateFeed(repository) {
+  if (repository == null) return null;
+  if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(repository.owner ?? '') || !/^[A-Za-z0-9_.-]+$/.test(repository.repo ?? '')) throw Error('Choose a valid GitHub update repository.');
+  return {provider:'github',owner:repository.owner,repo:repository.repo};
+}
+
+export function createUpdater({ app, repository = null, log = console, onChanged = () => {} }) {
   let state = {
     phase: 'idle',
     currentVersion: app.getVersion(),
@@ -120,8 +126,11 @@ export function createUpdater({ app, log = console, onChanged = () => {} }) {
   let autoUpdater = null;
   try {
     ({ autoUpdater } = require('electron-updater'));
+    const feed = githubUpdateFeed(repository);
+    if (feed) autoUpdater.setFeedURL(feed);
   } catch (e) {
-    set({ phase: 'unsupported', error: 'This build has no updater in it.' });
+    autoUpdater = null;
+    set({ phase: 'unsupported', error: repository ? 'The selected update feed could not be configured.' : 'This build has no updater in it.' });
     log.warn?.('[updater] electron-updater is not available:', e?.message ?? e);
   }
 

@@ -538,7 +538,7 @@ export const api = {
     try { return await window.zero.threadEdit({ product, id, patch }); } catch (err) { return { ok: false, error: String((err as Error)?.message ?? err) }; }
   },
 
-  async compose(p: { product: string; title: string; body?: string; kind?: string; priority?: number; runAt?: number; start?: 'later' | 'now'; labels?: string[]; model?: string; engine?: string; effort?: string; assignee?: string; due?: string; visibility?: 'team' | 'people' | 'private'; visibleTo?: string[] }): Promise<WorkItem | null> {
+  async compose(p: { product: string; title: string; body?: string; kind?: string; priority?: number; runAt?: number; start?: 'later' | 'manual' | 'now'; labels?: string[]; model?: string; engine?: string; effort?: string; assignee?: string; due?: string; visibility?: 'team' | 'people' | 'private'; visibleTo?: string[] }): Promise<WorkItem | null> {
     // FIXTURES ANSWER WITH THE TASK, the way the real store does. Returning
     // null here meant the send had nothing to point at, and the caller reads
     // that as "no task was made" and puts no way back on the undo pile — so the
@@ -555,6 +555,7 @@ export const api = {
         status: 'open', title: p.title, body: p.body, kind: p.kind ?? 'directive',
         labels: ['founder'], priority: p.priority ?? 5, epoch: 1, claim: null,
         ...(p.runAt ? { runAt: p.runAt } : {}),
+        ...(p.start ? {start:p.start,...(p.start==='manual'?{status:'blocked' as const}:{})} : {}),
         ...(p.model ? { model: p.model } : {}),
         // AND THE ENGINE, WHICH THIS DROPPED ON THE FLOOR. `engine` was not even
         // in the param type above, so a card that visibly picked Codex made a

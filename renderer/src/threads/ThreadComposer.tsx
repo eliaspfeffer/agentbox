@@ -70,7 +70,7 @@ export interface ThreadSent {
   /** A Send later moment, when there was one. */
   runAt?: number;
   /** 'later' when it went to Later rather than to a moment (w-afb66e6661). */
-  start?: 'later';
+  start?: 'later' | 'manual';
   /** The repeating rule's id, so ending it can be the undo. */
   ruleId?: string;
   /** Everyone a message went to, when it went to more than one person. */
@@ -361,7 +361,7 @@ export function ThreadComposer({
   const stopper = noProjectYet(product, { person: !!person });
   const canSend = !sending && (person ? !!text.trim() : !!message && !!product && !refusal);
 
-  const sendTask = async (when: { runAt?: number; start?: 'later'; repeat?: { every: 'day' | 'weekday' | 'week'; on?: number; at: string } } = {}, spoken?:string, background=false) => {
+  const sendTask = async (when: { runAt?: number; start?: 'later' | 'manual'; repeat?: { every: 'day' | 'weekday' | 'week'; on?: number; at: string } } = {}, spoken?:string, background=false) => {
     const spokenMessage=spoken===undefined?threadMessage(typed,attachments):threadMessage([text,spoken].filter(Boolean).join('\n\n'),attachments);
     if (sending || !product || !spokenMessage || refusal) {if(background)throw Error(refusal || 'Bitte ein gültiges Projekt wählen.');return;}
     const message=spokenMessage;
@@ -919,6 +919,7 @@ export function ThreadComposer({
               </span>
             )}
             <span className="tc-send" ref={anchor('later')}>
+              <button type="button" className="tc-save-todo" disabled={!canSend} onClick={() => void sendTask({start: 'manual'})}>Als To-do speichern</button>
               <button type="button" className="tc-send-main" disabled={!canSend} onClick={() => void send()} title={refusal ?? stopper?.reason ?? 'Send · ⌘↵'}>
                 Send <kbd>⌘↵</kbd>
               </button>
