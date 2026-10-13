@@ -10,7 +10,7 @@ export function RowHoverPreview({id,onClose,children}:{id:string;onClose:()=>voi
   const box=panel.getBoundingClientRect();
   const placed=placeHint(row.getBoundingClientRect(),box,{width:innerWidth,height:innerHeight},'left');
   // Touch the row so reaching the buttons cannot hover a different task in the gap.
-  setAt(placed?{...placed,top:Math.max(HINT_MARGIN,Math.min(placed.top+(placed.rose?HINT_GAP:-HINT_GAP),innerHeight-box.height-HINT_MARGIN))}:null);
+  setAt(placed?{...placed,left:Math.max(HINT_MARGIN,innerWidth-box.width-HINT_MARGIN),top:Math.max(HINT_MARGIN,Math.min(placed.top+(placed.rose?HINT_GAP:-HINT_GAP),innerHeight-box.height-HINT_MARGIN))}:null);
   const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.stopPropagation();onClose()}};
   const outside=(e:Event)=>{if(!panel.contains(e.target as Node)&&!row.contains(e.target as Node))onClose()};
   const scroll=(e:Event)=>{if(!panel.contains(e.target as Node))onClose()};
