@@ -37,7 +37,7 @@
 // is, so it hands over what is ready and how many are working on
 // `zero:corner-tag`; shared/corner-tag.mjs puts it newest first.
 
-import { cardPlacement, cornerPlace, hiddenUntil, keepCorner, readyNow, restingSpot, spotFor, tagScaleOn, tagShows, tagZoom, zoomFor, zoomStep, HIDE_CHOICES } from '../shared/corner-tag.mjs';
+import { cardPlacement, cornerPlace, heightFromDrag, hiddenUntil, keepCorner, readyNow, restingSpot, spotFor, tagScaleOn, tagShows, tagZoom, zoomFor, zoomStep, GRIPS, HIDE_CHOICES } from '../shared/corner-tag.mjs';
 
 // How long the pointer may be off both the tag and its list before the list
 // shuts: long enough to cross the gap between them, short enough to feel like
@@ -123,6 +123,21 @@ export function createCornerTag({
     const known = tag ?? (config.cornerTagSpot ? { ...config.cornerTagSpot, ...tagSize } : null);
     return known ? areaOf(known) : areas()[0];
   };
+  // While a corner is held, the tag is placed from the corner opposite it
+  // rather than from its own last position, so the end she is not dragging
+  // does not creep across the screen as the size changes.
+  const resizeTo = (size) => {
+    if (!press?.grip || !tag) return;
+    tagSize = { width: Math.max(1, Math.round(size.width)), height: Math.max(1, Math.round(size.height)) };
+    const a = press.anchor;
+    tag = {
+      x: press.corner.endsWith('r') ? a.x : a.x - tagSize.width,
+      y: press.corner.startsWith('b') ? a.y : a.y - tagSize.height,
+      ...tagSize,
+    };
+    if (alive('tag')) wins.tag.setBounds(rounded(tag));
+  };
+
   const placeTag = () => {
     const held = place ? spotFor(place, tagSize, screenFor()) : null;
     const spot = held ?? restingSpot(tag ? { x: tag.x, y: tag.y } : config.cornerTagSpot ?? null, tagSize, areas());
@@ -279,8 +294,27 @@ export function createCornerTag({
     // screen's automatic size that is.
     if (press.grip) {
       if (!press.moved) return;
-      const want = zoomFor(press.fromHeight + dy, areaOf(tag).width);
-      if (want !== zoom) { zoom = want; sendState(); }
+      const want = zoomFor(heightFromDrag(press.corner, press.fromHeight, dx, dy), areaOf(tag).width);
+      if (want === zoom) return;
+      const grew = want > zoom;
+      zoom = want;
+      sendState();
+      // THE WINDOW GROWS BEFORE THE PAGE DOES, never after. The page redraws
+      // at the new size and then reports it, a frame later; until that report
+      // the window is still the old rectangle, and a tag drawn larger than its
+      // window is a tag with its corners cut off, which is what she saw. So a
+      // growing drag widens the window on this side of the message straight
+      // away, by the same proportion, and the page's own measurement corrects
+      // it a frame later. Shrinking waits for the page: a window smaller than
+      // what is drawn in it clips, a window larger than it never does.
+      if (grew) {
+        // The height the page is about to draw is the scale it was just handed
+        // (28 points times it), and everything in the tag grows together, so
+        // the width goes up by the same proportion until the page says
+        // otherwise.
+        const height = Math.ceil(28 * scaleNow());
+        resizeTo({ width: Math.ceil(tagSize.width * height / Math.max(1, tagSize.height)), height });
+      }
       return;
     }
     if (press.moved && alive('tag')) {
@@ -308,10 +342,17 @@ export function createCornerTag({
     press = null;
     if (p.grip) {
       // The pointer is still on the tag, so the list waits for it to leave and
-      // come back, exactly as it does after a move. A press on the grip that
+      // come back, exactly as it does after a move. A press on a grip that
       // never moved is not a click either: it does not open the app.
       send('tag', 'corner-tag:dragging', false);
-      if (p.moved) saveConfig(config, { cornerTagZoom: zoom });
+      if (!p.moved) return;
+      // It has been dragged into a corner of its screen; let it settle back
+      // against the edge it is parked at, and remember where that is.
+      tag = { ...restingSpot({ x: tag.x, y: tag.y }, tagSize, areas()), ...tagSize };
+      if (alive('tag')) wins.tag.setBounds(rounded(tag));
+      place = cornerPlace(tag, areaOf(tag));
+      saveConfig(config, { cornerTagZoom: zoom, cornerTagSpot: { x: Math.round(tag.x), y: Math.round(tag.y) }, cornerTagPlace: place });
+      if (open) placeCard();
       return;
     }
     if (p.moved) {
@@ -414,6 +455,9 @@ export function createCornerTag({
       if (open) { placeCard(); showCard(); }
       return null;
     }
+    // Mid-resize the page's own measurement is the truth: it places the tag
+    // from the corner she is not holding.
+    if (press?.grip) { resizeTo(size); if (open) placeCard(); return null; }
     tagSize = size;
     // Nothing moves under the pointer while it is dragging.
     if (press?.moved) return null;
@@ -450,11 +494,17 @@ export function createCornerTag({
   ipcMain.handle('corner-tag:press', (_e, at) => {
     const pt = Number.isFinite(at?.x) && Number.isFinite(at?.y) ? { x: at.x, y: at.y } : screen.getCursorScreenPoint?.();
     if (!pt || !tag || !tagUp() || press) return null;
+    const corner = GRIPS.includes(at?.corner) ? at.corner : 'br';
     press = {
       start: pt, from: { x: tag.x, y: tag.y }, moved: false, at: now(), timer: null,
-      // A press on the grip resizes instead of moving: the corner follows the
-      // cursor down and the tag grows, the way a window does.
-      grip: !!at?.grip, fromHeight: tagSize.height,
+      // A press on a grip resizes instead of moving: the corner she has hold
+      // of follows the cursor, and the one opposite it stays exactly where it
+      // is, the way a window resizes.
+      grip: !!at?.grip, corner, fromHeight: tagSize.height,
+      anchor: {
+        x: corner.endsWith('r') ? tag.x : tag.x + tag.width,
+        y: corner.startsWith('b') ? tag.y : tag.y + tag.height,
+      },
     };
     press.timer = setTimer(step, FRAME_MS);
     return null;

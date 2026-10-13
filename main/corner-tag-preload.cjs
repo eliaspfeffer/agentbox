@@ -22,9 +22,10 @@ contextBridge.exposeInMainWorld('cornerTag', {
   // The button went down on the tag, and came up (or was taken away). What
   // happens in between, a drag or nothing, the main process reads off the
   // real cursor.
-  // grip: the press landed on the tag's resize corner, so what the cursor
-  // does next is a resize rather than a move.
-  press: (x, y, grip) => ipcRenderer.invoke('corner-tag:press', { x, y, grip: !!grip }),
+  // grip: the press landed on one of the tag's four resize corners, so what
+  // the cursor does next is a resize rather than a move, and corner says which
+  // one it has hold of.
+  press: (x, y, grip, corner) => ipcRenderer.invoke('corner-tag:press', { x, y, grip: !!grip, corner }),
   release: (cancelled) => ipcRenderer.invoke('corner-tag:release', { cancelled: !!cancelled }),
   go: (id) => ipcRenderer.invoke('corner-tag:go', id),
   hide: (choice) => ipcRenderer.invoke('corner-tag:hide', choice),

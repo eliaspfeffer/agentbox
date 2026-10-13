@@ -31,6 +31,15 @@ export function atTheApp({ focused = false, idleMs = 0 } = {}) {
   return !!focused && idleMs < AWAY_AFTER_MS;
 }
 
+// THE PHONE'S RULE IS WIDER: she is at the computer, in any app, so the phone
+// says nothing. Someone in a browser on the laptop is not at the app, and the
+// desktop banner above is how she hears; buzzing the phone in her bag as well
+// is the "tons and tons of notifications" she reported (2026-10-13). The
+// phone is for when she has left the machine, which only the idle clock knows.
+export function atTheComputer({ idleMs = 0 } = {}) {
+  return idleMs < AWAY_AFTER_MS;
+}
+
 // WHAT COUNTS AS NEWS, which is the question before "is she away".
 //
 // renderer/src/App.tsx owns the definition of the inbox and asks this of every

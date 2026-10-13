@@ -384,7 +384,8 @@ export function createPhoneLink({ file, channels, listeners, dist, files = null,
     if (action === 'subscribe') {
       const endpoint = String(subscription?.endpoint ?? '');
       if (!/^https:\/\//.test(endpoint) || !subscription?.keys?.p256dh || !subscription?.keys?.auth) throw new Error('That is not a push subscription.');
-      saved.alerts[d.id] = { sub: { endpoint, keys: { p256dh: String(subscription.keys.p256dh), auth: String(subscription.keys.auth) } }, name: d.name, since: Date.now() };
+      // ONE PHONE HEARS THEM: the one that turned them on last (newestAlerts).
+      saved.alerts = { [d.id]: { sub: { endpoint, keys: { p256dh: String(subscription.keys.p256dh), auth: String(subscription.keys.auth) } }, name: d.name, since: Date.now() } };
       save();
       onChange();
       return { on: true };
@@ -537,8 +538,23 @@ function read(file) {
     // A route somebody picked, not one written down because it was the only one.
     viaChosen: saved.viaChosen === true,
     vapid: saved.vapid?.publicKey && saved.vapid?.privateKey ? saved.vapid : null,
-    alerts: saved.alerts && typeof saved.alerts === 'object' ? saved.alerts : {},
+    alerts: newestAlerts(saved.alerts),
   };
+}
+
+// ALERTS GO TO ONE PHONE, the one that turned them on last (2026-10-13).
+// Adding the app to the home screen again, over Wi-Fi, over Tailscale or
+// through the relay, makes a separate web app to iOS with its own id here, and
+// nothing a page can read says two of them are the same phone. One Mac held
+// three of them, so every alert arrived three times in three groups to clear.
+// The newest is the icon in use: an older one is told alerts are off and can
+// take them back with one tap.
+function newestAlerts(alerts) {
+  if (!alerts || typeof alerts !== 'object') return {};
+  const entries = Object.entries(alerts).filter(([, a]) => a?.sub?.endpoint);
+  if (entries.length <= 1) return Object.fromEntries(entries);
+  const [id, a] = entries.reduce((best, e) => ((e[1].since ?? 0) > (best[1].since ?? 0) ? e : best));
+  return { [id]: a };
 }
 
 function readJson(req) {

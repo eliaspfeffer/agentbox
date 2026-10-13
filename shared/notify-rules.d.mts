@@ -7,6 +7,8 @@ export const AWAY_AFTER_MS: number;
 
 export function atTheApp(state?: { focused?: boolean; idleMs?: number }): boolean;
 
+export function atTheComputer(state?: { idleMs?: number }): boolean;
+
 // `known` is the ids on the snapshot before this one, and null means there has
 // not been one. Empty and never-looked are different facts, and the module
 // says what reading one as the other cost.

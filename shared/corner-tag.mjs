@@ -128,6 +128,34 @@ export function zoomStep(zoom, by) {
   return tagZoom(tagZoom(zoom) + by * TAG_ZOOM.step);
 }
 
+/** Every corner resizes it, because one ledge in one corner was not findable. */
+export const GRIPS = ['tl', 'tr', 'bl', 'br'];
+
+/**
+ * How tall a drag on this corner means. The corner follows the cursor and the
+ * opposite one stays where it is, the way a window resizes. The tag is four
+ * times wider than it is tall, so sideways travel counts for about a third:
+ * the diagonal still feels like a diagonal without the width running away.
+ */
+export function heightFromDrag(corner, fromHeight, dx, dy) {
+  const down = corner.startsWith('b') ? dy : -dy;
+  const out = corner.endsWith('r') ? dx : -dx;
+  return Math.round(fromHeight + down + out * 0.35);
+}
+
+/**
+ * HOW MUCH OF THE TAG'S SIZE THE LIST TAKES (2026-10-13). The tag is a glance
+ * from across a desk and wants to be big on a big screen; the list is read a
+ * line at a time and does not. At the tag's full scale on her 32" the rows came
+ * out "really, really big... way bigger than anything else I'm used to seeing
+ * on the screen", so the list follows the tag less than a third of the way and
+ * stops at a quarter bigger than the app's own text.
+ */
+export function cardScale(scale) {
+  const s = Number.isFinite(scale) ? scale : 1;
+  return clamp(Math.round((1 + (s - 1) * 0.3) * 1000) / 1000, 1, 1.25);
+}
+
 /**
  * THE NINE DOTS ARE WHOLE PIXELS, not a share of the tag (2026-10-13). They
  * used to be 2.7 and 0.95 points multiplied by the scale, which at 31px came

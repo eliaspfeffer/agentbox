@@ -317,13 +317,12 @@ describe('alerts on the phone', () => {
     await link.act({ action: 'on' });
     await listening(link);
     await alerts(41924, link, 'looking', { action: 'subscribe', subscription: SUB });
-    await alerts(41924, link, 'pocket', { action: 'subscribe', subscription: { ...SUB, endpoint: 'https://web.push.apple.com/def' } });
     const req = http.get({ host: '127.0.0.1', port: 41924, path: `/events?token=${link.key}&device=looking` }, (res) => res.on('data', () => {}));
     await wait(80);
     link.arrivals([{ id: 'w-1', title: 'x', kind: 'item' }]);
     await wait(60);
     req.destroy();
-    expect(sent.map((s) => s.sub.endpoint)).toEqual(['https://web.push.apple.com/def']);
+    expect(sent).toHaveLength(0);
   });
 
   it('forgets a phone whose subscription is gone', async () => {
@@ -342,9 +341,9 @@ describe('alerts on the phone', () => {
     await link.act({ action: 'on' });
     await listening(link);
     await alerts(41926, link, 'ph1', { action: 'subscribe', subscription: SUB });
-    await alerts(41926, link, 'ph2', { action: 'subscribe', subscription: SUB });
-    await link.act({ action: 'stop-alerts', device: 'ph2' });
-    expect((await link.status()).devices.filter((d) => d.alerts).map((d) => d.id)).toEqual(['ph1']);
+    await link.act({ action: 'stop-alerts', device: 'ph1' });
+    expect((await link.status()).devices.filter((d) => d.alerts)).toEqual([]);
+    await alerts(41926, link, 'ph1', { action: 'subscribe', subscription: SUB });
     await link.act({ action: 'reset' });
     link.arrivals([{ id: 'w-1', title: 'x', kind: 'item' }]);
     await wait(60);

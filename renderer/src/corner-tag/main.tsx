@@ -14,7 +14,7 @@
 // - Off both the tag and the list for a moment, and the list shuts.
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { HIDE_CHOICES, cardLines, latticeCell, tagSays } from '../../../shared/corner-tag.mjs';
+import { GRIPS, Grip, HIDE_CHOICES, cardLines, cardScale, latticeCell, tagSays } from '../../../shared/corner-tag.mjs';
 import { NAME } from '../../../shared/product-name.mjs';
 import { Lattice, Move, markMoves } from './lattice';
 import './corner-tag.css';
@@ -32,7 +32,8 @@ type Bridge = {
   size: (part: Part, w: number, h: number) => Promise<unknown>;
   hover: (part: Part, inside: boolean) => Promise<unknown>;
   toggle: () => Promise<unknown>;
-  press: (x: number, y: number, grip?: boolean) => Promise<unknown>;
+  // grip and corner say the press landed on one of the four resize corners.
+  press: (x: number, y: number, grip?: boolean, corner?: Grip) => Promise<unknown>;
   release: (cancelled?: boolean) => Promise<unknown>;
   go: (id: string | null) => Promise<unknown>;
   hide: (choice: string) => Promise<unknown>;
@@ -77,6 +78,9 @@ function useTagState() {
     const { dot, gap } = latticeCell(28 * state.scale);
     root.style.setProperty('--ct-dot', `${dot}px`);
     root.style.setProperty('--ct-gap', `${gap}px`);
+    // The list follows the tag only part of the way: it is read a line at a
+    // time and should sit near the size of everything else on the screen.
+    root.style.setProperty('--ct-cs', String(cardScale(state.scale)));
   }, [state.scale]);
   return state;
 }
@@ -177,31 +181,41 @@ function Tag({ state, forceOpen = false }: { state: State; forceOpen?: boolean }
       <Mark says={{ kind: says.kind, count: says.kind === 'ready' ? counts.ready : counts.working }} />
       <span className="ct-words">{text}</span>
       <Go />
-      {/* THE CORNER SHE DRAGS TO RESIZE IT (her ask, 2026-10-13). It sits in
-          the tag's bottom left, the end furthest from the chevron and from the
-          screen's own corner, and it is invisible until the pointer is on the
-          tag. The press goes through the same door as a move, flagged as the
-          grip, so the main process reads the cursor exactly as it does for a
-          drag: the page is never sent every move. */}
-      <span
-        className="ct-grip"
-        aria-hidden
-        title="Drag to resize"
-        onPointerDown={(e) => {
-          if (e.button !== 0) return;
-          e.stopPropagation();
-          e.currentTarget.setPointerCapture(e.pointerId);
-          pressed.current = true;
-          bridge?.press(e.screenX, e.screenY, true);
-        }}
-        onPointerUp={(e) => {
-          e.stopPropagation();
-          letGo(false);
-          if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-        }}
-        onPointerCancel={() => letGo(true)}
-        onLostPointerCapture={() => letGo(true)}
-      />
+      {/* EVERY CORNER RESIZES IT (2026-10-13). The first version put one small
+          ledge in the bottom left, and nothing said it was there: "there was no
+          way to discover that it was actually expandable... I'm not a fan of
+          that UI." So all four corners take a drag, each with a hand-sized
+          patch to aim at, and pointing at one draws a small arrow along its
+          diagonal. The press goes through the same door as a move, flagged as
+          the grip, so the main process reads the cursor exactly as it does for
+          a drag: the page is never sent every move. */}
+      {GRIPS.map((corner) => (
+        <span
+          key={corner}
+          className={`ct-grip ct-grip-${corner}`}
+          data-corner={corner}
+          aria-hidden
+          title="Drag to resize"
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            e.stopPropagation();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            pressed.current = true;
+            bridge?.press(e.screenX, e.screenY, true, corner);
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation();
+            letGo(false);
+            if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+          }}
+          onPointerCancel={() => letGo(true)}
+          onLostPointerCapture={() => letGo(true)}
+        >
+          <svg viewBox="0 0 10 10" aria-hidden>
+            <path d="M8.5 1.5 1.5 8.5M8.5 5.2V1.5H4.8M1.5 4.8v3.7h3.7" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      ))}
     </div>
   );
 }

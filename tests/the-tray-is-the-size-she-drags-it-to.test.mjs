@@ -64,15 +64,34 @@ describe('the size she drags to is a multiple of the automatic one', () => {
   });
 });
 
-describe('the corner she drags', () => {
-  it('is a grip in the tag, which only shows itself when pointed at', () => {
-    expect(page).toContain('ct-grip');
-    expect(css).toContain('.ct-grip');
+describe('the corners she drags', () => {
+  it('are all four, each with an arrow that shows itself when pointed at', () => {
+    // One ledge in one corner was not discoverable: "there was no way to
+    // discover that it was actually expandable".
+    for (const corner of ['tl', 'tr', 'bl', 'br']) expect(css).toContain(`.ct-grip-${corner}`);
+    expect(page).toContain('GRIPS.map');
     expect(css).toMatch(/\.ct-tag:hover \.ct-grip[^}]*opacity/);
+    expect(css).toMatch(/\.ct-grip:hover[^}]*opacity/);
+    // and a patch big enough to aim at, not a few pixels of ledge
+    expect(css).toMatch(/\.ct-grip \{[^}]*width: calc\(16px/);
   });
 
-  it('presses through the same door as a drag, saying it is the grip', () => {
-    expect(bridge).toContain('press: (x, y, grip)');
-    expect(page).toContain('bridge?.press(e.screenX, e.screenY, true)');
+  it('press through the same door as a drag, saying which corner it is', () => {
+    expect(bridge).toContain('press: (x, y, grip, corner)');
+    expect(page).toContain('bridge?.press(e.screenX, e.screenY, true, corner)');
+  });
+});
+
+describe('the corners do not steal the tag itself', () => {
+  it('leaves the middle of the tag to the mark and the chevron', () => {
+    // The grips are strips across the top and bottom of each end. If they took
+    // the full height, a press on the nine dots or on the chevron would start
+    // a resize instead of opening the app: exactly the kind of quirk she asked
+    // me to find before pushing.
+    const grip = css.match(/\.ct-grip \{[^}]*\}/)[0];
+    expect(grip).toMatch(/height: calc\(8px \* var\(--ct-s\)\)/);
+    expect(grip).not.toContain('height: 50%');
+    // the strips are shorter than the mark is tall, which is 10px of a 28 tag
+    expect(8 * 2).toBeLessThan(28 - 10);
   });
 });

@@ -25,7 +25,7 @@ import { appSessionFolders } from './agent-homes.mjs';
 import { registerIpc } from './ipc.mjs';
 import { createPhoneLink } from './phone-link.mjs';
 import { relayAddress } from './relay-address.mjs';
-import { atTheApp } from '../shared/notify-rules.mjs';
+import { atTheComputer } from '../shared/notify-rules.mjs';
 import { answerWhatOnlyTheWindowAnswered } from './serve.mjs';
 import { carryHerBriefsAcross, joinMessageRules, setAsideShippedMessageRules, unifyAgentInstructions } from './instruction-settings.mjs';
 import * as approvals from './approvals.mjs';
@@ -749,10 +749,10 @@ async function createWindow() {
     // (main/relay-client.mjs). None until it is deployed, and then no choice.
     relayUrl: relayAddress({ appDir }),
     onChange: () => { if (!window.isDestroyed()) sendToWindow('zero:phone-changed'); },
-    // The phone stays quiet while she is at the desktop app, by the same rule
-    // the desktop's own notifications use (shared/notify-rules.mjs).
+    // The phone stays quiet while she is using the computer in any app, not
+    // only Agentbox: the desktop banner covers the rest (shared/notify-rules.mjs).
     atDesk: () => {
-      try { return atTheApp({ focused: !window.isDestroyed() && window.isFocused(), idleMs: powerMonitor.getSystemIdleTime() * 1000 }); } catch { return false; }
+      try { return atTheComputer({ idleMs: powerMonitor.getSystemIdleTime() * 1000 }); } catch { return false; }
     },
   });
   window.on('focus', () => phone.seen());
