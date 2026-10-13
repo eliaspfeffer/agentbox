@@ -7,6 +7,7 @@ export interface WorkItem {
   id: string;
   product: string;
   productName: string;
+  displayProject?: string;
   // WHAT PEOPLE PUT ON EACH MESSAGE IN A CONVERSATION (w-560647d4db): by the
   // message's line uid, then by emoji, then the people on it. Folded out of the
   // presses the ledger holds (shared/work-items.mjs); absent on every row
@@ -970,6 +971,7 @@ export interface RepeatRule {
   id: string;
   product: string;
   productName: string;
+  displayProject?: string;
   title: string;
   body?: string;
   priority?: number;
@@ -1164,5 +1166,5 @@ export type ThreadEditPatch = Partial<{
   /** 'now' is how a thread leaves Later and starts (w-afb66e6661). */
   start: 'later' | 'now';
   visibility: 'team' | 'people' | 'private'; visibleTo: string[]; priority: number;
-  blockedBy: string[]; blocks: string[];
+  blockedBy: string[]; blocks: string[]; displayProject: string;
 }>;

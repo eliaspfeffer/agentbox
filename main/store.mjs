@@ -523,9 +523,10 @@ export class Store {
   // person's own words; on the summary the later write wins either way
   // (SHARED_FIELDS in shared/work-items.mjs).
   threadEdit(slug, id, patch) {
+    if(patch?.displayProject!==undefined && (typeof patch.displayProject!=='string' || !this.listProducts().some(p=>p.slug===patch.displayProject)))throw new Error('Choose an existing project.');
     // `start` is how a thread leaves Later: the summary and the thread page
     // both write 'now' on it, which is what makes `isDue` true again.
-    const fields = ['problem', 'progress', 'solution', 'visibility', 'visibleTo', 'priority', 'blockedBy', 'blocks', 'start'];
+    const fields = ['problem', 'progress', 'solution', 'visibility', 'visibleTo', 'priority', 'blockedBy', 'blocks', 'start', 'displayProject'];
     const allowed = Object.fromEntries(Object.entries(patch ?? {}).filter(([k]) => fields.includes(k)));
     if (!Object.keys(allowed).length) throw new Error('nothing to change');
     return this.modules.workItemsDisk.updateWorkItem(this.productDir(slug), id, allowed, { source: 'founder' });

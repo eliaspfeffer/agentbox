@@ -484,6 +484,7 @@ export default function App() {
   // the same reason `newProject` has one: ⌘K closes the modal stack on its
   // way out, and this card is opened FROM ⌘K.
   const [importAgents, setImportAgents] = useState(false);
+  const [importChatsOnly,setImportChatsOnly]=useState(false);
   // The project just made, handed to the composer so the task she was in the
   // middle of writing is now addressed to it.
   const [pickProject, setPickProject] = useState<string | null>(null);
@@ -5273,6 +5274,7 @@ export default function App() {
               items={items}
               onSearch={openSearch}
               onCompose={() => setModal('compose')}
+              onImport={() => {setImportChatsOnly(true);setImportAgents(true)}}
               shown={displayedBox.length + theirRows.length}
               total={(mineShown ? shownBox.length : 0) + theirRows.length}
               tab={view}
@@ -5698,7 +5700,7 @@ export default function App() {
                   // her own filter, over a tab that still read 13.
                   hiddenNow > 0
                     ? <FilteredEmpty view={view} hidden={hiddenNow}
-                        onClear={() => setInboxDisplay({ ...inboxDisplay, priorities: [], projects: [], updated: 'any', privacy: 'any' })} />
+                        onClear={() => setInboxDisplay({ ...inboxDisplay, priorities: [], projects: [], excludedProjects: [], projectMode: 'all', updated: 'any', privacy: 'any' })} />
                     // "Nothing needs you" is about you alone; with a teammate
                     // on the page the quiet line says it instead.
                     : view === 'inbox' && !withOthers
@@ -5759,6 +5761,7 @@ export default function App() {
                   onHover={setHoveredId}
                   onDone={markDone}
                   onLater={openSnooze}
+                  onProjectChange={async(item,project)=>{const result=await api.threadEdit(item.product,item.id,{displayProject:project});if(!result.ok){showToast(result.error||'Project assignment failed.');return false;}await refresh();return true;}}
                   onReply={(item) => { setFocused(item); markSeen(item); setModal('reply'); }}
                   onPick={pickOption}
                   onSelect={(i) => { setCardSel(null); setSelected(i); }}
@@ -5911,7 +5914,7 @@ export default function App() {
         <Palette
           onFirstRun={walkAgain}
           onTutorial={() => startTutorial(comeBackTo(snap.products, productFilter, rememberedProject()))}
-          onImportAgents={() => { setModal(null); setImportAgents(true); }}
+          onImportAgents={() => { setModal(null); setImportChatsOnly(false);setImportAgents(true); }}
           onFreshUser={openAsNewUser}
           onDemo={openDemoInbox}
           products={rankedProducts}
@@ -6178,6 +6181,7 @@ export default function App() {
        */}
       {importAgents && (
         <ImportAgents
+          chatsOnly={importChatsOnly}
           products={snap.products}
           filter={productFilter}
           onNewProject={() => { setImportAgents(false); setNewProject(true); }}

@@ -139,7 +139,7 @@ export function dayGroups(
   return groups;
 }
 
-export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, searchDetails, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover, onAnswerImport, onReply, onPick, onDone, onLater, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd }: {
+export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, searchDetails, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover, onAnswerImport, onReply, onPick, onDone, onLater, onProjectChange, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd }: {
   items: WorkItem[];
   view: View;
   // WHICH VIEW'S KEYS THE ROW HINT PRINTS, which is not always the view this
@@ -219,6 +219,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
    * breaks. */
   walk?: { key: string | null; rows: string[] } | null;
   onHover?: (id: string | null) => void;
+  onProjectChange?: (item:WorkItem,project:string)=>Promise<boolean>;
   onDone?: (item: WorkItem) => void;
   onLater?: (item: WorkItem) => void;
   onReply?: (item: WorkItem) => void;
@@ -544,7 +545,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                   // THE TABLE ROW (the team version): the same row, its select
                   // box and its keys, with the approved columns instead of a
                   // title over a summary.
-                  <ThreadCells item={item} product={products.find((p) => p.slug === item.product)} now={Date.now()} tab={view}
+                  <ThreadCells item={item} products={products} onProjectChange={onProjectChange} product={products.find((p) => p.slug === item.product)} now={Date.now()} tab={view}
                     person={withPerson ? personCell?.(team?.me ?? null) : undefined} />
                 ) : <>
                 <div className="row-main">

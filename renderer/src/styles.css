@@ -8718,3 +8718,5 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
 .dictation-jobs textarea {display:block;width:100%;box-sizing:border-box;min-height:60px;}
 
 .live-heading button[aria-label="Call beenden"] {flex-shrink:0;white-space:nowrap;}
+
+.ia-search {width:100%;box-sizing:border-box;padding:10px 12px;margin:8px 0 14px;background:transparent;color:var(--text);border:1px solid var(--line);font:inherit;}

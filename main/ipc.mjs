@@ -1088,15 +1088,18 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // 'codex'`, land under the project whose folder they ran in exactly as the
   // Claude Code ones do, and the ones the user said not now to are here too, so
   // there is a way back to them.
-  const readAllThreads = () => {
+  const readAllThreads = (query = '') => {
+    const options=query ? {days:36500} : {};
     let claude = [];
     let codex = [];
-    try { ({ threads: claude } = readSessionThreads({})); } catch { claude = []; }
-    try { ({ threads: codex } = readCodexThreads({})); } catch { codex = []; }
-    return [...claude, ...codex].sort((a, b) => (b.when ?? 0) - (a.when ?? 0));
+    try { ({ threads: claude } = readSessionThreads(options)); } catch { claude = []; }
+    try { ({ threads: codex } = readCodexThreads({query})); } catch { codex = []; }
+    const search=query.toLocaleLowerCase();
+    return [...claude, ...codex].filter(t=>!search||String(t.title).toLocaleLowerCase().includes(search)).sort((a, b) => (b.when ?? 0) - (a.when ?? 0));
   };
-  ipcMain.handle('zero:agent-threads', () => {
-    const threads = readAllThreads();
+  ipcMain.handle('zero:agent-threads', (_e, {query} = {}) => {
+    const search=typeof query==='string' ? query.trim().slice(0,160) : '';
+    const threads = readAllThreads(search.length>=2?search:'');
     lastThreads = threads;
     // Each one already in the inbox says so, and the card leaves it out
     // (w-db6f5e331e). The walk's folder suggestions still read all of them.

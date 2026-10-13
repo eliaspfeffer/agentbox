@@ -73,12 +73,14 @@ const numericDesc = (dir) => {
  *  worked in yesterday sits in a folder the newest-`days` walk never opens
  *  (w-db6f5e331e). Past those folders only a stat is paid per file, and the
  *  walk still stops at MAX_DAY_FOLDERS. */
-export function listRolloutFiles(codexDir = codexHome(), { days = CODEX_RECENT_DAYS, since = null } = {}) {
+export function listRolloutFiles(codexDir = codexHome(), { days = CODEX_RECENT_DAYS, since = null, ids = null } = {}) {
   const root = path.join(codexDir, 'sessions');
   const out = [];
   let looked = 0;
+  const wanted = ids ? [...ids] : null, found = new Set();
+  if(wanted && !wanted.length)return out;
   const limit = Math.min(Math.max(1, Number(days) || 1), MAX_DAY_FOLDERS);
-  const reach = since == null ? limit : MAX_DAY_FOLDERS;
+  const reach = wanted ? Infinity : since == null ? limit : MAX_DAY_FOLDERS;
   for (const year of numericDesc(root)) {
     for (const month of numericDesc(path.join(root, year))) {
       for (const day of numericDesc(path.join(root, year, month))) {
@@ -91,12 +93,14 @@ export function listRolloutFiles(codexDir = codexHome(), { days = CODEX_RECENT_D
         for (const name of names) {
           if (!/^rollout-.*\.jsonl$/.test(name)) continue;
           const file = path.join(dir, name);
-          if (older) {
+          if(wanted){const id=wanted.find(id=>name.endsWith(`-${id}.jsonl`));if(!id||found.has(id))continue;found.add(id);}
+          if (older && !wanted) {
             let mtime = 0;
             try { mtime = fs.statSync(file).mtimeMs; } catch { continue; }
             if (mtime < since) continue;
           }
           out.push(file);
+          if(wanted && found.size===wanted.length)return out;
         }
       }
     }
@@ -253,21 +257,24 @@ export const isLive = (mtime, now = Date.now()) => Number(mtime) > 0 && now - Nu
  * THE USER'S CONVERSATIONS, newest first, in the shape the import card and the
  *  import row both read. One entry per thread a person typed into, in a real folder,
  *  touched in the last `days` days. */
-export function readCodexThreads({ home = os.homedir(), codexDir = codexHome(home), days = CODEX_RECENT_DAYS, now = Date.now() } = {}) {
+export function readCodexThreads({ home = os.homedir(), codexDir = codexHome(home), days = CODEX_RECENT_DAYS, now = Date.now(), query = '' } = {}) {
   const index = readCodexIndex(codexDir);
+  const search=String(query).trim().toLocaleLowerCase();
+  const ids=search?new Set([...index].filter(([,value])=>value.name.toLocaleLowerCase().includes(search)).map(([id])=>id)):null;
   const cutoff = now - Math.max(0, Number(days) || 0) * 86400 * 1000;
   const out = [];
   const skipped = { notHers: 0, scratch: 0, old: 0, empty: 0, unreadable: 0 };
-  for (const file of listRolloutFiles(codexDir, { days, since: cutoff })) {
+  for (const file of new Set([...listRolloutFiles(codexDir, { days, since: cutoff, ids }), ...(search ? listRolloutFiles(codexDir, {days,since:cutoff}) : [])])) {
     const r = readRollout(file);
     if (!r) { skipped.unreadable += 1; continue; }
     if (r.threadSource !== 'user') { skipped.notHers += 1; continue; }
     if (!r.cwd || isScratchFolder(r.cwd, home)) { skipped.scratch += 1; continue; }
     const named = index.get(r.id);
     const when = Math.max(named?.updatedAt ?? 0, r.mtime, r.startedAt);
-    if (when < cutoff) { skipped.old += 1; continue; }
+    if (!search && when < cutoff) { skipped.old += 1; continue; }
     const title = named?.name || threadTitle([r.prompt]);
     if (!title) { skipped.empty += 1; continue; }
+    if(search&&!title.toLocaleLowerCase().includes(search))continue;
     out.push({
       id: r.id,
       source: 'codex',

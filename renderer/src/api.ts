@@ -1150,7 +1150,7 @@ export const api = {
   // `agentFolders`: a main process too old to have the channel, or a walk that
   // threw on a folder it could not read, both mean the card draws the agent
   // files it always drew and says nothing it cannot back up.
-  async agentThreads(): Promise<SessionThread[]> {
+  async agentThreads(p: {query?:string} = {}): Promise<SessionThread[]> {
     if (useFixtures) {
       if (emptyFixtures || params.has('noThreads')) return [];
       return fixtureSessionThreads();
@@ -1158,7 +1158,7 @@ export const api = {
     const zero = window.zero as any;
     if (!zero?.agentThreads) return [];
     try {
-      const r = await zero.agentThreads();
+      const r = p.query ? await zero.agentThreads(p) : await zero.agentThreads();
       return Array.isArray(r?.threads) ? r.threads : [];
     } catch { return []; }
   },

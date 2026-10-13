@@ -114,7 +114,7 @@ contextBridge.exposeInMainWorld('zero', {
   importAgents: (payload) => ipcRenderer.invoke('zero:import-agents', payload ?? {}),
   // The Claude Code threads she started herself in the last few days, which is
   // what she meant by her agents, and taking one as a task.
-  agentThreads: () => ipcRenderer.invoke('zero:agent-threads'),
+  agentThreads: (p) => ipcRenderer.invoke('zero:agent-threads', p),
   importThreads: (payload) => ipcRenderer.invoke('zero:import-threads', payload ?? {}),
   badge: (count) => ipcRenderer.invoke('zero:badge', count),
   // Whether this page came up from ⌘R, and which build it is running.

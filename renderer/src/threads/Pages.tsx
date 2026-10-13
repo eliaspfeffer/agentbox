@@ -14,7 +14,7 @@ import { notStarted, rowTitle } from '../list-rules';
 import { DONE } from '../done-word';
 import {
   boardColumns, columnTo, DEFAULT_COLUMN_ORDER, filteredEmptyWords, finishedAt, isDirect, isFiltered, nextPrivacy, projectChoices, slotUnder,
-  timeHeading, updatedWords,
+  timeHeading, updatedWords, projectSelected, toggleProject, readSavedFilters, writeSavedFilters,
   type BoardEntry, type Display, type PageId, type Privacy, type UpdatedWindow,
 } from './page-rules';
 import { messageLine, messagePriority, rowSharing, sharePatch } from './page-rules';
@@ -99,9 +99,9 @@ function useOutside(open: boolean, close: () => void) {
 export type PeoplePick = { everyone: Person[]; picked: string[]; me: string | null; onPick: (picked: string[]) => void };
 
 /** Search, New thread and the Display icon, at the right of the Inbox and Team headers. */
-export function HeaderActions({ page, display, onDisplay, products, items, onSearch, onCompose, shown, total, tab, people }: {
+export function HeaderActions({ page, display, onDisplay, products, items, onSearch, onCompose, onImport, shown, total, tab, people }: {
   page: PageId; display: Display; onDisplay: (d: Display) => void; products: Product[]; items?: WorkItem[];
-  onSearch: () => void; onCompose: () => void; shown?: number; total?: number; tab?: string;
+  onSearch: () => void; onCompose: () => void; onImport?: () => void; shown?: number; total?: number; tab?: string;
   people?: PeoplePick;
 }) {
   const [open, setOpen] = useState(false);
@@ -119,6 +119,7 @@ export function HeaderActions({ page, display, onDisplay, products, items, onSea
   // hint plate, and is never printed on the control.
   return <div className="th-right">
     <button type="button" className="th-search" data-hint="search" data-hint-text="span" onClick={onSearch} title="Search threads (/)" aria-label="Search threads"><SearchGlyph /><span>Search</span></button>
+    {onImport && <button type="button" className="th-new" onClick={onImport} title="Import existing Codex and Claude chats">Add chat</button>}
     <button type="button" className="th-new" data-hint="new-task" onClick={onCompose} title="New thread (N)"><PenIcon />New thread</button>
     <span ref={(el) => { ref.current = el; }} style={{ position: 'relative', display: 'inline-flex' }}>
       <button type="button" className={`th-disp${worn ? ' faces' : ''}${open ? ' open' : ''}`}
@@ -153,6 +154,9 @@ export function DisplayMenu({ page, display, onDisplay, products, items = [], sh
   // projects chip so that "nothing picked means everything" is on the screen
   // rather than discovered by clicking a chip and watching the list grow.
   const [showAll, setShowAll] = useState(false);
+  const [saved,setSaved]=useState(()=>readSavedFilters(page)),[filterName,setFilterName]=useState('');
+  useEffect(()=>setSaved(readSavedFilters(page)),[page]);
+  const saveList=(next:typeof saved)=>{setSaved(next);writeSavedFilters(page,next)};
   const { shown: topProjects, rest: moreProjects } = projectChoices(products, items, { picked: display.projects });
   const projects = showAll ? [...topProjects, ...moreProjects] : topProjects;
   const set = (patch: Partial<Display>) => onDisplay({ ...display, ...patch });
@@ -177,8 +181,9 @@ export function DisplayMenu({ page, display, onDisplay, products, items = [], sh
       {PRIORITIES.map((p) => <button type="button" key={p.id} className={display.priorities.includes(p.id) ? 'on' : ''} onClick={() => set({ priorities: toggle(display.priorities, p.id) })}><PriorityMark id={p.id} />{p.label}</button>)}
     </span></div>
     {page === 'inbox' && topProjects.length + moreProjects.length > 1 && <div className="line"><span className="lab">Project</span><span className="opts">
-      <button type="button" className={display.projects.length === 0 ? 'on' : ''} onClick={() => set({ projects: [] })}>All projects</button>
-      {projects.map((p) => <button type="button" key={p.slug} className={display.projects.includes(p.slug) ? 'on' : ''} onClick={() => set({ projects: toggle(display.projects, p.slug) })}>{p.name}</button>)}
+      <button type="button" className={display.projectMode !== 'selected' && display.projects.length === 0 && !display.excludedProjects?.length ? 'on' : ''} aria-pressed={display.projectMode !== 'selected' && display.projects.length === 0 && !display.excludedProjects?.length} onClick={() => set({ projects: [], excludedProjects: [], projectMode: 'all' })}>All projects</button>
+      <button type="button" onClick={() => set({projects:[],excludedProjects:[],projectMode:'selected'})}>No projects</button>
+      {projects.map((p) => <button type="button" key={p.slug} aria-pressed={projectSelected(display,p.slug)} className={projectSelected(display,p.slug) ? 'on' : ''} onClick={() => onDisplay(toggleProject(display,p.slug))}>{p.name}</button>)}
       {moreProjects.length > 0 && <button type="button" className="th-pop-more" onClick={() => setShowAll(!showAll)}>
         {showAll ? 'Show fewer' : `Show all ${topProjects.length + moreProjects.length}`}
       </button>}
@@ -195,8 +200,14 @@ export function DisplayMenu({ page, display, onDisplay, products, items = [], sh
       {windows.map(([w, label]) => <button type="button" key={w} className={display.updated === w ? 'on' : ''} onClick={() => set({ updated: w })}>{label}</button>)}
     </span></div>
     <div className="rule" />
+    <div className="saved-filters">
+      <form onSubmit={e=>{e.preventDefault();const name=filterName.trim();if(!name)return;saveList([...saved.filter(f=>f.name!==name),{id:crypto.randomUUID(),name,display:{...display}}]);setFilterName('')}}>
+        <input aria-label="Filter name" placeholder="Filter name, e.g. Favorites" maxLength={80} value={filterName} onChange={e=>setFilterName(e.target.value)}/><button type="submit" disabled={!filterName.trim()}>Save filter</button>
+      </form>
+      {saved.map(f=><div className="saved-filter" key={f.id}><button type="button" onClick={()=>onDisplay(f.display)}>{f.name}</button><button type="button" aria-label={`Delete filter ${f.name}`} onClick={()=>saveList(saved.filter(row=>row.id!==f.id))}>×</button></div>)}
+    </div>
     <div className="foot"><span>{shown !== undefined && total !== undefined ? `Showing ${shown} of ${total}` : ''}</span>
-      {isFiltered(display) && <button type="button" onClick={() => set({ priorities: [], projects: [], updated: 'any', privacy: 'any' })}>Clear filters</button>}
+      {isFiltered(display) && <button type="button" onClick={() => set({ priorities: [], projects: [], excludedProjects: [], projectMode: 'all', updated: 'any', privacy: 'any' })}>Clear filters</button>}
     </div>
   </div>;
 }
@@ -287,7 +298,7 @@ export function InboxClear({ running, scheduled, onView, onCompose, team = false
           : team ? 'Start a thread and an agent picks it up, or message a teammate.' : 'Start a thread and an agent picks it up.'}
     </p>
     <div className="th-clear-acts">
-      <button type="button" className="th-new" onClick={onCompose}><PenIcon />New thread</button>
+    <button type="button" className="th-new" onClick={onCompose}><PenIcon />New thread</button>
       <span className="th-clear-key">or press <kbd>N</kbd></span>
     </div>
   </div>;
@@ -407,11 +418,14 @@ export function MessageTitle({ people, fromMe, text }: { people: string[]; fromM
  *  With a teammate on the page (w-05ff3d1438) it also carries the Person
  *  cell. Who can see the thread is said by one mark after its title, the lock
  *  or the people, and never by who else is on the page. */
-export function ThreadCells({ item, product, now, person, tab }: {
+export function ThreadCells({ item, product, now, person, tab, products, onProjectChange }: {
   item: WorkItem; product: Product | undefined; now: number; person?: ReactNode;
   /** On Done the time is when the thread was finished, which is its order. */
-  tab?: string;
+  tab?: string; products?: Product[]; onProjectChange?: (item:WorkItem,project:string)=>Promise<boolean>;
 }) {
+  const [assigned,setAssigned]=useState(item.displayProject||item.product),[savingProject,setSavingProject]=useState(false);
+  useEffect(()=>setAssigned(item.displayProject||item.product),[item.product,item.displayProject]);
+  const projectCell=onProjectChange&&products&&tab==='inbox'&&!item.agent ? <select aria-label={`Project for ${rowTitle(item)}`} title="Zuordnung für Übersicht und Filter; der Arbeitsordner bleibt erhalten." value={assigned} disabled={savingProject} onClick={e=>e.stopPropagation()} onChange={async e=>{const value=e.target.value;setAssigned(value);setSavingProject(true);try{if(!await onProjectChange(item,value))setAssigned(item.displayProject||item.product)}finally{setSavingProject(false)}}}>{products.filter(p=>!isDirect(p)&&!p.practice).map(p=><option key={p.slug} value={p.slug}>{p.name}</option>)}</select> : products?.find(p=>p.slug===assigned)?.name||product?.name||'';
   const when = tab === 'done' ? finishedAt(item) : item.updatedAt;
   const liveIds = useContext(LiveContext);
   const team = useContext(TeamContext);
@@ -457,7 +471,7 @@ export function ThreadCells({ item, product, now, person, tab }: {
   // comes and goes with an unrelated control cannot be read. Both follow the
   // click at once, the way the Share button does.
   const lock = seen === 'private';
-  return <RowCells live={liveIds.has(item.id)} title={rowTitle(item)} shared={seen === 'people'} chosen={chosen} lock={lock} held={notStarted(item)} where={product?.name ?? ''} person={person}
+  return <RowCells live={liveIds.has(item.id)} title={rowTitle(item)} shared={seen === 'people'} chosen={chosen} lock={lock} held={notStarted(item)} where={projectCell} person={person}
     priority={item.priority ?? 0} updatedAt={when} now={now} action={action} />;
 }
 

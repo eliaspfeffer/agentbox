@@ -109,7 +109,7 @@ export const CLAUDE_PERMISSION_MODES = [
 export const WORK_ITEM_FIELDS = [
   'title', 'label', 'body', 'kind', 'labels', 'priority', 'parent',
   'status', 'result', 'note', 'answer', 'product', 'runAt', 'snoozedUntil', 'answeredThrough',
-  'engine', 'model', 'effort',
+  'engine', 'model', 'effort', 'displayProject',
   // WHETHER THIS HAS BEEN STARTED AT ALL. 'later' is a thread written down and
   // deliberately not begun: it waits for a person, not for a clock, and
   // `isDue` below is where that becomes true of the whole app. 'now' is how it
@@ -374,6 +374,7 @@ function coerceField(field, value) {
     // rule about how the app writes, and it lives with the writer in
     // main/row-label.mjs. This module holds no taxonomy, only storage.
     case 'label': return str(value, MAX_TITLE);
+    case 'displayProject': return typeof value==='string' && value.trim() && value.length<=160 ? value.trim() : undefined;
     case 'body': case 'result': case 'note': case 'answer': return str(value, MAX_TEXT_BYTES);
     // kind and product are free strings on purpose: the taxonomy of work is the
     // caller's to invent and change without a migration here.
