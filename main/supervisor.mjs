@@ -2483,7 +2483,7 @@ export class Supervisor {
    */
   _onlyWeSpokeForAnAccount(item) {
     const seen = this._fruitless[`${item.product}:${item.id}`];
-    if (!seen?.saidTs || !(needsHerHands(seen.saidWhy) || seen.saidWhy === 'at-limit')) return false;
+    if (!seen?.saidTs || !(needsHerHands(seen.saidWhy) || seen.saidWhy === 'at-limit' || seen.saidWhy === 'interrupted')) return false;
     return (item.wrote?.result?.ts ?? 0) <= seen.saidTs;
   }
 
@@ -3003,7 +3003,7 @@ export class Supervisor {
    *   on arrival: it never got as far as being a session, so what it proves is
    *   that the machine is broken, not that this row has nothing in it.
    */
-  noteFreshRun(item, { everRan = true, account = null } = {}) {
+  noteFreshRun(item, { everRan = true, account = null, interrupted = false } = {}) {
     const key = `${item.product}:${item.id}`;
     // Re-read: `item` is the snapshot taken at spawn, and the whole question is
     // what the session did to the row since.
@@ -3041,7 +3041,7 @@ export class Supervisor {
     // moment it is back (`restingUntil`), rather than fifteen minutes after
     // she has signed in again.
     if (account) runs = Math.min(runs, 1);
-    this._fruitless[key] = { runs, endedAt: Date.now(), founderAt, ...(account ? { account } : {}) };
+    this._fruitless[key] = { runs, endedAt: Date.now(), founderAt, ...(account ? { account } : {}), ...(interrupted ? { interrupted: true } : {}) };
     this._saveState();
     return 'rested';
   }
@@ -3690,6 +3690,23 @@ export class Supervisor {
     // no bench, no "Signed out" on the row, and her reply was charged one of
     // its three tries. The error result names its cause whatever the length.
     const refusedBy = session.resultIsError ? troubleCause(session.result) : null;
+    // A dropped connection is retried with the same conversation, not charged to the task.
+    const networkFault = session.transportFault || refusedBy === 'interrupted'
+      || (!quickButReal && troubleCause((session.tail ?? []).filter(l => l.startsWith('stderr: ')).join('\n').slice(-1000)) === 'interrupted');
+    if (networkFault) {
+      const account = this._accountKey(engine, session.profile);
+      // Preserve an existing login/policy block; reconnecting cannot repair it.
+      if (!needsHerHands(this._profileTrouble?.[account]?.cause)) {
+        this._noteProfileTrouble(account, 'connection lost');
+        this._profileStrikes ??= {};
+        const strikes = this._profileStrikes[account] = (this._profileStrikes[account] ?? 0) + 1;
+        this._profileCooldown ??= {};
+        this._profileCooldown[account] = Date.now() + Math.min(30_000 * strikes, 60_000);
+      }
+      session.accountFault = { cause: 'interrupted', account };
+      this._saveState();
+      return;
+    }
     const limitHit = refusedBy === 'at-limit' || needsHerHands(refusedBy);
     if ((Date.now() - session.startedAt < FAST_EXIT_MS && !quickButReal) || limitHit) {
       // The last words of a fast-dead session are the diagnosis. They are kept,
@@ -4804,8 +4821,9 @@ export class Supervisor {
     //
     //   `rowSessionFor` itself, which returns null unless the row, the product,
     //   the folder and the transcript on disk all still agree.
-    const rowChat = continuation && !resumeSessionId
-      && item.answer && item.answer !== '(withdrawn)'
+    const retryInterrupted = this._fruitless?.[`${item.product}:${item.id}`]?.interrupted === true;
+    const rowChat = !resumeSessionId
+      && (retryInterrupted || (continuation && item.answer && item.answer !== '(withdrawn)'))
       ? this.rowSessionFor(item, product)
       : null;
     // WHICH SESSION THIS IS, if it is not a new one. A worker resumes when the
@@ -4868,7 +4886,9 @@ export class Supervisor {
     // THE TWO KINDS OF RESUME SAY DIFFERENT THINGS, and handing a finished
     // session the interrupted wording would tell it to go looking for a step it
     // never left half-done. `replyBrief` is the one for a chat.
-    if (rowChat) prompt = this.replyBrief(item, { product });
+    if (rowChat) prompt = retryInterrupted && !continuation
+      ? this.resumeBrief(item, { continuation, product })
+      : this.replyBrief(item, { product });
     // A FORK IS NOT AN INTERRUPTED SESSION AND MUST NOT BE TOLD IT IS. It is
     // the old conversation under a new id, on a new row, and the one thing it
     // cannot work out for itself is that it has moved.
@@ -7102,7 +7122,7 @@ export class Supervisor {
         // Claude Code announces itself with `session_id` on its first line of
         // output, so a session with neither died before the CLI was running.
         const everRan = session.sessionId != null || session.result != null;
-        const outcome = this.noteFreshRun(item, { everRan, account: session.accountFault?.account ?? null });
+        const outcome = this.noteFreshRun(item, { everRan, account: session.accountFault?.account ?? null, interrupted: session.accountFault?.cause === 'interrupted' });
         if (outcome === 'rested') {
           const until = this.restingUntil(item);
           if (until > Date.now()) onLine(`nothing moved on this row; resting ${Math.round((until - Date.now()) / 60_000)}m`);
