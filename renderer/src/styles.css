@@ -8703,9 +8703,7 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
  .desktop-live-launch .live-panel.compact [role="status"] {display:none;}
 }
 
-/* In flow so the last row's preview stays inside the scrolling list. */
-.row:has(.row-hover-preview) { flex-wrap: wrap; row-gap: 10px; }
-.row-hover-preview { order: 1; flex: 0 0 100%; min-width: 0; padding-left: 38px; box-sizing: border-box; }
+.row-hover-preview { display: block; pointer-events: auto; white-space: normal; width: min(420px, calc(100vw - 24px)); max-height: min(360px, calc(100vh - 24px)); overflow: auto; box-sizing: border-box; }
 .row-hover-tldr { color: var(--text-dim); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .row-hover-tldr strong { color: var(--text-faint); font-size: 11px; margin-right: 8px; }
 .row-hover-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
@@ -8718,3 +8716,5 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
 .dictation-jobs {position:fixed;bottom:16px;left:16px;z-index:1000;max-width:min(260px,calc(100vw - 32px));max-height:35vh;overflow:auto;padding:8px;background:var(--skin-solid);border:1px solid var(--line);font-size:12px;}
 
 .dictation-jobs textarea {display:block;width:100%;box-sizing:border-box;min-height:60px;}
+
+.live-heading button[aria-label="Call beenden"] {flex-shrink:0;white-space:nowrap;}

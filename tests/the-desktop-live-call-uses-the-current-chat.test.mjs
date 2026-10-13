@@ -13,3 +13,11 @@ it('reads the displayed headline and existing two-sentence TLDR, keeping the ful
  const run=desktopLiveActions({state:()=>({current,rows:[current]}),open(){},details:async i=>i.result});const view=await run({action:'read'});
  expect(view.current.title).toBe('Startup application');expect(view.latestAgentResult).toBe('Connection unavailable. Consent remains valid.');expect(JSON.stringify(view)).not.toContain('Third sentence');expect(await run({action:'details'})).toHaveProperty('details',current.result);
 });
+
+it('review skips a completed chat and mutations cannot operate on a different product',async()=>{
+ let current={id:'done',product:'qa',status:'done',title:'Already completed'};
+ const next={id:'next',product:'qa',status:'blocked',title:'Next example'};
+ const execute=desktopLiveActions({state:()=>({current,rows:[next]}),open:i=>{current=i},details:async()=>({}),done:async()=>{},reply:async()=>{},later:async()=>{}});
+ expect((await execute({action:'review'})).current.id).toBe('next');
+ await expect(execute({action:'done',id:'next',product:'other'})).rejects.toThrow();
+});

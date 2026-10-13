@@ -23,6 +23,7 @@ import { Face, TeamRowEnd, type TeamView } from '../team/people';
 import { RepeatMark, RowCells, TableHead, ThreadCells } from '../threads/Pages';
 import type { MixedRow } from '../threads/people-rules';
 import { threadTldr } from '../../../shared/thread-tldr.mjs';
+import {RowHoverPreview} from './RowHoverPreview';
 import { heldByAPerson } from '../../../shared/team-rules.mjs';
 
 /**
@@ -138,7 +139,7 @@ export function dayGroups(
   return groups;
 }
 
-export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, searchDetails, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover, onAnswerImport, onReply, onPick, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd }: {
+export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, searchDetails, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover, onAnswerImport, onReply, onPick, onDone, onLater, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd }: {
   items: WorkItem[];
   view: View;
   // WHICH VIEW'S KEYS THE ROW HINT PRINTS, which is not always the view this
@@ -218,6 +219,8 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
    * breaks. */
   walk?: { key: string | null; rows: string[] } | null;
   onHover?: (id: string | null) => void;
+  onDone?: (item: WorkItem) => void;
+  onLater?: (item: WorkItem) => void;
   onReply?: (item: WorkItem) => void;
   onPick?: (item: WorkItem, n: number) => void;
   // THE YES OR NO ON A CODEX CONVERSATION'S ROW, and the Import on one she
@@ -472,7 +475,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                    the hover in App, and only a pointer that actually moves
                    takes it back. */
                 onMouseMove={() => { if (hoveredId !== item.id) onHover?.(item.id); }}
-                onMouseLeave={() => { if (hoveredId === item.id) onHover?.(null); }}
+                onMouseLeave={(e) => { if (hoveredId === item.id && (!(e.relatedTarget instanceof Element) || !e.relatedTarget.closest('.row-hover-preview'))) onHover?.(null); }}
                 onClick={(e) => {
                   const intent = clickIntent('row', { shift: e.shiftKey, meta: e.metaKey, ctrl: e.ctrlKey });
                   if (intent === 'range') { onRange(index); return; }
@@ -481,7 +484,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                 }}
               >
                 {hoveredId === item.id && !checked && !multiSel.size && !walk && !isImportRow(item) && (
-                  <div className="row-hover-preview" onClick={(e) => e.stopPropagation()}>
+                  <RowHoverPreview id={item.id} onClose={() => onHover?.(null)}>
                     <div className="row-hover-tldr"><strong>TL;DR</strong> {threadTldr(
                       (['body', 'answer', 'note', 'result'] as const).map((field) => ({
                         who: field === 'answer' || (field === 'body' && item.wrote?.body?.source === 'founder') ? 'you' : 'it',
@@ -489,6 +492,8 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                       })), null, { running: running.some((r) => r.itemId === item.id) },
                     )?.text || rowSummary(item, view) || 'Noch kein Ergebnis.'}</div>
                     <div className="row-hover-actions">
+                      <button type="button" className="row-key" onClick={() => {onSelect(index);onOpen(item)}}><kbd>↵</kbd><span>Open task</span></button>
+                      {(keyView ?? view) === 'inbox' && <><button type="button" className="row-key" disabled={!onDone} onClick={() => onDone?.(item)}><kbd>E</kbd><span>Mark done</span></button><button type="button" className="row-key" disabled={!onLater} onClick={() => onLater?.(item)}><kbd>L</kbd><span>Schedule for later</span></button></>}
                       {offerIsLive(item) && !item.agent && !made && itemOptions(item).map((option) => (
                         <button type="button" className="row-key" key={option.n}
                           aria-label={`Option ${option.n}: ${option.text}`}
@@ -499,7 +504,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                       {(keyView ?? view) === 'inbox' && <button type="button" className="row-key"
                         aria-label="Antworten (R)" onClick={() => onReply?.(item)}><kbd>R</kbd><span>Antworten</span></button>}
                     </div>
-                  </div>
+                  </RowHoverPreview>
                 )}
                 {/* THE ONE THING THAT IS NOT A MESSAGE STANDS IN THE MESSAGE'S OWN
                    SELECT-BOX STRIP: a rule at the row's left edge, in the app's own faint

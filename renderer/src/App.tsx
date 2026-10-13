@@ -4783,12 +4783,12 @@ export default function App() {
     }
   };
 
-  liveState.current = {current: focused, rows: list};
+  liveState.current = {current: focused ? items.find(i => i.id === focused.id && i.product === focused.product) ?? focused : null, rows: list};
   const liveExecute = desktopLiveActions({
     state: () => liveState.current,
     open: (item: WorkItem | null) => { liveState.current.current = item; setFocused(item); if(item)markSeen(item); },
     details: async (item: WorkItem) => ({result: item.result, history: await api.itemHistory({product:item.product,id:item.id})}),
-    done: async (item: WorkItem) => {await markDone(item, {stay:true});await flushPending();},
+    done: async (item: WorkItem) => {await markDone(item, {stay:true});await flushPending();if(!item.agent){const snapshot=await api.snapshot();if(snapshot.items.find(i=>i.id===item.id&&i.product===item.product)?.status!=='done')throw Error('Die Aufgabe wurde nicht als erledigt gespeichert.');}},
     reply: async (item: WorkItem, text: string) => {if(item.agent)await replyToAgent(item,text,true);else await answerWith(item,text);await flushPending();},
     later: (item: WorkItem, minutes: number) => snoozeUntil(item, Date.now()+minutes*60000, `in ${minutes} minutes`, true),
   });
@@ -5014,7 +5014,7 @@ export default function App() {
           the sidebar for the single-player launch (w-1b574413db, 2026-10-04).
           `onInvite` is still handed in, for the account menu. */}
       {workspaceNavigation && <WorkspaceNavigation
-        live={<DesktopLive execute={liveExecute} context={desktopLiveView(focused)} onNotice={showToast}/>}
+        live={<DesktopLive execute={liveExecute} context={desktopLiveView(liveState.current.current)} onNotice={showToast}/>}
         update={announcesUpdate(snap?.update, { walking, closed: '' }) ? { installing: !!snap?.update?.installing, version: snap?.update?.newVersion, changes: snap?.update?.changes, behind: snap?.update?.behind, error: snap?.update?.error } : null}
         onUpdate={() => { void api.updateInstall(); }}
         page={settingsOpen ? 'settings' : null} onFeedback={() => setFeedbackOpen(true)} teamPage={teamOpen && !settingsOpen} hasTeam={!!snap?.team?.configured} team={snap?.team ?? null}
@@ -5757,6 +5757,8 @@ export default function App() {
                   keyView={view}
                   hoveredId={hoveredId}
                   onHover={setHoveredId}
+                  onDone={markDone}
+                  onLater={openSnooze}
                   onReply={(item) => { setFocused(item); markSeen(item); setModal('reply'); }}
                   onPick={pickOption}
                   onSelect={(i) => { setCardSel(null); setSelected(i); }}
@@ -6654,7 +6656,7 @@ export default function App() {
           inside the sidebar would be clipped by the sidebar. Which component it
           is for is `data-hint` on that component, and what it says is
           `hint-plate.ts`. */}
-      {hintsOn && shownHint && HINTS[shownHint.id] && (
+      {hintsOn && shownHint && HINTS[shownHint.id] && !(shownHint.id === 'row' && hoveredId) && (
         <HintPlate
           lines={HINTS[shownHint.id]}
           comp={shownHint.el.getBoundingClientRect()}

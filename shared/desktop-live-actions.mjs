@@ -5,12 +5,13 @@ export function desktopLiveActions({state,open,details,done,reply,later}){
  return async a=>{
   const {rows,current}=state();let target=current;
   if(a.action==='read')return screen(target);
-  if(a.action==='review'){target=current||rows[0];if(target)open(target);return screen(target)}
+  if(a.action==='review'){target=current?.status==='done'?rows.find(i=>i.status!=='done'):(current||rows[0]);if(target)open(target);return screen(target)}
   if(a.action==='open'){target=rows.find(i=>i.id===a.id);if(!target)throw Error('Chat not found in the current list.');open(target);return screen(target)}
   if(a.action==='next'||a.action==='previous'){const at=rows.findIndex(i=>i.id===current?.id),step=a.action==='next'?1:-1;target=rows[at+step];if(!target)return {...screen(current),boundary:step===1?'end':'start'};open(target);return screen(target)}
   if(!current)throw Error('Open a chat first.');
   if(a.action==='details')return {...screen(current),details:await details(current)};
-  if(a.id!==current.id)throw Error('The displayed chat changed. Read it again before taking action.');
+  if(a.id!==current.id||(a.product!==undefined&&a.product!==current.product))throw Error('The displayed chat changed. Read it again before taking action.');
+  if(current.status==='done')throw Error('This chat is already done.');
   const next=rows[rows.findIndex(i=>i.id===current.id)+1];
   if(a.action==='done')await done(current);
   else if(a.action==='reply'){if(typeof a.text!=='string'||!a.text.trim()||a.text.length>24000)throw Error('Response text is required.');await reply(current,a.text)}
