@@ -27,13 +27,17 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { AgentMode, CodexModeId, PermissionMode, ProjectSettings, Settings as SettingsModel, UpdateState } from '../types';
+import type { AgentMode, CodexModeId, PermissionMode, PhoneLink, PhoneRoute, ProjectSettings, Settings as SettingsModel, UpdateState } from '../types';
+import { ago } from '../format';
+import { ALERTS_SAY, alertsState, testAlert, turnOffAlerts, turnOnAlerts, type AlertsState } from '../phone-alerts';
+import { onPhone } from '../phone-screen';
+import { pollEvery } from '../phone-polls';
 import { api, RESTART_NOTE } from '../api';
 import { updateLook } from '../update-row';
 import { InstructionSettings, sizeLabel } from './InstructionSettings';
 import { EVERY } from '../instruction-scope';
 import type {Usage, WorkspaceSettings} from '../types';
-import { limitRows } from '../../../shared/usage.mjs';
+import { limitRows, USAGE_UNREADABLE } from '../../../shared/usage.mjs';
 import { LOOKS, lookMeans, SKINS, TUNE_DEFAULT, TUNE_LIMITS, type Look, type SkinId, type SkinTune } from '../skins';
 import { readySkin } from '../look-switch';
 import { MatchMark } from './MatchMark';
@@ -303,6 +307,7 @@ function agentStory(w: WorkspaceSettings, readings: Usage[], engine: 'claude' | 
       found: !!w.codex?.found, certain: !!w.codex?.certain,
       trouble: w.codex?.trouble ?? null,
       bin: w.codex?.bin ?? '',
+      chosen: !!w.codex?.chosen,
       url: w.codex?.url ?? '',
       accounts: (w.codex?.accounts ?? []).map((a): CardAccount => ({
         profile: a.profile, email: a.email, plan: a.plan, chosen: a.chosen,
@@ -315,6 +320,7 @@ function agentStory(w: WorkspaceSettings, readings: Usage[], engine: 'claude' | 
     found: !!w.claudeFound, certain: w.claudeCertain !== false,
     trouble: null,
     bin: w.claudeBin ?? '',
+    chosen: !!w.claudeChosen,
     url: w.claudeInstallUrl ?? '',
     accounts: (w.accounts ?? []).map((a): CardAccount => ({
       profile: a.profile,
@@ -333,9 +339,9 @@ type Agent = ReturnType<typeof agentStory>;
 /**
  * THE METERS, one row each: the window's name, when it resets, and how much of
  *  it is spent. Same `usage-meter` markup the sidebar's usage corner draws. */
-function UsageRows({ reading, now }: { reading: Usage | null; now: number }) {
+function UsageRows({ reading, now, trouble = null }: { reading: Usage | null; now: number; trouble?: string | null }) {
   const rows = reading?.limits?.length ? limitRows(reading.limits, now) : [];
-  if (!rows.length) return <Row label="No usage reading yet" />;
+  if (!rows.length) return trouble ? null : <Row label="No usage reading yet" />;
   return (
     <>
       {rows.map((r) => (
@@ -350,6 +356,60 @@ function UsageRows({ reading, now }: { reading: Usage | null; now: number }) {
   );
 }
 
+export function usageCheckedAt(at: number | null | undefined, now: number): string {
+  if (at == null || !Number.isFinite(at)) return '';
+  const minutes = Math.max(0, Math.floor((now - at) / 60_000));
+  if (!minutes) return 'Checked just now';
+  if (minutes < 60) return `Checked ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+  const hours = Math.floor(minutes / 60);
+  return `Checked ${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+}
+
+/** A reading names its account; switching cannot reuse the old account's meter.
+ *
+ *  AN ACCOUNT THAT CANNOT RUN HAS NO USAGE TO READ, AND "TRY AGAIN" IS A LIE
+ *  ABOUT IT. One whose organization has Claude Code off prints no limits from
+ *  `/usage` at all (2026-10-11, Claude Code 2.1.293), so the box said "No usage
+ *  reading yet" and every Refresh "Could not refresh usage. Try again." The
+ *  account row already carried main's sentence for it; `trouble` is that
+ *  sentence, and it stands in for both. */
+export function ClaudeUsageSection({ reading, profile, email, now, trouble = null }: {
+  reading: Usage | null; profile: string; email?: string | null; now: number; trouble?: string | null;
+}) {
+  const [fresh, setFresh] = useState<Usage | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const waiting = useRef(false);
+  const selected = useRef(profile);
+  selected.current = profile;
+  const belongs = (r: Usage | null) => r && (r.profile ?? 'default') === profile ? r : null;
+  const incoming = belongs(reading), refreshed = belongs(fresh);
+  const current = refreshed && (!incoming || refreshed.at >= incoming.at) ? refreshed : incoming;
+  useEffect(() => { setFresh(null); setError(null); }, [profile]);
+  const refresh = async () => {
+    if (waiting.current) return;
+    waiting.current = true;
+    const account = profile;
+    setBusy(true); setError(null);
+    try {
+      const result = await api.refreshUsage();
+      if (selected.current !== account) return;
+      if (result.ok && result.reading && (result.reading.profile ?? 'default') === account) setFresh(result.reading);
+      else setError(result.error ?? 'The account changed. Refresh usage again.');
+    } catch { if (selected.current === account) setError(USAGE_UNREADABLE); }
+    finally { waiting.current = false; setBusy(false); }
+  };
+  return (
+    <Group id="usage" label="Usage" action={<button type="button" className="set-ghost" disabled={busy} onClick={() => void refresh()}>{busy ? 'Refreshing…' : 'Refresh'}</button>}>
+      <Row label={email || 'Claude Code'} desc={busy ? 'Checking usage…' : usageCheckedAt(current?.at, now) || undefined} />
+      <UsageRows reading={current} now={now} trouble={trouble ?? error} />
+      {trouble
+        ? <div className="set-row set-row-warn" role="alert">{trouble}</div>
+        : error && <div className="set-row set-row-warn" role="alert">{error}</div>}
+    </Group>
+  );
+}
+
 /**
  * THE ACCOUNTS, one row each.
  *
@@ -361,7 +421,7 @@ function UsageRows({ reading, now }: { reading: Usage | null; now: number }) {
  *  A TROUBLED ACCOUNT IS NOT SOMETHING TO PICK, IT IS SOMETHING TO FIX. It says
  *  what is wrong in main's own words and carries the command that puts it
  *  right (w-3da36a45e5). */
-function AccountRows({ agent, onChoose, onAdd }: {
+export function AccountRows({ agent, onChoose, onAdd }: {
   agent: Agent;
   onChoose: (engine: string, profile: string) => void;
   onAdd: (agent: Agent) => void;
@@ -387,7 +447,7 @@ function AccountRows({ agent, onChoose, onAdd }: {
                 {label}
                 {live && <span className="set-badge">In use</span>}
               </div>
-              <div className="set-row-desc">{a.plan ?? (a.signedIn ? 'Signed in' : 'Finish signing in to use it')}</div>
+              <div className="set-row-desc">{a.signedIn ? (a.plan ?? 'Signed in') : 'Finish signing in to use it'}</div>
             </div>
             {/* One account has nothing to choose between. */}
             {!live && accounts.length > 1 && (
@@ -453,9 +513,9 @@ function SettingsTerminal({ command, onFinished }: { command?: string; onFinishe
  *  "a lot of text under components, gets a bit ugly", so a group no longer
  *  takes one. Anything a row needs to say is in the row. A warning about the
  *  whole group is the card's first line, inside it. */
-const Group = ({ id, label, warn, children }: { id?: string; label?: string; warn?: string | null; children: React.ReactNode }) => (
+const Group = ({ id, label, warn, action, children }: { id?: string; label?: string; warn?: string | null; action?: ReactNode; children: React.ReactNode }) => (
   <div className="set-group" data-find={id}>
-    {label && <div className="set-group-label">{label}</div>}
+    {label && <div className={`set-group-label${action ? ' set-group-head' : ''}`}>{label}{action}</div>}
     <div className="set-plate">
       {warn && <div className="set-row set-row-warn" role="status">{warn}</div>}
       {children}
@@ -476,7 +536,6 @@ const Group = ({ id, label, warn, children }: { id?: string; label?: string; war
 export function agentCountOptions(w: {
   accounts?: unknown[]; agentsTotal?: number; capacity?: number; slotsMax?: number; sessionsAtOnce?: number;
 }) {
-  const accounts = Math.max(1, w.accounts?.length ?? 1);
   const auto = w.agentsTotal ?? w.capacity ?? 1;
   const say = (n: number) => `${n} ${n === 1 ? 'agent' : 'agents'}`;
   // NO DASH BETWEEN THE TWO HALVES. This read "Automatic — 6 agents" until she
@@ -485,7 +544,10 @@ export function agentCountOptions(w: {
   // is read exactly as a sentence is, so the rule covers it too. A bracket is
   // what the rest of this file reaches for when a label carries a second fact.
   const options = [{ value: 'auto', label: `Automatic (${say(auto)})` }];
-  for (let n = 1; n <= (w.slotsMax ?? 12); n++) options.push({ value: String(n), label: say(n * accounts) });
+  // EVERY NUMBER IS FOR THE WHOLE COMPUTER AND IS STORED AS ITSELF
+  // (w-ec27ff1a51). The label used to multiply a per-login number by the
+  // logins, so a 7 read "14 agents" and nobody had picked 14.
+  for (let n = 1; n <= (w.slotsMax ?? 12); n++) options.push({ value: String(n), label: say(n) });
   return options;
 }
 
@@ -505,7 +567,7 @@ export function agentCountOptions(w: {
  */
 function Reading({ running, capacity, gate }: {
   running?: number; capacity?: number;
-  gate?: { on: boolean; reading?: { heavy: number | null; waiting: number | null; pressure: string | null; usedPct: number | null; asked: number | null; waited: number | null; refused: number | null } };
+  gate?: { on: boolean; reading?: { heavy: number | null; waiting: number | null; pressure: string | null; usedPct: number | null; asked: number | null; waited: number | null; refused: number | null; holding?: boolean } };
 }) {
   const r = gate?.on ? gate.reading : null;
   if (!r) return null;
@@ -521,7 +583,10 @@ function Reading({ running, capacity, gate }: {
   const tally = r.asked
     ? `Today: ${r.asked} commands asked, ${r.waited ?? 0} waited, ${r.refused ? `${r.refused} turned away` : 'none turned away'}.`
     : null;
-  if (!cells.length && !tally) return null;
+  // NEW AGENTS HELD FOR MEMORY (w-ec27ff1a51) is said while it is happening,
+  // because a queue that is not moving and says nothing reads as broken.
+  const holding = r.holding ? 'New agents wait until memory frees up. Urgent tasks still start.' : null;
+  if (!cells.length && !tally && !holding) return null;
   return (
     <div className="set-group">
       <div className="set-plate">
@@ -535,6 +600,7 @@ function Reading({ running, capacity, gate }: {
             <i className="set-bar"><i className={r.pressure === 'normal' ? '' : 'hot'} style={{ width: `${r.usedPct}%` }} /></i>
           </div>
         )}
+        {holding && <div className="set-row set-row-warn">{holding}</div>}
         {tally && <div className="set-row set-row-warn">{tally}</div>}
       </div>
     </div>
@@ -543,6 +609,152 @@ function Reading({ running, capacity, gate }: {
 
 /** A page: its title, the sentence under it when there is one worth saying,
  *  and its groups. */
+/* --------------------------------- phone --------------------------------- */
+// THE PHONE DOOR (main/phone-link.mjs). Off until turned on. The QR code is the
+// key, so it is drawn only on this page and only while the door is open.
+const PHONE_ROUTE_OPTIONS: Array<{ value: PhoneRoute; label: string }> = [
+  // Shown only once there is a relay to use (main/relay-address.mjs).
+  { value: 'anywhere', label: 'Anywhere' },
+  { value: 'tailscale', label: 'Tailscale, secure' },
+  { value: 'wifi', label: 'Same Wi-Fi, not secure' },
+];
+
+/** The Phone page as the phone itself draws it: this phone's alerts. */
+function PhoneAlertsPage({ onFeedback }: { onFeedback?: () => void }) {
+  const [state, setState] = useState<AlertsState | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { void alertsState().then(setState); }, []);
+  const run = async (fn: () => Promise<AlertsState>) => {
+    setBusy(true); setSaid(null);
+    try { setState(await fn()); } catch (e) { setSaid(String((e as Error).message ?? e)); } finally { setBusy(false); }
+  };
+  return (
+    <Page title="Phone">
+      <Group id="phone-alerts" label="Alerts on this phone">
+        <Row label={state === 'on' ? 'Alerts are on' : 'Alerts'} desc={said ?? (state ? ALERTS_SAY[state] : 'Checking…')}>
+          {(state === 'on' || state === 'off') && (
+            <Switch on={state === 'on'} busy={busy} label="Alerts" onChange={(v) => void run(v ? turnOnAlerts : turnOffAlerts)} />
+          )}
+        </Row>
+        {state === 'on' && (
+          <Row label="Send a test alert" desc="Lock the phone after tapping, and it should arrive within a few seconds.">
+            <button type="button" className="set-ghost" disabled={busy} onClick={() => { setBusy(true); void testAlert().then((ok) => setSaid(ok ? 'Sent.' : 'The computer could not send it.')).catch((e) => setSaid(String(e.message ?? e))).finally(() => setBusy(false)); }}>Send test</button>
+          </Row>
+        )}
+      </Group>
+      {/* FEEDBACK FROM A PHONE. Its corner has no Feedback button, by choice
+          ("not important to be big for mobile"), which left no way to send any
+          ("not sure how to give feedback on mobile", 2026-10-12). */}
+      {onFeedback && (
+        <Group id="phone-feedback" label="Feedback">
+          <Row label="Send feedback" desc={`Tell us what works and what does not. It goes straight to the people who make ${Name}.`}>
+            <button type="button" className="set-ghost" onClick={onFeedback}>Send feedback</button>
+          </Row>
+        </Group>
+      )}
+    </Page>
+  );
+}
+
+function PhonePage({ onFeedback }: { onFeedback?: () => void }) {
+  const [link, setLink] = useState<PhoneLink | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const run = useCallback(async (action: 'status' | 'on' | 'off' | 'reset' | 'via', via?: PhoneRoute) => {
+    setBusy(true);
+    try { setLink(await api.phoneLink({ action, via })); } finally { setBusy(false); }
+  }, []);
+  useEffect(() => {
+    void run('status');
+    const off = api.onPhoneChanged(() => { void api.phoneLink({ action: 'status' }).then(setLink); });
+    // "Last seen" moves without a push.
+    const tick = window.setInterval(() => { setNow(Date.now()); void api.phoneLink({ action: 'status' }).then(setLink); }, pollEvery(15_000, onPhone()));
+    return () => { off(); window.clearInterval(tick); };
+  }, [run]);
+
+  if (link === undefined) return <Page title="Phone">{null}</Page>;
+  if (link === null) {
+    // On the phone itself: its own alerts. Anywhere else (a browser tab on
+    // the computer) there is nothing to set here.
+    if (document.documentElement.dataset.door === 'phone') return <PhoneAlertsPage onFeedback={onFeedback} />;
+    return (
+      <Page title="Phone">
+        <Group>
+          <Row label="Set up from the desktop app" desc={`A phone is connected from the ${Name} app's own window, not from a browser tab.`} />
+        </Group>
+      </Page>
+    );
+  }
+  const hasTailscale = link.routes.some((r) => r.via === 'tailscale');
+  const reset = () => {
+    if (window.confirm('Make a new key? Every connected phone is disconnected and has to scan the new code.')) void run('reset');
+  };
+  return (
+    <Page title="Phone" lede={`Use this inbox on your phone. Scan the code with the phone's camera, then add the page to the home screen and it opens like an app.`}>
+      <Group id="phone" label="Phone access">
+        <Row label="Let phones connect" desc={link.on ? (link.error ?? (link.listening ? `Open on port ${link.port}.` : 'Starting…')) : 'Off. Nothing outside this computer can reach the inbox.'}>
+          <Switch on={link.on} busy={busy} label="Let phones connect" onChange={(v) => void run(v ? 'on' : 'off')} />
+        </Row>
+        {link.on && (
+          <Row
+            label="Reach it over"
+            desc={link.via === 'anywhere'
+              ? link.relay?.connected
+                ? 'Works on any Wi-Fi or mobile data, with nothing to install. Everything is locked on this computer and unlocked only on your phone, so the relay in between cannot read it.'
+                : link.error ?? 'Connecting to the relay…'
+              : link.via === 'tailscale'
+              ? link.settingUp
+                ? 'Setting up a secure address with Tailscale…'
+                : link.secure
+                  ? 'A secure address only your own devices on Tailscale can reach. Works anywhere your phone has Tailscale on.'
+                  : 'Works anywhere your phone has Tailscale on, but without a secure address, so the phone shows Not Secure.'
+              : hasTailscale
+                ? 'Works only on the same Wi-Fi, and the phone shows Not Secure because nothing is encrypted. Pick Tailscale for a secure address that also works away from home.'
+                : 'Works only on the same Wi-Fi, and the phone shows Not Secure because nothing is encrypted. Install Tailscale on both for a secure address.'}
+          >
+            <Picker bare label="Reach it over" value={link.via ?? 'wifi'} options={PHONE_ROUTE_OPTIONS.filter((o) => link.routes.some((r) => r.via === o.value))} onChange={(v) => void run('via', v)} />
+          </Row>
+        )}
+      </Group>
+      {link.on && (
+        <Group id="phone-code" label="Scan with your phone">
+          {link.qr && link.url ? (
+            <div className="set-row set-phone-qr">
+              <img alt="QR code that opens this inbox on a phone" src={`data:image/svg+xml;utf8,${encodeURIComponent(link.qr)}`} />
+              <div className="set-row-desc">
+                Anyone who scans this code can run agents on this computer, so treat it like a password. If it was seen by someone else, reset the key.
+                <br />
+                <code>{link.url.replace(/(token=|#k=).*/, '$1…')}</code>
+              </div>
+            </div>
+          ) : (
+            <Row label="No network" desc="This computer is not on Wi-Fi or Tailscale right now, so a phone has no way to reach it." />
+          )}
+          <Row label="Reset key" desc="Makes a new code. Every phone is disconnected until it scans again.">
+            <button type="button" className="set-ghost" disabled={busy} onClick={reset}>Reset key</button>
+          </Row>
+        </Group>
+      )}
+      {link.on && (
+        <Group id="phone-devices" label="Connected devices">
+          {link.devices.length === 0 ? (
+            <Row label="None yet" desc="A phone shows here as soon as it opens the inbox." />
+          ) : link.devices.map((d) => (
+            <Row
+              key={d.id}
+              label={d.name}
+              desc={`${d.live ? 'Connected now' : `Last seen ${ago(d.lastSeen, now)} ago`}${d.ip ? ` · ${d.ip}` : ''} · first seen ${ago(d.firstSeen, now)} ago${d.alerts ? ' · alerts on' : ''}${d.alertError ? ` · last alert failed: ${d.alertError}` : ''}`}
+            >
+              {d.alerts && <button type="button" className="set-ghost" disabled={busy} onClick={() => void api.phoneLink({ action: 'stop-alerts', device: d.id }).then(setLink)}>Stop alerts</button>}
+            </Row>
+          ))}
+        </Group>
+      )}
+    </Page>
+  );
+}
+
 const Page = ({ title, lede, children }: { title: string; lede?: string; children: ReactNode }) => (
   <div className="set-inner">
     <h1 className="set-title">{title}</h1>
@@ -661,6 +873,19 @@ const CLAUDE = {
   still: 'Still nothing here. A fresh install can take a moment to appear.',
   stillUnsure: `${Name} still could not get an answer. Nothing is necessarily wrong; try once more in a minute.`,
   where: (bin: string) => `${Name} runs it from ${bin}.`,
+  /* * AND THE ROW THAT MEANS NOBODY WAITS FOR A RELEASE (w-ce8c1a9275).
+     ${Name} asks your own login shell first and then looks in sixteen places,
+     which between them cover every ordinary install. What they cannot cover is a
+     copy somewhere nobody would guess, and until this row existed that was a
+     path WE ship and a release YOU wait for. */
+  point: 'Choose the file',
+  pointLabel: 'Keep it somewhere else?',
+  pointSay: `If ${Name} is looking in the wrong place, show it where Claude Code is.`,
+  picking: 'Choosing',
+  chosenLabel: 'You chose this one',
+  chosenSay: `You showed ${Name} where it is, so it stopped looking. Let it look again if that was wrong.`,
+  chosenGoneSay: `The file you chose is not there any more. Choose another, or let ${Name} look.`,
+  searchAgain: 'Look for it instead',
 } as const;
 
 /* ------------------ AND THE SAME QUESTION ABOUT THE SECOND ---------------- */
@@ -692,6 +917,15 @@ const CODEX = {
   still: 'Still nothing here. A fresh install can take a moment to appear.',
   stillUnsure: `${Name} still could not get an answer. Nothing is necessarily wrong; try once more in a minute.`,
   where: (bin: string) => `${Name} runs it from ${bin}.`,
+  // The same row, with Codex as the subject. See the note on Claude Code's.
+  point: 'Choose the file',
+  pointLabel: 'Keep it somewhere else?',
+  pointSay: `If ${Name} is looking in the wrong place, show it where Codex is.`,
+  picking: 'Choosing',
+  chosenLabel: 'You chose this one',
+  chosenSay: `You showed ${Name} where it is, so it stopped looking. Let it look again if that was wrong.`,
+  chosenGoneSay: `The file you chose is not there any more. Choose another, or let ${Name} look.`,
+  searchAgain: 'Look for it instead',
 } as const;
 
 type ConnectionCopy = typeof CLAUDE | typeof CODEX;
@@ -737,13 +971,21 @@ function accountSay(account: EngineAccount): string {
    for the reason the walk and this screen share one vocabulary: two drawings of
    the same three states drift within a week, and the state that drifts is
    always the unsure one, because it is the one nobody is looking at. */
-function Connection({ copy, check, found, certain, bin, url, trouble = null, account = null, onChecked }: {
+function Connection({ copy, check, engine, found, certain, bin, chosen = false, url, trouble = null, account = null, onChecked }: {
   copy: ConnectionCopy;
+  /**
+   * WHICH AGENT THIS CARD IS ABOUT, and the only thing the window hands over
+   *  when somebody points at the file themselves. The path comes back from the
+   *  panel main opened; it never goes the other way (main/ipc.mjs,
+   *  `zero:engine-bin`). */
+  engine: 'claude' | 'codex';
   /**
    * The search this card's button runs. It is the engine's own, because
    *  looking for Claude Code tells you nothing about Codex. */
   check: () => Promise<{ found: boolean }>;
   found: boolean; certain: boolean; bin: string; url: string;
+  /** Whether this path is one somebody chose rather than one we found. */
+  chosen?: boolean;
   /**
    * WHO THIS MAC IS SIGNED IN AS, when the engine can say. Every field is
    *  independently null, so a login with no email still draws whatever it does
@@ -766,6 +1008,10 @@ function Connection({ copy, check, found, certain, bin, url, trouble = null, acc
   // because "still nothing here" said to somebody who has not pressed anything
   // is a screen answering a question nobody asked.
   const [again, setAgain] = useState<boolean | null>(null);
+  // The panel is open, or main is refusing what came out of it in words. Both
+  // belong to the one row below and to nothing else on this card.
+  const [picking, setPicking] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
 
   const look = async () => {
     setChecking(true);
@@ -778,6 +1024,24 @@ function Connection({ copy, check, found, certain, bin, url, trouble = null, acc
       await onChecked();
     } finally {
       setChecking(false);
+    }
+  };
+
+  /*
+   * POINT AT THE FILE, OR HAND THE CHOICE BACK. One trip either way: main opens
+   * the panel and applies what came out of it in the same call, so a cancel is
+   * ok-with-nothing-changed and a refusal is a sentence rather than an error.
+   * The page then re-reads itself, like every other write on this screen.
+   */
+  const point = async (action?: 'search') => {
+    setPicking(true);
+    setRefused(null);
+    try {
+      const r = await api.engineBin(engine, action);
+      if (r?.refused) setRefused(r.refused);
+      if (!r?.canceled) await onChecked();
+    } finally {
+      setPicking(false);
     }
   };
 
@@ -823,8 +1087,37 @@ function Connection({ copy, check, found, certain, bin, url, trouble = null, acc
       )}
       {/* The path, and only when there is one. Its own row at the foot of the
           card, never in the status sentence, because it is the one thing here
-          that is for somebody who already knows what it means. */}
+          that is for somebody who already knows what it means. It is also the
+          one row that says where a CHOSEN path is, so the row below never
+          repeats it. */}
       {found && bin && <Row label="Runs from" desc={copy.where(bin)} />}
+      {/* AND THE WAY OUT THAT IS NOT A RELEASE (w-ce8c1a9275).
+          The search asks the login shell first and then looks in sixteen
+          places, which between them cover every ordinary install; what they
+          cannot cover is a copy somewhere nobody would guess, and every one of
+          those used to be a path we ship and a release somebody waits for.
+
+          ONE ROW, TWO STATES, because that is the whole decision: either show
+          it where the file is, or -- if that turned out wrong -- let it look
+          again. Drawn whether or not the agent was found, since somebody with a
+          connected agent in the wrong place has exactly the same thing to say.
+
+          THE REFUSAL REPLACES THE LINE IT CONTRADICTS, the same way `trouble`
+          does above: picking a folder by mistake is answered where the press
+          was, not in a second place. */}
+      <Row
+        label={chosen ? copy.chosenLabel : copy.pointLabel}
+        desc={refused ?? (chosen ? (found ? copy.chosenSay : copy.chosenGoneSay) : copy.pointSay)}
+      >
+        <button
+          type="button"
+          className="set-ghost"
+          disabled={picking}
+          onClick={() => void point(chosen ? 'search' : undefined)}
+        >
+          {picking ? copy.picking : chosen ? copy.searchAgain : copy.point}
+        </button>
+      </Row>
     </Group>
   );
 }
@@ -835,12 +1128,14 @@ function Connection({ copy, check, found, certain, bin, url, trouble = null, acc
    handed to the other page by accident. */
 type EngineConnection = Omit<React.ComponentProps<typeof Connection>, 'copy' | 'check'>;
 
-const ClaudeCode = (props: EngineConnection) => (
-  <Connection copy={CLAUDE} check={api.recheckClaude} {...props} />
+type EngineConnectionProps = Omit<EngineConnection, 'engine'>;
+
+const ClaudeCode = (props: EngineConnectionProps) => (
+  <Connection copy={CLAUDE} check={api.recheckClaude} engine="claude" {...props} />
 );
 
-const CodexCli = (props: EngineConnection) => (
-  <Connection copy={CODEX} check={api.recheckCodex} {...props} />
+const CodexCli = (props: EngineConnectionProps) => (
+  <Connection copy={CODEX} check={api.recheckCodex} engine="codex" {...props} />
 );
 
 /* THE UPDATES GROUP CAME BACK, AS ONE ROW WITH ONE BUTTON (w-39d6c237f7,
@@ -879,6 +1174,11 @@ function Updates({ state }: { state?: UpdateState | null }) {
   const press = async () => {
     if (look.busy) return;
     if (look.restart) { void api.updateInstall(); return; }
+    // THE COPY THAT CANNOT UPDATE ITSELF FROM WHERE IT IS: the press moves the
+    // app into Applications and macOS relaunches it, so nothing after a
+    // success here is ever drawn. A refusal arrives in the state, through the
+    // snapshot, like every other failure (shared/where-it-runs-from.mjs).
+    if (look.move) { void api.updateMove(); return; }
     setChecking(true);
     try {
       const got = await api.updateCheck();
@@ -1020,6 +1320,7 @@ function NavIcon({ id }: { id: SettingsPageId }) {
     general: <><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="17" cy="17" r="2" /></>,
     appearance: <><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none" /></>,
     shortcuts: <><rect x="3.5" y="6.5" width="17" height="11" rx="2" /><path d="M7.5 10.5h.01M11 10.5h.01M14.5 10.5h.01M8.5 14h7" /></>,
+    phone: <><rect x="7" y="3" width="10" height="18" rx="2.2" /><path d="M11 17.5h2" /></>,
     claude: <><rect x="3.5" y="5" width="17" height="14" rx="2" /><path d="m7.5 10 2.5 2-2.5 2M12.5 14.5h4" /></>,
     codex: <><path d="m9 8-4 4 4 4M15 8l4 4-4 4" /></>,
     running: <><circle cx="12" cy="12" r="8" /><path d="M10.5 9.2v5.6l4.5-2.8z" /></>,
@@ -1051,7 +1352,10 @@ function paneFrom(want: string, has: { team: boolean }): Pane {
 
 /* --------------------------------- screen --------------------------------- */
 
-export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHints, onSetKeyHints, startPane, usageReadings = [], now = Date.now(), embedded = false, onSectionChange, onNewProject, ranked = [], onSetOrder, teamPane, projectShare, projectWho, account, update = null, onClose }: {
+export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHints, onSetKeyHints, startPane, usageReadings = [], now = Date.now(), embedded = false, onSectionChange, onNewProject, ranked = [], onSetOrder, teamPane, projectShare, projectWho, account, update = null, onClose, onFeedback }: {
+  /** Opens the feedback card. A phone has no Feedback button in its corner,
+   *  so its own Settings page offers it (2026-10-12). */
+  onFeedback?: () => void;
   // ONE control for the three of them. Light, dark and each picture are one
   // list, because a picture IS dark (skins.ts) and asking her to set a theme
   // and then a background is two decisions for one choice.
@@ -1104,8 +1408,11 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
   // ?settings=claude, or ?settings=project:kestrel. Anything else (including the
   // bare ?settings=1 that only means "open") lands on General. `startPane` is
   // the same question asked from inside the app, and it wins.
+  // ON A PHONE IT OPENS ON THE PHONE'S OWN PAGE, its alerts: "we probably need
+  // a way in Settings for me to configure [notifications]" (2026-10-12). The
+  // page was there, a tab along a strip that opened on General.
   const [pane, setPane] = useState<Pane>(() => paneFrom(
-    startPane || new URLSearchParams(location.search).get('settings') || '',
+    startPane || new URLSearchParams(location.search).get('settings') || (onPhone() ? 'phone' : ''),
     { team: !!teamPane },
   ));
   // WHICH PAGE IS UP, for the window around this screen.
@@ -1246,16 +1553,24 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
   const enginePage = (engine: 'claude' | 'codex') => {
     if (!w) return null;
     const agent = agentStory(w, usageReadings, engine);
-    const status = { found: agent.found, certain: agent.certain, bin: agent.bin, url: agent.url, trouble: agent.trouble, onChecked: load };
+    const usageAccount = agent.accounts.find(a => a.chosen) ?? agent.accounts[0];
+    const status = { found: agent.found, certain: agent.certain, bin: agent.bin, chosen: agent.chosen, url: agent.url, trouble: agent.trouble, onChecked: load };
     return (
       <Page title={agent.name}>
-        {/* THE STATE SPEAKS ONLY WHEN IT IS BAD. */}
-        {(!agent.found || agent.trouble) && (engine === 'codex' ? <CodexCli {...status} /> : <ClaudeCode {...status} />)}
+        {/* THE STATE SPEAKS ONLY WHEN IT IS BAD -- OR WHEN YOU MADE IT THIS WAY
+            (w-ce8c1a9275). A path somebody chose themselves is the one healthy
+            state worth a row, because the card is the only place that choice can
+            be given back: a choice that could only be undone by hand-editing a
+            file nobody is told about is not a door, it is a trap. */}
+        {(!agent.found || agent.trouble || agent.chosen)
+          && (engine === 'codex' ? <CodexCli {...status} /> : <ClaudeCode {...status} />)}
         {agent.found && (
           <>
-            <Group id="usage" label="Usage">
-              <UsageRows reading={agent.reading} now={now} />
-            </Group>
+            {engine === 'claude' ? (
+              <ClaudeUsageSection key={usageAccount?.profile ?? 'default'} reading={agent.reading} profile={usageAccount?.profile ?? 'default'} email={usageAccount?.email} trouble={usageAccount?.trouble ?? null} now={now} />
+            ) : (
+              <Group id="usage" label="Usage"><UsageRows reading={agent.reading} now={now} /></Group>
+            )}
             {/* "SIGNED IN", NOT "ACCOUNTS": a heading that works at any
                 number, so one account is never shown a plural to fill. */}
             <Group
@@ -1454,6 +1769,17 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
                 <Switch label="Show keyboard shortcut hints" on={keyHints} onChange={onSetKeyHints} />
               </Row>
             </Group>
+            {/* THE CORNER TAG (w-dafae58a23). The tag itself only hides for a
+                while; this is the one place it turns off for good, so it can
+                never become a thing she closed once and forgot. */}
+            <Group id="corner-tag" label="Agent Tray">
+              <Row
+                label="Show the Agent Tray"
+                desc="A small tag over your other apps says when an agent has something for you. Drag it anywhere; it keeps that corner on every screen, and sizes itself to the screen it is on. Drag its bottom-left corner to make it bigger or smaller, or right-click it for that, for hiding it a while, and for turning it off."
+              >
+                <Switch label="Show the Agent Tray" on={w.cornerTag !== false} onChange={(v) => setWorkspace('cornerTag', v)} />
+              </Row>
+            </Group>
             {/* ONE SWITCH OVER EVERYTHING THAT LEAVES THE MACHINE, and there is
                 deliberately no second one and no partial mode, because the
                 privacy page (section 10) promises there is not. */}
@@ -1555,7 +1881,7 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
               {w.memoryGate && (
                 <Row
                   label="Hold heavy work when memory is short"
-                  desc={`Tests and builds take turns, urgent first. Everything else runs as normal.${twoEngines ? ' Claude Code and Codex both.' : ''}`}
+                  desc={`Tests and builds take turns, urgent first, and new agents wait to start until memory frees up.${twoEngines ? ' Claude Code and Codex both.' : ''}`}
                 >
                   <Switch label="Hold heavy work when memory is short" on={w.memoryGate.on} onChange={(v) => setWorkspace('memoryGate', v)} />
                 </Row>
@@ -1611,6 +1937,20 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
                   <Switch label="Stop programs agents leave behind" on={w.leftovers.on} onChange={(v) => setWorkspace('cleanupLeftovers', v)} />
                 </Row>
               )}
+              {/* COPIES OF A PROJECT THIS APP DID NOT MAKE (2026-10-07,
+                  w-330eea6c66). Thirteen worktrees of one repository were found
+                  outside the folder the app keeps its own in, about 740 MB, and
+                  nothing in the app could list, show or sweep one: the same
+                  invisibility that stranded 26 GB a fortnight earlier, in a new
+                  place. main/task-folders.mjs has the measurement and the rules.
+
+                  A SENTENCE AND NO CONTROL, and the row is absent whenever there
+                  is nothing to say. A folder the app did not make is not the
+                  app's to remove — it is the only copy of whatever is
+                  uncommitted inside it — so there is nothing here to decide,
+                  only something to know. A permanent row saying "none" would be
+                  bookkeeping on a page that is already long. */}
+              {w.strayFolders && <Row label="Copies of a project made by hand" desc={w.strayFolders.now} />}
               {/* THE ONE LEVER NO READING REPLACES. She is sitting in front of
                   the Mac and the app is not: "If there are issues with that, the
                   user determines whether they can take some sort of more manual
@@ -1718,6 +2058,7 @@ export function Settings({ look, onSetLook, tune, onSetTune, onResetTune, keyHin
             is what a person actually presses, grouped by the moment they would
             want it; ../shortcuts.ts holds the list. Every key on it works today
             (`tests/the-shortcuts-page-lists-keys-that-work.test.mjs`). */}
+        {pane === 'phone' && <PhonePage onFeedback={onFeedback} />}
         {pane === 'shortcuts' && (
           <div className="set-inner set-keys-page">
             <h1 className="set-title">Shortcuts</h1>

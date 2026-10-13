@@ -90,17 +90,28 @@ describe('what must not change', () => {
   // Hers is 4, set by hand, and it stays 4 whatever any plan says. This is the
   // test that keeps a settings screen honest: a stepper she moved may never be
   // moved back by the app.
+  //
+  // THE NUMBER SHE SETS IS FOR THE WHOLE COMPUTER NOW (w-ec27ff1a51), under
+  // `agentsAtOnce`, and that one still always wins over the plan. A per-login
+  // `maxConcurrentSessions` left by the old stepper is not a choice any more,
+  // so the plan is read over it: a Pro plan still runs one at a time.
   it('a number she set herself always wins', () => {
     layPlan(path.join(home, '.claude.json'), 'default_claude_pro');
-    layConfig({ maxConcurrentSessions: 4 });
+    layConfig({ agentsAtOnce: 4, agentsAuto: false });
     const config = loadConfig(appDir, { home });
-    expect(config.maxConcurrentSessions).toBe(4);
+    expect(config.agentsAtOnce).toBe(4);
+    expect(config.agentsAuto).toBe(false);
     expect(config.planSlotsFrom).toBe(null);
   });
 
-  it('a number she set that happens to equal the default still wins', () => {
+  it('an old per-login number does not hide a plan that runs one at a time', () => {
     layPlan(path.join(home, '.claude.json'), 'default_claude_pro');
     layConfig({ maxConcurrentSessions: 3 });
-    expect(loadConfig(appDir, { home }).maxConcurrentSessions).toBe(3);
+    const config = loadConfig(appDir, { home });
+    expect(config.maxConcurrentSessions).toBe(1);
+    // Named only when the plan is what lowered the number, as above. GitHub's
+    // macOS runner already allows one, which kept this red on every push from
+    // 2026-10-09 to 2026-10-13.
+    expect(config.planSlotsFrom).toBe(machineSlots().slots > 1 ? 'Pro' : null);
   });
 });

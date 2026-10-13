@@ -27,6 +27,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { RECENT_DAYS, isScratchFolder, shortFolder, threadTitle } from './agent-sessions.mjs';
+import { codexDataDirs } from './agent-homes.mjs';
 import { WAS_SLUGS, nameSlug } from '../shared/product-name.mjs';
 
 export const CODEX_RECENT_DAYS = RECENT_DAYS;
@@ -256,15 +257,42 @@ export const isLive = (mtime, now = Date.now()) => Number(mtime) > 0 && now - Nu
 /**
  * THE USER'S CONVERSATIONS, newest first, in the shape the import card and the
  *  import row both read. One entry per thread a person typed into, in a real folder,
- *  touched in the last `days` days. */
-export function readCodexThreads({ home = os.homedir(), codexDir = codexHome(home), days = CODEX_RECENT_DAYS, now = Date.now(), query = '' } = {}) {
-  const index = readCodexIndex(codexDir);
+ *  touched in the last `days` days.
+ *
+ *  EVERY CODEX FOLDER ON THE MACHINE, not only `~/.codex` (w-e46f2e9cea): a
+ *  second login under `~/.codex-<name>` or a `CODEX_HOME` holds conversations
+ *  the import never offered. `codexDirs` is the list main/agent-homes.mjs makes;
+ *  `codexDir` still names exactly one folder for a caller that means one. The
+ *  same conversation in two folders is one row.
+ *
+ *  WHICH COPY, AND WHICH NAME, decided apart (Codex's review of this change,
+ *  2026-10-11). The copy kept is the transcript file written last, judged by
+ *  the file alone: judging by `when`, which folds in the index's own date, let
+ *  a stale copy whose folder's index was touched later beat the copy still
+ *  being written. And the name Codex gave a conversation is read from every
+ *  folder's index, newest entry winning, so the copy kept still carries a name
+ *  that only another folder's index knew. */
+export function readCodexThreads({ home = os.homedir(), codexDir = null, codexDirs = null, days = CODEX_RECENT_DAYS, now = Date.now(), query = '' } = {}) {
   const search=String(query).trim().toLocaleLowerCase();
-  const ids=search?new Set([...index].filter(([,value])=>value.name.toLocaleLowerCase().includes(search)).map(([id])=>id)):null;
+  const dirs = codexDirs ?? (codexDir ? [codexDir] : codexDataDirs({ home }));
   const cutoff = now - Math.max(0, Number(days) || 0) * 86400 * 1000;
-  const out = [];
-  const skipped = { notHers: 0, scratch: 0, old: 0, empty: 0, unreadable: 0 };
-  for (const file of new Set([...listRolloutFiles(codexDir, { days, since: cutoff, ids }), ...(search ? listRolloutFiles(codexDir, {days,since:cutoff}) : [])])) {
+  const index = new Map();
+  for (const dir of dirs) {
+    for (const [id, entry] of readCodexIndex(dir)) {
+      const had = index.get(id);
+      if (!had || (entry.name && (!had.name || entry.updatedAt > had.updatedAt))) index.set(id, entry);
+    }
+  }
+  const byId = new Map();
+  const skipped = { notHers: 0, scratch: 0, old: 0, empty: 0, unreadable: 0, copy: 0 };
+  for (const dir of dirs) readOneCodexHome(dir, { home, days, now, cutoff, index, byId, skipped, search });
+  const out = [...byId.values()].map(({ fileTime, ...t }) => t);
+  out.sort((a, b) => b.when - a.when);
+  return { threads: out, skipped };
+}
+
+function readOneCodexHome(codexDir, { home, days, now, cutoff, index, byId, skipped, search }) {
+  for (const file of listRolloutFiles(codexDir, { days: search ? 36500 : days, since: search ? 0 : cutoff })) {
     const r = readRollout(file);
     if (!r) { skipped.unreadable += 1; continue; }
     if (r.threadSource !== 'user') { skipped.notHers += 1; continue; }
@@ -275,7 +303,13 @@ export function readCodexThreads({ home = os.homedir(), codexDir = codexHome(hom
     const title = named?.name || threadTitle([r.prompt]);
     if (!title) { skipped.empty += 1; continue; }
     if(search&&!title.toLocaleLowerCase().includes(search))continue;
-    out.push({
+    const had = byId.get(r.id);
+    if (had) {
+      skipped.copy += 1;
+      if (had.fileTime >= r.mtime) continue;
+    }
+    byId.set(r.id, {
+      fileTime: r.mtime,
       id: r.id,
       source: 'codex',
       folder: r.cwd,
@@ -293,6 +327,4 @@ export function readCodexThreads({ home = os.homedir(), codexDir = codexHome(hom
       live: isLive(r.mtime, now),
     });
   }
-  out.sort((a, b) => b.when - a.when);
-  return { threads: out, skipped };
 }

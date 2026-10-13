@@ -244,7 +244,11 @@ describe('the connection card', () => {
     // Since the redraw (w-ccadd13c46) the agent's page draws its status card
     // whenever there is trouble, and hands it main's sentence untouched.
     expect(settingsTsx).toContain('trouble: agent.trouble, onChecked: load };');
-    expect(settingsTsx).toContain("(!agent.found || agent.trouble) && (engine === 'codex' ? <CodexCli {...status} /> : <ClaudeCode {...status} />)");
+    // `agent.chosen` joined the two since w-ce8c1a9275: a path somebody pointed
+    // at themselves is the one healthy state that draws this card, because the
+    // card is the only place that choice can be handed back. The trouble half,
+    // which is what this file is named for, is unchanged.
+    expect(settingsTsx).toContain("(!agent.found || agent.trouble || agent.chosen)\n          && (engine === 'codex' ? <CodexCli {...status} /> : <ClaudeCode {...status} />)");
     // And it is still SAID, not turned into a word of ours.
     expect(settingsTsx).not.toContain("<span className=\"ac-warn\">not running</span>");
   });

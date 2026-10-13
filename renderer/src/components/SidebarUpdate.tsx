@@ -22,7 +22,8 @@
 // a red-orange, and a red mark reads as something broken.
 
 import { NAME } from '../../../shared/product-name.mjs';
-import { SAY } from '../update-row';
+import { MOVE_SAY, SAY } from '../update-row';
+import { sayWhere } from '../../../shared/where-it-runs-from.mjs';
 
 export const SIDE_SAY = {
   title: 'New version ready',
@@ -31,7 +32,50 @@ export const SIDE_SAY = {
   changed: 'What changed:',
   close: 'Close',
   closeTip: 'Hide until the next version',
+  // The move card's × hides a card about something no later version will fix,
+  // so it says where the offer still is rather than when it comes back.
+  moveCloseTip: 'Hide it · Settings still offers it',
 } as const;
+
+// AND THE CARD FOR A COPY THAT CANNOT UPDATE ITSELF AT ALL (w-ca1fc3ac58,
+// 2026-10-12). Two installs ran 0.1.11 for a week off the disk image: they
+// could not update, the app reported Squirrel's refusal as a crash every six
+// hours, and nothing on the screen ever mentioned it. This is the same card
+// in the same place, with the one press that fixes it for good, and the same ×
+// so it can be put away. The Settings row and ⌘K keep the offer after that:
+// unlike a waiting version, nothing else will ever install this one.
+export function SidebarMove({ place, error = null, collapsed, onMove, onClose }: {
+  /** Which read-only place this is (shared/where-it-runs-from.mjs). */
+  place: string | null;
+  /** Why the last move did not work, if it did not. */
+  error?: string | null;
+  collapsed: boolean;
+  onMove: () => void;
+  onClose: () => void;
+}) {
+  // THE CARD SAYS THE FACT AND THE BUTTON SAYS THE FIX. The Settings row has
+  // the width for both sentences; here the long one ran to six lines.
+  const why = error ? `${error.replace(/\.?$/, '.')} ${MOVE_SAY.retry}` : (sayWhere(place, { short: true }) ?? MOVE_SAY.cannotUpdateHere);
+
+  if (collapsed) {
+    return <button type="button" className="sb-update-row" title={`${MOVE_SAY.button}. ${why}`} aria-label={MOVE_SAY.button} onClick={onMove}>
+      <MoveIcon /><span>{MOVE_SAY.button}</span>
+    </button>;
+  }
+
+  return <div className="sb-update-card">
+    <div className="sb-update-card-title"><MoveIcon /><span>{MOVE_SAY.title}</span></div>
+    <button type="button" className="sb-update-close" aria-label={SIDE_SAY.close} title={SIDE_SAY.moveCloseTip} onClick={onClose}><CloseIcon /></button>
+    <p>{why}</p>
+    <button type="button" className="sb-update-go" onClick={onMove}>{MOVE_SAY.button}</button>
+  </div>;
+}
+
+// A box with an arrow going into it. Grey like the restart arrow, for the
+// reason at the top of this file: a red mark reads as something broken.
+function MoveIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><path d="M4 14v5a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-5"/><path d="M12 3.5v10"/><path d="M8.5 10 12 13.5 15.5 10"/></svg>;
+}
 
 function RestartIcon() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg>;

@@ -89,8 +89,8 @@ describe('snooze is for the person reading the answer', () => {
       vi.setSystemTime(Date.now() + 1);
     }
     const lines = store.modules.workItemsDisk.readLinesFrom(dir).lines;
-    expect(threadEvents(lines).filter(e => /snoozed|brought it back/.test(e.said)).map(e => e.said))
-      .toEqual(['You snoozed it', 'You snoozed it', 'You brought it back']);
+    expect(threadEvents(lines).filter(e => /moved it to Later|brought it back/.test(e.said)).map(e => e.said))
+      .toEqual(['You moved it to Later', 'You moved it to Later', 'You brought it back']);
   });
 
   it('does not cancel a send-later schedule while snoozing or undoing the snooze', () => {
@@ -180,6 +180,6 @@ describe('snooze is for the person reading the answer', () => {
       { id: 'w-1', ts: NOW + 2, source: 'founder', patch: { answer: 'Revise the opening' } },
       { id: 'w-1', ts: NOW + 3, source: 'founder', patch: { snoozedUntil: 0 } },
     ];
-    expect(threadEvents(lines).map(e => e.said)).toEqual(['You opened this', 'You snoozed it', 'You replied']);
+    expect(threadEvents(lines).map(e => e.said)).toEqual(['You opened this', 'You moved it to Later', 'You replied']);
   });
 });

@@ -20,6 +20,9 @@ import { MessageActions, Reactions } from './ChatActions';
 import { clock } from '../thread-history';
 import { THREAD_WIDTH, threadLine } from './chat-threads';
 import { holdTheEdge } from './hold-the-edge';
+import { FormatBar } from './FormatBar';
+import { AttachRow } from '../components/AttachRow';
+import { collectFiles, fromPaste, persistAttachments, type PendingAttachment } from '../attachments';
 import type { AgentTurn } from '../types';
 import './chat.css';
 
@@ -29,7 +32,9 @@ const useBeforePaint = typeof window === 'undefined' ? useEffect : useLayoutEffe
 /** How far one arrow press moves the edge, for a keyboard. */
 const NUDGE = 24;
 
-export function ThreadPanel({ parent, replies, md, width, reactions, onReact, onSend, onClose, onResize }: {
+export function ThreadPanel({ product, parent, replies, md, width, reactions, onReact, onSend, onClose, onResize }: {
+  /** The conversation's project, where a picture sent here is saved. */
+  product: string;
   /** The message the thread hangs off. */
   parent: AgentTurn;
   /** Its replies, oldest first. */
@@ -51,6 +56,11 @@ export function ThreadPanel({ parent, replies, md, width, reactions, onReact, on
   const body = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState('');
+  // A PICTURE GOES IN HERE THE WAYS IT GOES INTO THE CHAT'S OWN BOX
+  // (w-140ac855b1): pasted, dropped, or picked with the paperclip. This box
+  // took words only, so a screenshot pasted into a thread went nowhere.
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const filePicker = useRef<HTMLInputElement>(null);
   // WHAT YOU SENT AND THE LEDGER DOES NOT HAVE YET, drawn at once and dropped
   // when your own committed copy arrives, so a reply never appears to vanish
   // between Enter and the next read of the row.
@@ -59,7 +69,7 @@ export function ThreadPanel({ parent, replies, md, width, reactions, onReact, on
     setSending((was) => was.filter((s) => !replies.some((r) => (r.by ?? me) === me && r.at >= s.at - 5_000 && (r.text ?? '').trim() === s.text.trim())));
   }, [replies, me]);
   // A new thread starts empty, with the box ready.
-  useEffect(() => { setDraft(''); setSending([]); box.current?.focus(); }, [parent.uid]);
+  useEffect(() => { setDraft(''); setAttachments([]); setSending([]); box.current?.focus(); }, [parent.uid]);
 
   // THE PANE MAKES ROOM FOR AS LONG AS THE PANEL IS DRAWN, and no longer. Set
   // from here rather than by whoever opened it, so a thread whose message has
@@ -87,18 +97,24 @@ export function ThreadPanel({ parent, replies, md, width, reactions, onReact, on
     const el = box.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
   }, [draft]);
 
-  const send = () => {
-    const text = draft.trim();
+  // The words, then a link to each file, the way the chat's box sends them.
+  const send = async () => {
+    const words = draft.trim();
+    if (!words && !attachments.length) return;
+    const files = attachments;
+    setDraft('');
+    setAttachments([]);
+    const text = [words, await persistAttachments(product, files)].filter(Boolean).join('\n\n');
     if (!text) return;
     setSending((was) => [...was, { at: Date.now(), text }]);
-    setDraft('');
     onSend(text);
   };
+  const ready = !!draft.trim() || attachments.length > 0;
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); }
     // Escape leaves the thread, and goes no further: the page behind it would
     // otherwise take the same key as "leave this conversation".
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); }
@@ -181,17 +197,53 @@ export function ThreadPanel({ parent, replies, md, width, reactions, onReact, on
         {sending.map((s) => said({ at: s.at, who: 'you', text: s.text }, true))}
       </div>
       <div className="chat-thread-foot">
-        <div className="chat-thread-box">
+        <div
+          className="chat-thread-box"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={async (e) => {
+            e.preventDefault();
+            const dropped = await collectFiles(e.dataTransfer.files);
+            if (dropped.length) setAttachments((a) => [...a, ...dropped]);
+          }}
+        >
+          {/* THE CHAT'S OWN BOX, NARROWER (w-140ac855b1, 2026-10-13). Their
+              words on a one-line box with Send beside the words: "there's
+              still not enough space to write your message... The send button
+              should also be in the bottom-right corner... our approach should
+              be rather similar to that of other input fields in our
+              application." So: room for three lines that grows, what is
+              attached under the words, then the chat's formatting bar on the
+              left of a footer and Send at its right, which is the chat's reply
+              box and Slack's thread box both. */}
           <textarea
             ref={box}
-            rows={1}
+            rows={3}
             value={draft}
             placeholder="Reply in thread…"
             aria-label="Reply in thread"
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onKey}
+            onPaste={async (e) => {
+              const pasted = await fromPaste(e);
+              if (pasted.length) { e.preventDefault(); setAttachments((a) => [...a, ...pasted]); }
+            }}
           />
-          <button type="button" className="chat-thread-send" disabled={!draft.trim()} onClick={send}>Send</button>
+          <AttachRow attachments={attachments} onRemove={(i) => setAttachments((x) => x.filter((_, j) => j !== i))} />
+          <input
+            ref={filePicker}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const picked = await collectFiles(e.target.files ?? []);
+              if (picked.length) setAttachments((a) => [...a, ...picked]);
+              e.target.value = '';
+            }}
+          />
+          <div className="chat-thread-bar">
+            <FormatBar box={box} onChange={setDraft} onAttach={() => filePicker.current?.click()} />
+            <button type="button" className="dock-send" disabled={!ready} onClick={() => void send()} title="Send · ↵">Send <kbd>↵</kbd></button>
+          </div>
         </div>
       </div>
     </aside>

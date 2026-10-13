@@ -16,6 +16,9 @@
 import { PRACTICE_BACKDROP, PRACTICE_NAME, PRACTICE_TASK } from '../../shared/first-run-practice.mjs';
 import { NAME, Name } from '../../shared/product-name.mjs';
 import { DONE } from './done-word';
+// The walk's own question card, and the one answer this file shares with it:
+// "I already have one" is the same sentence in both places or it is two.
+import { COPY as PLAN, type AskRow } from './plan-setup';
 
 /**
  * THE BEATS. `landed` is the end and draws nothing over the app.
@@ -1320,7 +1323,14 @@ export const COPY = {
   gateHead: `${Name} needs Claude Code or Codex.`,
   gateDo: `Install either one, then check again. Your inbox opens as soon as ${NAME} can see it.`,
   gateCheck: 'Check again',
+  // What each of the two ways out says WHILE it is working. The row that was
+  // pressed says it, because the row is the only thing that was pressed.
   gateChecking: 'Looking',
+  gatePointing: 'Choosing',
+  // The sentence under the one row that leads. The two under it are ways out
+  // and carry no sentence, which is the shape the walk's cards are drawn in;
+  // see `AskRow.other` in ./plan-setup for why that is not a choice.
+  gateGetSub: 'Takes a few minutes, on its own page',
   // AFTER A CHECK THAT FOUND NOTHING. It is a different sentence from the one
   // above it, because repeating the first sentence at somebody who has just
   // pressed a button reads as a screen that did not notice the press.
@@ -1333,9 +1343,10 @@ export const COPY = {
    a condition inside a component, so the rule can be tested without a window.
 
    THE GATE ONLY EVER CLOSES ON A CERTAIN ANSWER, and that is the safety of it.
-   `missing` is true only after `main/claude-bin.mjs` has looked in fifteen
-   places, read the version manager folders, asked up to three shells and had
-   every one of them exit properly, and found no trace of Claude Code anywhere
+   `missing` is true only after `main/engine-bin.mjs` has asked up to three
+   login shells and had every one of them exit properly, looked in sixteen
+   places, read the version manager folders, looked inside the Claude desktop
+   app, and found no trace of Claude Code anywhere
    on the Mac — `installEvidence` vetoes certainty on so much as a
    `~/.claude.json` or a dangling symlink. A search that merely failed leaves
    `missing` false and this card is the approved ending, untouched.
@@ -1414,6 +1425,41 @@ export function finishCard(
  *  the walk off as done, so a press that arrives from anywhere — the button,
  *  the return key, a keystroke that reached the window some other way — is
  *  answered the same way. */
+/**
+ * THE THREE MOVES ON THE LAST CARD, AS A LIST (w-ce8c1a9275, 2026-10-09).
+ *
+ * They were three bare buttons in a row. The founder, on a photograph of it:
+ * "UI wise this is very rough. In onboarding we already have a component for
+ * geting setup/selecting your harness I feel like that's a better design an
+ * dpossibly placement." They are right twice over: the walk already asks this
+ * question on the plan screen, with a card of rows, so three buttons here were
+ * a second vocabulary for one moment, on the one screen that will not let
+ * anybody past it. These rows are drawn by `AskList`, the plan question's own
+ * card.
+ *
+ * GETTING ONE LEADS, because most people who reach this really do not have a
+ * coding agent, and pointing at a file they have not got is no use to them. It
+ * is a REAL LINK rather than a button: the address belongs in the page.
+ *
+ * SHOWING IT WHERE ONE IS comes last and is worded exactly as the plan
+ * question words it, because it is the same answer to the same question
+ * (`COPY.haveOne` in ./plan-setup). One sentence, in both places.
+ *
+ * NOTHING HERE OPENS AN INBOX. That is `mayOpenInbox` below and it is
+ * untouched: these are three ways to get an agent and no way past.
+ */
+export function gateRows(url: string, busy: { checking?: boolean; pointing?: boolean } = {}): AskRow[] {
+  return [
+    { key: 'get', mark: 'C', name: COPY.missingLink, sub: COPY.gateGetSub, href: url },
+    // A PRESS SAYS SO WHILE IT WORKS. The row is the only thing that was
+    // pressed, so it is the only honest place to say it; the buttons this list
+    // replaced swapped their own labels and losing that would be a search that
+    // runs for several seconds behind a screen showing nothing at all.
+    { key: 'check', name: busy.checking ? COPY.gateChecking : COPY.gateCheck, other: true },
+    { key: 'mine', name: busy.pointing ? COPY.gatePointing : PLAN.haveOne, other: true },
+  ];
+}
+
 export function mayOpenInbox(claude: { missing: boolean }): boolean {
   return !claude.missing;
 }

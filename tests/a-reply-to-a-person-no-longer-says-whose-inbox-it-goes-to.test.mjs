@@ -20,33 +20,40 @@
 // so that card's corner holds the priority chip; the corner is not bare, and
 // the sentence beside it was repeating the To field one line above. The reply
 // box has no level to carry — a level belongs to the message that OPENS a
-// conversation — so the line is still the whole of its corner, and that is the
-// half of this file that still pins something.
+// conversation — so the line stayed the whole of its corner.
+//
+// AND THEN THE REPLY BOX LOST IT TOO (w-140ac855b1, 2026-10-13), at the
+// person's own request: "I think it's best to remove the 'text goes to
+// [their teammate]'s inbox' part." Measured on their screen before the change: the
+// reply box's footer read the formatting bar, then "Goes to …'s inbox.", then
+// Send. The corner is not bare without it, because the formatting bar sits
+// there. What is left of the old rule is that the slot still speaks when an
+// agent in the message has no project and Send is waiting.
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { landsIn } from '../renderer/src/threads/composer-rules.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-describe('where a message to a person lands', () => {
-  it('names the one person whose inbox it goes to', () => {
-    expect(landsIn(['Maya'])).toBe("Goes to Maya's inbox.");
+describe('whose inbox a reply goes to', () => {
+  it('is not said in any box', () => {
+    for (const f of ['renderer/src/components/Focus.tsx', 'renderer/src/threads/ThreadComposer.tsx', 'renderer/src/threads/composer-rules.ts']) {
+      expect(code(read(f)), `${f} still says it`).not.toMatch(/Goes to \$\{|inboxes?\./);
+      expect(code(read(f)), `${f} still says it`).not.toMatch(/landsIn/);
+    }
   });
 
-  // The possessive sits on the LAST name only, which is how a joint possessive
-  // is written: "Maya and Jun's inboxes", never "Maya's and Jun's".
-  it('names everyone when a message goes to more than one person', () => {
-    expect(landsIn(['Maya', 'Jun'])).toBe("Goes to Maya and Jun's inboxes.");
-    expect(landsIn(['Maya', 'Jun', 'Priya'])).toBe("Goes to Maya, Jun and Priya's inboxes.");
+  // THE CASE THAT MUST STAY: the same slot still says why Send is waiting
+  // when an agent named in the message has no project.
+  it('still says why Send waits when an agent in the message has no project', () => {
+    expect(code(read('renderer/src/components/Focus.tsx'))).toMatch(/chat\.block \? <span className="dim">\{chat\.block\}<\/span> : null/);
   });
 
-  // The boundary either side: nobody addressed yet draws nothing, and the
-  // corner is never the string "undefined".
-  it('says nothing at all when nobody is addressed', () => {
-    expect(landsIn([])).toBe('');
+  it('keeps the formatting bar in the corner, so the corner is not bare', () => {
+    expect(code(read('renderer/src/components/Focus.tsx'))).toMatch(/talkTo\?\.length \? <FormatBar/);
   });
 });
 
@@ -90,11 +97,6 @@ describe('the corner is filled, not emptied', () => {
     const from = src.indexOf('{person ? (');
     const bar = src.slice(from, src.indexOf('\n        ) : (', from));
     expect(bar).toMatch(/\{priorityChip\}/);
-  });
-
-  it('the reply box draws it on a conversation with a person', () => {
-    const src = read('renderer/src/components/Focus.tsx');
-    expect(src).toMatch(/landsIn\(/);
   });
 
   // The agent's own clause is untouched: a message going into somebody's

@@ -83,7 +83,7 @@ describe('the row prints the keys it really has', () => {
     expect(listSwitch).toMatch(/case 'e': case 'E':[\s\S]{0,400}view === 'snoozed'\) unsnooze/);
     expect(rowKeys('snoozed')).toEqual([
       { key: 'E', word: 'Back to inbox' },
-      { key: 'L', word: 'Remind me' },
+      { key: 'L', word: 'Later' },
     ]);
   });
 

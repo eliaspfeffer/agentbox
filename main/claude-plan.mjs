@@ -71,6 +71,9 @@ export function planLabel(raw) {
   if (!s) return null;
   const bare = s.replace(/^default_/, '').replace(/^claude_/, '');
   if (!bare) return null;
+  // Claude's saved Enterprise tier includes an internal name. Keep the raw
+  // tier for capacity decisions, but show only the subscription name.
+  if (bare === 'raven_enterprise') return 'Enterprise';
   return bare
     .split('_')
     .filter(Boolean)
@@ -114,7 +117,15 @@ export function readPlan(profile, { home = os.homedir(), file = null } = {}) {
   const from = tier === account.organizationRateLimitTier
     ? 'org-tier'
     : tier === account.userRateLimitTier ? 'user-tier' : 'org-type';
-  return { known: true, max: isMaxTier(tier), label: planLabel(tier), tier, from, file: at };
+  // A SUBSCRIPTION THAT HAS ENDED STILL NAMES ITS OLD TIER. Measured
+  // 2026-10-11 on a lapsed personal Max login: `billingType` had gone to
+  // "none" (a paying one says "stripe_subscription") while the tier still said
+  // `default_claude_max_20x`, so the page went on saying "Max 20x". Only the
+  // exact word counts; a file that names no billing at all is read as before.
+  if (account.billingType === 'none') {
+    return { known: true, ended: true, max: false, label: 'Subscription ended', tier, from, file: at };
+  }
+  return { known: true, ended: false, max: isMaxTier(tier), label: planLabel(tier), tier, from, file: at };
 }
 
 /**
@@ -142,7 +153,8 @@ export function readPlans(profiles, { home = os.homedir() } = {}) {
  *  AND AN UNREADABLE ACCOUNT NEVER LOWERS IT. Somebody whose config file we
  *  cannot parse gets exactly the app they had before this existed. */
 export function slotsForPlans(plans, fallback = 3) {
-  const known = (plans ?? []).filter((p) => p.known);
+  // An ended subscription runs nothing, so it has no say in how many run.
+  const known = (plans ?? []).filter((p) => p.known && !p.ended);
   if (!known.length) return fallback;
   return known.every((p) => p.max) ? fallback : 1;
 }

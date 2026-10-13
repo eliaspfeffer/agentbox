@@ -21,9 +21,9 @@ const at = (d, h, m = 0) => new Date(2026, 9, d, h, m).getTime();
 const NOW = at(4, 15); // Sunday 4 October 2026, 3pm
 
 describe('the words', () => {
-  it('drops "You" and "it" from a snooze', () => {
-    expect(actWords({ verb: 'You snoozed it', subject: 'until tomorrow 9:00am' }))
-      .toEqual({ lead: 'Snoozed until tomorrow 9:00am', choice: null, picked: false });
+  it('drops "You" and "it" from moving it to Later', () => {
+    expect(actWords({ verb: 'You moved it to Later', subject: 'until tomorrow 9:00am' }))
+      .toEqual({ lead: 'Moved to Later until tomorrow 9:00am', choice: null, picked: false });
   });
 
   it('reads a pick as "Picked" and the option, without its number', () => {
@@ -38,7 +38,7 @@ describe('the words', () => {
   });
 
   it('puts a teammate\'s name where "You" was', () => {
-    expect(actWords({ verb: 'You snoozed it', subject: 'until 5:00pm' }, 'Ana').lead).toBe('Ana snoozed until 5:00pm');
+    expect(actWords({ verb: 'You moved it to Later', subject: 'until 5:00pm' }, 'Ana').lead).toBe('Ana moved to Later until 5:00pm');
     expect(actWords({ verb: 'You picked option 2', subject: 'Later' }, 'Ana')).toEqual({ lead: 'Ana picked', choice: 'Later', picked: true });
   });
 });

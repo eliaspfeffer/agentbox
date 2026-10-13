@@ -121,6 +121,18 @@ export function shownAfterUndo<I>(
   return { open: brings ?? null, compose: false };
 }
 
+/**
+ * WHICH ROW AN UNDO HANDS BACK, for the entries that act on a list of rows
+ * (w-874411cc63). Undoing a snooze put the task back in the inbox and opened
+ * nothing, so the Z looked like it had done nothing and the next Z reached the
+ * reply under it. One row is the task she was reading, so it is opened. Several
+ * came from a ticked selection in the list, where they all reappear, and there
+ * is no one of them she meant.
+ */
+export function bringsBack<I>(rows: readonly I[]): I | undefined {
+  return rows.length === 1 ? rows[0] : undefined;
+}
+
 /** And what a Z says when there is nothing on the pile at all. */
 export const NOTHING_TO_UNDO = 'Nothing to undo yet.';
 

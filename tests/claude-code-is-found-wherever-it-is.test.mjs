@@ -40,13 +40,18 @@ describe('finding Claude Code', () => {
     expect(found).toMatchObject({ path: where, found: true, from: 'disk' });
   });
 
-  it('asks the shell when none of the known paths have it, which is how nvm and volta are found', () => {
+  // THE SHELL IS ASKED FIRST SINCE 2026-10-08 (w-ce8c1a9275). It was the third
+  // step, behind the hand-written list, and the list is a guess while the shell
+  // is their actual PATH with their profile loaded. The new order is pinned in
+  // tests/one-finder-asks-the-shell-before-any-list.test.mjs; what this case
+  // still cares about is that nvm and volta are reachable at all.
+  it('asks the shell, which is how nvm and volta are found', () => {
     const viaNvm = `${HOME}/.nvm/versions/node/v22.3.0/bin/claude`;
     const found = findClaudeBin({
       home: HOME, exists: only(viaNvm), shellLookup: () => viaNvm,
     });
     expect(found).toMatchObject({ path: viaNvm, found: true, from: 'shell' });
-    // And it only pays for the subprocess after the cheap checks miss.
+    // And it still says where else it would have looked.
     expect(found.searched).toEqual(candidatePaths(HOME));
   });
 

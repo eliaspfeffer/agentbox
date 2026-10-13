@@ -26,6 +26,7 @@ describe('the toast can carry a way in', () => {
   });
 
   it('opens that row, marks it seen and clears itself', () => {
+    // One path for the click and for O since w-f0bfe32859: openToastRow.
     expect(app).toMatch(/setToast\(null\);\s*if \(!row\) return;/);
     expect(app).toMatch(/setFocused\(row\);\s*markSeen\(row\);/);
   });
@@ -33,16 +34,19 @@ describe('the toast can carry a way in', () => {
   it('outlives noticing it, which 2.5 seconds did not', () => {
     // Her report is that she sometimes does not notice this one go past at all,
     // and a toast she is meant to CLICK has to survive reaching the trackpad.
-    expect(app).toContain('setTimeout(() => setToast(null), goes ? 6000 : 2500);');
+    expect(app).toContain('setTimeout(() => setToast(null), goes ? TOAST_GOES_MS : 2500);');
+    expect(app).toContain('const TOAST_GOES_MS = 6000;');
   });
 
   it('stays a plain announcement when there is nowhere to go', () => {
     // Nothing that is only telling her something grows a pointer or a ring.
-    expect(app).toContain('<div className="toast">{toast.text}</div>');
+    // Since w-f0bfe32859 it is drawn in parts, and still a div.
+    expect(app).toContain(': <div key={toastShown.current} className="toast toast-plain">{face}</div>;');
   });
 
   it('says out loud that it is pressable', () => {
-    expect(app).toContain('<span className="toast-go">Open it</span>');
+    // Since w-f0bfe32859 the words are a keycap, O, which also works.
+    expect(app).toContain('{toast.goes && <span className="toast-key"><kbd>O</kbd><span className="toast-key-word">Open</span></span>}');
     expect(css).toContain('.toast-goes {');
     expect(css).toMatch(/\.toast-goes \{[^}]*cursor: pointer;/s);
     expect(css).toMatch(/\.toast-goes:focus-visible \{[^}]*outline:/s);
@@ -61,7 +65,8 @@ describe('the toast can carry a way in', () => {
 describe('the toast after an answer carries the same way in', () => {
   it('deferCommit takes a destination', () => {
     // Followed, since w-c78d1e1607, by what the thread says if a Z takes it back.
-    expect(app).toMatch(/goes\?: \{ product: string; id: string \},[\s\S]{0,300}?undid\?: UndidSpec\[\],\s*background=false,\s*\) => \{/);
+    // Then, since 2026-10-13, how long it is held: a phone's reply is not.
+    expect(app).toMatch(/goes\?: \{ product: string; id: string \},[\s\S]{0,300}?undid\?: UndidSpec\[\],[\s\S]{0,300}?background=false,[\s\S]{0,300}?holdMs: number = UNDO_GRACE_MS,\s*\) => \{/);
     expect(app).toContain('showToast(`${toast} · press Z to undo`, stay ? undefined : goes);');
   });
 

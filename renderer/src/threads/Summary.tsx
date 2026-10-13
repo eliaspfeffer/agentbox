@@ -14,7 +14,7 @@
 // may be linked) are in ./summary-rules.ts, and the bar's crumb in
 // ./crumb-rules.ts, where the tests read them.
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { Person, ThreadCard, ThreadEditPatch, WorkItem } from '../types';
+import type { Person, RepeatRule, ThreadCard, ThreadEditPatch, WorkItem } from '../types';
 import { api } from '../api';
 import { doneSteps, summaryOf, threadState } from '../../../shared/thread-cards.mjs';
 import { PriorityIcon } from '../components/Priority';
@@ -31,6 +31,9 @@ import { findPeople, teammates } from './composer-rules';
 import { shownToPeople } from '../../../shared/thread-cards.mjs';
 import { rowTitle } from '../list-rules';
 import { SharedMark } from './Pages';
+import { TicketText } from '../components/TicketReference';
+import { repeatTag } from '../components/List';
+import { joinMessage } from '../message-split';
 import './summary.css';
 
 /* ------------------------------------------------------------------ pieces */
@@ -172,9 +175,10 @@ export function SummaryRail({ item, team, onOpen }: { item: WorkItem; team: Team
 
 type Field = SummaryField | 'priority' | 'visibility' | 'visibleTo';
 type Pending = Partial<Record<Field, { value: unknown; ts: number }>>;
-type Menu = null | 'status' | 'priority' | 'visibility';
+type Menu = null | 'status' | 'priority' | 'visibility' | 'repeat';
 
 const NOT_WRITTEN = 'Not written yet';
+const sentence = (words: string) => words.charAt(0).toUpperCase() + words.slice(1);
 // The two parts the panel draws; `solution` is still stored but not shown.
 const SHOWN_FIELDS: SummaryField[] = ['problem', 'progress'];
 
@@ -185,7 +189,7 @@ const SHOWN_FIELDS: SummaryField[] = ['problem', 'progress'];
 function DoneTrail({ steps }: { steps: string[] }) {
   return (
     <ol className="ts-trail">
-      {steps.map((s, i) => <li key={i} className={`ts-step${i === steps.length - 1 ? ' ts-step-last' : ''}`}>{s}</li>)}
+      {steps.map((s, i) => <li key={i} className={`ts-step${i === steps.length - 1 ? ' ts-step-last' : ''}`}><TicketText text={s} /></li>)}
     </ol>
   );
 }
@@ -199,9 +203,24 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stri
  *
  * `team` is null on a Mac nobody has signed into, where every thread is yours.
  */
-export function SummaryPanel({ item, team, onFinish, onClose }: {
+/**
+ * THE RULE BEHIND A RUN OF A REPEATING TASK, when the thread is one
+ * (w-5e3f2e047f). A repeating task opens as its latest run, so this panel is
+ * where its instruction and schedule live: one more line and one more
+ * property, drawn the way the others are.
+ */
+export interface RepeatHandle {
+  rule: RepeatRule;
+  /** Replace what every later run is told, as one message (message-split.ts).
+   *  False when the write was refused, and the box opens again with her words. */
+  onSave: (message: string) => Promise<boolean>;
+  onEnd: () => void;
+}
+
+export function SummaryPanel({ item, team, onFinish, onClose, repeat = null }: {
   item: WorkItem;
   team: TeamView | null;
+  repeat?: RepeatHandle | null;
   /** FOLD IT BACK TO THE RAIL, from the icon at the top of the summary (w-a3482b8c2c). */
   onClose?: () => void;
   /**
@@ -348,10 +367,41 @@ export function SummaryPanel({ item, team, onFinish, onClose }: {
     el.setSelectionRange(el.value.length, el.value.length);
   }, [editing]);
 
+  /* --- what every run is told ------------------------------------------ */
+  // THE SAME LINE THAT TURNS INTO A BOX, but it saves once, when she clicks
+  // away or presses Escape, and not as she types: this text briefs every run
+  // after it, and a rule rewritten forty times on the way to one sentence is
+  // forty instructions a run could have read. Enter is a new line here, since
+  // an instruction is often a list.
+  const instruction = repeat ? joinMessage(repeat.rule) : '';
+  const [ruleDraft, setRuleDraft] = useState<string | null>(null);
+  const ruleBox = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { setRuleDraft(null); }, [item.product, item.id]);
+  const finishRule = () => {
+    if (ruleDraft === null || !repeat) return;
+    const text = ruleDraft.trim();
+    setRuleDraft(null);
+    if (text && text !== instruction.trim()) void repeat.onSave(text).then((ok) => { if (!ok) setRuleDraft(text); });
+  };
+  useLayoutEffect(() => {
+    const el = ruleBox.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [ruleDraft]);
+  const editingRule = ruleDraft !== null;
+  useEffect(() => {
+    const el = ruleBox.current;
+    if (!el || !editingRule) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [editingRule]);
+
   // What is happening to the words right now, said under them only while it
   // is true: an edit in progress, or one that did not save. When they were
   // last written is the Updated row at the foot (w-922f66bb06).
-  const note = editing ? 'You are editing · saves as you type' : error;
+  const note = editingRule ? 'Every run after this one reads this · saves when you click away'
+    : editing ? 'You are editing · saves as you type' : error;
   const updated = updatedWord(item, {
     me,
     pending: Object.fromEntries(SUMMARY_FIELDS.filter((f) => pending[f]).map((f) => [f, pending[f]!.ts])),
@@ -406,10 +456,36 @@ export function SummaryPanel({ item, team, onFinish, onClose }: {
               title="Click to edit"
               onClick={() => begin(f)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); begin(f); } }}
-            >{f === 'progress' ? <DoneTrail steps={doneSteps(stood[f])} /> : stood[f]}<Pen /></div>
+            >{f === 'progress' ? <DoneTrail steps={doneSteps(stood[f])} /> : <TicketText text={stood[f]} />}<Pen /></div>
           )}
         </div>
       ))}
+      {repeat && (
+        <div className="ts-sec ts-sec-rule">
+          <div className="ts-h">Every run is told</div>
+          {ruleDraft !== null ? (
+            <textarea
+              ref={ruleBox}
+              className="ts-edit"
+              rows={1}
+              value={ruleDraft}
+              aria-label="What every run is told"
+              onChange={(e) => setRuleDraft(e.target.value)}
+              onBlur={finishRule}
+              onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finishRule(); } }}
+            />
+          ) : (
+            <div
+              className="ts-line ts-line-rule"
+              role="button"
+              tabIndex={0}
+              title="Click to change what every run is told"
+              onClick={() => setRuleDraft(instruction)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setRuleDraft(instruction); } }}
+            >{instruction}<Pen /></div>
+          )}
+        </div>
+      )}
       {note && <div className={`ts-by${error && !editing ? ' ts-by-error' : ''}`}>{note}</div>}
 
       <div className="ts-foot">
@@ -491,6 +567,23 @@ export function SummaryPanel({ item, team, onFinish, onClose }: {
         <span className="ts-value">{ownerPerson && <Face person={ownerPerson} />}{owner}</span>
         <span className="ts-label">Project</span>
         <span className="ts-value">{item.productName}</span>
+        {/* HOW IT REPEATS, with the one change it offers in the same kind of
+            menu Status and Priority open. */}
+        {repeat && <>
+        <span className="ts-label">Repeats</span>
+        <span className="ts-value ts-menu-anchor" ref={holdMenu('repeat')}>
+          <button type="button" className="ts-prop-btn" aria-haspopup="listbox" aria-expanded={menu === 'repeat'} title="Stop it repeating" onClick={() => setMenu(menu === 'repeat' ? null : 'repeat')}>
+            {sentence(repeatTag(repeat.rule))}<Caret />
+          </button>
+          {menu === 'repeat' && (
+            <span className="prio-menu ts-menu" role="listbox" aria-label="Repeats">
+              <button type="button" role="option" aria-selected={false} className="prio-menu-row" onClick={() => { setMenu(null); repeat.onEnd(); }}>
+                <span className="prio-menu-label">Stop repeating</span>
+              </button>
+            </span>
+          )}
+        </span>
+        </>}
         {/* ONLY ON A TEAM (w-db6f5e331e). With nobody else on the Mac the row
             read "Visible to: Team" over a menu of people who do not exist,
             and the public app is not to mention a team at all. */}

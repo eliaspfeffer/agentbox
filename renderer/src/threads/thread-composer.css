@@ -134,6 +134,9 @@
    itself rather than sitting against the chip. The task bar needs no such rule,
    because its paperclip already carries one. */
 .tc-send.solo { margin-left: auto; }
+/* AND NOW A PAPERCLIP (w-140ac855b1): a message carries files, so the clip
+   takes that space and Send sits against it, as on the task bar. */
+.tc-icon ~ .tc-send.solo { margin-left: 0; }
 .tc-only { flex: 1; min-width: 0; font-size: 13px; color: var(--text-faint); }
 
 /* WHY SEND IS OFF (w-f8d123be62). It takes the corner the attach clip would

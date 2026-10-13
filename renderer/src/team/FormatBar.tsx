@@ -54,6 +54,19 @@ const WRITES: { what: Format; title: string; glyph: JSX.Element }[] = [
   ) },
 ];
 
+// ATTACH IS A PAPERCLIP, NOT A PLUS (w-140ac855b1, 2026-10-13). The bar drew a
+// +, and the person using it said "there doesn't seem to be an easy way to
+// attach something" with that + on the screen in front of them. A + says "add"
+// and could mean anything; a paperclip says attach. The thread panel's box
+// draws the same one (./ThreadPanel.tsx).
+export function ClipGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m13.6 7.6-5.5 5.5a3.4 3.4 0 0 1-4.8-4.8l5.6-5.6a2.3 2.3 0 0 1 3.3 3.3L6.6 11.6a1.15 1.15 0 0 1-1.6-1.6l5.1-5.1" />
+    </svg>
+  );
+}
+
 export function FormatBar({ box, onChange, onAttach }: {
   /** The reply box itself: the bar works on the selection that is in it. */
   box: { current: HTMLTextAreaElement | null };
@@ -107,9 +120,7 @@ export function FormatBar({ box, onChange, onAttach }: {
       {onAttach && (
         <button type="button" className="fmt-btn" title="Attach a file" aria-label="Attach a file"
           onMouseDown={hold} onClick={onAttach}>
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
-            <path d="M8 3v10M3 8h10" />
-          </svg>
+          <ClipGlyph />
         </button>
       )}
       <span className="fmt-emoji-wrap" ref={emojiWrap}>

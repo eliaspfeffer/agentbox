@@ -10,7 +10,8 @@
 // by reading it every few minutes and everything is lost by reading it on a
 // timer the window waits for.
 //
-// SO IT IS A CACHE WITH A BACKGROUND REFRESH, and never a call anything awaits:
+// SO IT IS A CACHE WITH A BACKGROUND REFRESH. Only the explicit Settings
+// refresh waits for a result; snapshots always return immediately:
 //
 //   - `read` answers instantly, always, from the last measurement or with null.
 //     It never blocks and never throws.
@@ -33,7 +34,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readUsage } from '../shared/claude-usage.mjs';
-import { localZone } from '../shared/usage.mjs';
+import { localZone, USAGE_UNREADABLE } from '../shared/usage.mjs';
 
 // WHERE THE READING RUNS, AND WHY IT IS NOT "WHEREVER THE APP IS". An app
 // opened from Finder has `/` as its working directory, and this used to spawn
@@ -76,18 +77,34 @@ export class ClaudeUsage {
    * is, asked each time rather than captured: it can be installed while the
    * app is running, and the settings screen already promises that works.
    * @param { => void} [how.onChange] Told when a new reading lands, so the
-   * window redraws. Never called for a refresh that changed nothing.
+   * window redraws, including a new checked time on unchanged percentages.
+   * @param { => { profile: string, env?: object }} [how.account] WHOSE LIMIT
+   * IS READ, asked each time. It used to be nobody's in particular: the
+   * command ran with the app's own environment, which is the default login,
+   * so a Mac with a second account picked as In use showed "No usage reading
+   * yet" for good, because the default one was at its limit and Claude Code
+   * printed no limits for it (2026-10-08, Claude Code 2.1.293). `profile` is
+   * the account's name ('default' or its CLAUDE_CONFIG_DIR) and `env` is the
+   * environment to run it in. Supervisor.usageAccount is the real one.
    */
-  constructor({ bin, onChange = () => {}, run = execFile, now = () => Date.now(), where = usageCwd } = {}) {
+  constructor({ bin, onChange = () => {}, run = execFile, now = () => Date.now(), where = usageCwd, account = () => ({ profile: 'default' }) } = {}) {
     this._bin = bin;
+    this._selectedProfile = null;
+    this._generation = 0;
+    this._pending = null;
     this._onChange = onChange;
     this._run = run;
     this._now = now;
     this._where = where;
-    /** @type {{ limits: any[], at: number, zone: string|null }|null} */
+    this._account = account;
+    /** @type {{ limits: any[], at: number, zone: string|null, profile: string }|null} */
     this._last = null;
     this._busy = false;
     this._missedUntil = 0;
+  }
+
+  _who() {
+    try { return this._account() ?? { profile: 'default' }; } catch { return { profile: 'default' }; }
   }
 
   /**
@@ -98,13 +115,28 @@ export class ClaudeUsage {
    * than a pill full of dashes.
    */
   read() {
+    this._syncProfile();
     this._maybeRefresh();
-    return this._last ? { limits: this._last.limits, at: this._last.at } : null;
+    return this.peek();
   }
 
   // The secondary subscription can show its last reading without starting
   // another coding process merely to populate the sidebar.
-  peek() { return this._last ? { limits: this._last.limits, at: this._last.at } : null; }
+  peek() {
+    this._syncProfile();
+    return this._last ? { limits: this._last.limits, at: this._last.at, profile: this._last.profile } : null;
+  }
+
+  _syncProfile() {
+    const account = this._who().profile || 'default';
+    if (account !== this._selectedProfile) {
+      this._selectedProfile = account;
+      this._generation++;
+      this._last = null;
+      this._missedUntil = 0;
+    }
+    return account;
+  }
 
   _maybeRefresh() {
     const now = this._now();
@@ -114,33 +146,58 @@ export class ClaudeUsage {
   }
 
   /** Ask again now, whatever the cache says. The settings screen's own button. */
-  refreshNow() {
+  async refreshNow() {
+    this._syncProfile();
     this._missedUntil = 0;
-    if (!this._busy) this._refresh();
+    // Join an existing reading, including one begun by the background poll.
+    // If it belongs to the previous login, wait for it and then ask this one.
+    const generation = this._generation;
+    const pendingGeneration = this._pendingGeneration;
+    const result = await (this._pending ?? this._refresh());
+    this._syncProfile();
+    if (generation !== this._generation) return { ok: false, error: 'The account changed. Refresh usage again.' };
+    if (pendingGeneration != null && pendingGeneration !== generation) return this.refreshNow();
+    return result;
   }
 
   _refresh() {
+    const profile = this._syncProfile();
+    const generation = this._generation;
     const bin = (() => { try { return this._bin(); } catch { return null; } })();
-    if (!bin) { this._missed(); return; }
+    const failure = () => ({ ok: false, error: USAGE_UNREADABLE });
+    if (!bin) { this._missed(); return Promise.resolve(failure()); }
     this._busy = true;
-    this._run(
+    this._pendingGeneration = generation;
+    let resolve;
+    const pending = new Promise(done => { resolve = done; });
+    this._pending = pending;
+    const finish = (err, stdout) => {
+      this._busy = false;
+      this._pending = null;
+      this._pendingGeneration = null;
+      this._syncProfile();
+      if (generation !== this._generation) { resolve(failure()); this._onChange(); return; }
+      // Failed or unreadable output cannot acquire a fresh checked time.
+      const limits = err ? [] : readUsage(stdout, this._now(), localZone());
+      if (!limits.length) { this._missed(); resolve(failure()); return; }
+      this._last = { limits, at: this._now(), zone: localZone(), profile };
+      resolve({ ok: true, reading: this.peek() });
+      // Even unchanged percentages now have a newly checked time to draw.
+      this._onChange();
+    };
+    const env = { ...(this._who().env ?? process.env) };
+    for (const key of Object.keys(env)) {
+      if (/^ANTHROPIC_|^CLAUDE_CODE_/.test(key) || ['CLAUDECODE', 'CLAUDE_PID', 'CLAUDE_EFFORT', 'CLAUDE_CONFIG_DIR'].includes(key)) delete env[key];
+    }
+    if (profile !== 'default') env.CLAUDE_CONFIG_DIR = profile;
+    try { this._run(
       bin,
       ['-p', '/usage', '--output-format', 'text'],
       // `cwd` is the whole fix for the permission panels; see usageCwd above.
-      { cwd: this._where(), timeout: TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, encoding: 'utf8' },
-      (err, stdout) => {
-        this._busy = false;
-        // A COMMAND THAT FAILED LEAVES THE OLD READING ALONE. It is stale rather
-        // than wrong, and a corner that empties itself every time the network
-        // hiccups is worse than one that is five minutes behind.
-        if (err && !stdout) { this._missed(); return; }
-        const limits = readUsage(stdout, this._now(), localZone());
-        if (!limits.length) { this._missed(); return; }
-        const before = JSON.stringify(this._last?.limits ?? null);
-        this._last = { limits, at: this._now(), zone: localZone() };
-        if (JSON.stringify(limits) !== before) this._onChange();
-      },
-    );
+      { cwd: this._where(), env, timeout: TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, encoding: 'utf8' },
+      finish,
+    ); } catch (err) { finish(err, ''); }
+    return pending;
   }
 
   _missed() {

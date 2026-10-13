@@ -835,6 +835,11 @@ export const fixtureSettings = {
     sessionsAtOnce: 3,
     memoryGate: { on: false, slots: null, slotsAuto: 2, slotsMax: 12, now: null },
     leftovers: { on: false, now: 'Right now finished agents have left 40 programs running; turning this on stops them, two hours from then.' },
+    // COPIES OF A PROJECT NOBODY'S TASK OWNS (main/settings.mjs,
+    // `strayFolderSettings`). A fixture because the row is absent whenever there
+    // are none, which is most of the time and all of a fresh install: without
+    // one there is no way to look at the sentence before it is true for somebody.
+    strayFolders: { count: 11, now: `11 copies of Kestrel were made by hand outside the folder ${NAME} keeps its own in, and are holding disk until you remove them: ~/Desktop/dev/kestrel-fontsize, ~/Desktop/dev/kestrel-cardart, ~/Desktop/dev/wt-w-34eb858714 and 8 more. ${NAME} never removes a folder it did not make.` },
     capacity: 6,
     running: 2,
     model: 'claude-opus-5',
@@ -969,9 +974,9 @@ export const fixtureSettings = {
 //   ?engines=codex    two agents, workspace moved to Codex. The screen the
 //                     shipped bug was on.
 
-export type FixtureEngineWorld = 'missing' | 'claude' | 'codex';
+export type FixtureEngineWorld = 'missing' | 'claude' | 'codex' | 'nowhere' | 'chosen' | 'signedout';
 
-const ENGINE_WORLDS: FixtureEngineWorld[] = ['missing', 'claude', 'codex'];
+const ENGINE_WORLDS: FixtureEngineWorld[] = ['missing', 'claude', 'codex', 'nowhere', 'chosen', 'signedout'];
 
 /**
  * The world one url asks for, or null for the Mac she has. A word nothing
@@ -1078,6 +1083,59 @@ export function fixtureEngineSettings(world: FixtureEngineWorld | null): Partial
       codex: { found: false, certain: true, bin: '', url: CODEX_INSTALL_URL, trouble: null },
     };
   }
+  /*
+   * THE TWO MACHINES "POINT AT IT YOURSELF" EXISTS FOR (w-ce8c1a9275).
+   *
+   * `nowhere` is the one the bug reports came from: the search asked their login
+   * shell and looked in sixteen places and came back sure about both agents. It
+   * is the only world where the walk's last card shuts the inbox, so it is also
+   * the only one that can photograph that card's three buttons.
+   *
+   * `chosen` is what that machine looks like afterwards: both paths are ones
+   * somebody pointed at, and the row that offers the search back is the only
+   * thing standing between them and a choice they cannot undo.
+   */
+  /*
+   * THE MACHINE THE PLAN QUESTION EXISTS TO NOT ASK (w-ce8c1a9275): Codex is on
+   * the disk and signed out. `needsPlan` is true, so the walk opens this step --
+   * and `afterCheck` knows which plan they have, so the step must not ask. It
+   * had no fixture world, so that branch could not be driven in a browser.
+   */
+  if (world === 'signedout') {
+    return {
+      claudeFound: false, claudeCertain: true, claudeBin: '/Users/you/.local/bin/claude',
+      codexFound: false, codexCertain: true, codexInstallUrl: CODEX_INSTALL_URL,
+      codex: { found: true, certain: true, bin: CODEX_BIN, url: CODEX_INSTALL_URL, trouble: null },
+    };
+  }
+  if (world === 'nowhere') {
+    return {
+      claudeFound: false, claudeCertain: true, claudeBin: '/Users/you/.local/bin/claude',
+      // THE THREE FLAT KEYS THE WALK'S LAST CARD READS, which no fixture world
+      // had set before. `codexFoundState` in main/settings.mjs sends them
+      // alongside the `codex` object below, and App.tsx reads THEM rather than
+      // the object -- so a world that set only the object left `codexCertain`
+      // undefined, `noCodingAgent` false, and the gate undrawable in fixtures.
+      codexFound: false, codexCertain: true, codexInstallUrl: CODEX_INSTALL_URL,
+      codex: { found: false, certain: true, bin: '', url: CODEX_INSTALL_URL, trouble: null },
+    };
+  }
+  if (world === 'chosen') {
+    return {
+      claudeFound: true, claudeCertain: true, claudeChosen: true,
+      claudeBin: '/Volumes/work/tools/claude',
+      engineChoices: ENGINES,
+      codexModels: fixtureCodexModels,
+      codexModelDefault: fixtureCodexModelDefault,
+      codexModel: null,
+      codexMode: CODEX_DEFAULT_MODE,
+      codex: {
+        found: true, certain: true, chosen: true, bin: '/Volumes/work/tools/codex',
+        url: CODEX_INSTALL_URL, trouble: null,
+        accounts: [{ profile: 'default', email: 'you@example.com', name: null, plan: 'Plus', accountId: null, signedIn: true, chosen: false }],
+      },
+    };
+  }
   return {
     engine: world,
     engineChoices: ENGINES,
@@ -1108,7 +1166,11 @@ export function fixtureEngineSettings(world: FixtureEngineWorld | null): Partial
 export function fixtureSecondEngine(snap: Snapshot, world: FixtureEngineWorld | null): Snapshot {
   // `missing` is one coding agent, so the snapshot is the one she already has.
   // Everything it changes is in Settings.
-  if (!world || world === 'missing') return snap;
+  //
+  // `nowhere` and `chosen` are the same: they are about WHERE the agents are,
+  // not about which one a row runs on, so the rows they describe are the ones
+  // already up (w-ce8c1a9275).
+  if (!world || world === 'missing' || world === 'nowhere' || world === 'chosen' || world === 'signedout') return snap;
   const byItem = OFF_THE_WORKSPACE[world];
   const engineOf = (id: string) => byItem[id] ?? world;
   return {

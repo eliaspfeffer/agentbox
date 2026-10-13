@@ -359,7 +359,7 @@ export function ThreadComposer({
   // (w-f8d123be62). It gets a line in the bar rather than a tooltip, because
   // the whole fault was that nothing on screen said anything.
   const stopper = noProjectYet(product, { person: !!person });
-  const canSend = !sending && (person ? !!text.trim() : !!message && !!product && !refusal);
+  const canSend = !sending && (person ? !!text.trim() || attachments.length > 0 : !!message && !!product && !refusal);
 
   const sendTask = async (when: { runAt?: number; start?: 'later' | 'manual'; repeat?: { every: 'day' | 'weekday' | 'week'; on?: number; at: string } } = {}, spoken?:string, background=false) => {
     const spokenMessage=spoken===undefined?threadMessage(typed,attachments):threadMessage([text,spoken].filter(Boolean).join('\n\n'),attachments);
@@ -429,6 +429,7 @@ export function ThreadComposer({
       extra.length ? [person.id, ...also] : person.id,
       text.trim(),
       prio ? priorityValueOf(prio) : undefined,
+      attachments.map(({ name, dataBase64, srcPath }) => ({ name, dataBase64, srcPath })),
     );
     if (!res.ok) {
       setError(`Not sent: ${res.error ?? 'the team cloud did not answer.'}`);
@@ -834,35 +835,30 @@ export function ThreadComposer({
           onChange={(e) => setText(e.target.value)}
           placeholder={person ? `Message ${names}` : placeholderFor(null)}
           onPaste={async (e) => {
-            if (person) return;
             const pasted = await fromPaste(e);
             if (pasted.length) { e.preventDefault(); setAttachments((a) => [...a, ...pasted]); }
           }}
-          onDragOver={(e) => { if (!person) e.preventDefault(); }}
+          onDragOver={(e) => e.preventDefault()}
           onDrop={async (e) => {
-            if (person) return;
             e.preventDefault();
             await addFiles(e.dataTransfer.files);
           }}
         />
         </div>
-        {!person && <AttachRow attachments={attachments} onRemove={(i) => setAttachments((x) => x.filter((_, j) => j !== i))} />}
+        <AttachRow attachments={attachments} onRemove={(i) => setAttachments((x) => x.filter((_, j) => j !== i))} />
 
         {refusal && <div className="tc-note">{refusal}</div>}
-        {!person && dropped > 0 && (
+        {dropped > 0 && (
           <div className="tc-note">
             {dropped === 1
               ? 'One pasted image is too big to save. Closing the card loses it.'
               : `${dropped} pasted images are too big to save. Closing the card loses them.`}
           </div>
         )}
-        {/* A message to a person carries words only for now, so files she
-            attached for an agent are said out loud rather than dropped. */}
-        {person && attachments.length > 0 && (
-          <div className="tc-note">
-            {attachments.length === 1 ? 'The attached file stays here' : `The ${attachments.length} attached files stay here`}: a message to a person carries words only.
-          </div>
-        )}
+        {/* A MESSAGE TO A PERSON CARRIES ITS FILES (w-140ac855b1). It used to
+            say they stayed here, because the conversation they are saved in
+            may not exist until the message makes it; the send hands them over
+            and main/team/index.mjs saves them once it knows where. */}
         {error && <div className="tc-note tc-error" role="alert">{error}</div>}
 
         {person ? (
@@ -875,6 +871,10 @@ export function ThreadComposer({
                 already says. The chip is the task card's own, because a message
                 lands in a list sorted by the same four words. */}
             {priorityChip}
+            <button type="button" className="tc-icon" title="Attach files" aria-label="Attach files" onClick={() => fileRef.current?.click()}>
+              <ClipIcon />
+            </button>
+            <input ref={fileRef} type="file" multiple hidden onChange={async (e) => { await addFiles(e.target.files); e.target.value = ''; }} />
             <span className="tc-send solo">
               <button type="button" className="tc-send-main" disabled={!canSend} onClick={() => void send()} title="Send · ⌘↵">
                 Send <kbd>⌘↵</kbd>

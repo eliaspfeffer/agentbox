@@ -133,8 +133,13 @@ const INTERRUPTED = [
   /connection (closed|lost|dropped)/i,
   /response stopped arriving/i,
   /may be incomplete/i,
-  /econnreset|enotfound|etimedout|econnrefused|enetunreach|enetdown|eai_again/i,
-  /stream ?disconnected|httpConnectionFailed|connection error|fetch failed/i,
+  /econnreset|enotfound|etimedout|econnrefused|enetunreach|ehostunreach|enetdown|eai_again/i,
+  // Codex also prefixes non-network failures with "stream disconnected".
+  // Match the request failure itself so incomplete responses keep their limit.
+  /error sending request for url/i,
+  /failed to send websocket request/i,
+  /httpConnectionFailed|connection error|fetch failed/i,
+  /^\s*stream ?disconnected(?: before completion)?[.!]?\s*$/i,
   /unable to connect/i,
   /can.{0,3}t reach the api/i,
   /timed out/i,
@@ -165,6 +170,18 @@ const WORKSPACE = [
   /skip-git-repo-check/i,
 ];
 
+// A MODEL THE LOGIN'S PLAN DOES NOT INCLUDE. Not the account being out and not
+// the model being unknown: the same login runs every other model, and another
+// login on a bigger plan runs this one. Codex's own words, off two dead runs on
+// 2026-10-09 and 2026-10-11 (codex-cli 0.160.0, a free-plan login handed
+// gpt-6.1-sol): "The 'gpt-6.1-sol' model is not supported when using Codex with
+// a ChatGPT account." The second line is ours, thrown before the thread starts
+// by `codexModelRefusal` when the login's own list already says so.
+const MODEL_NOT_ON_PLAN = [
+  /model is not supported when using codex with a chatgpt account/i,
+  /not a model the plan of the codex account/i,
+];
+
 // WHICH OF THE THREE THINGS WENT WRONG, from whatever the tool printed.
 // 'unknown' is a first-class answer, not a failure: an honest generic sentence
 // beats a confident wrong one.
@@ -174,6 +191,8 @@ export function troubleCause(raw) {
   // FIRST, because an organization's refusal mentions the subscription and
   // reads as a signed-out login to the list below.
   if (ORG_BLOCKED.some((re) => re.test(text))) return 'org-blocked';
+  // BEFORE SIGNED-OUT, because Codex's sentence says "ChatGPT account".
+  if (MODEL_NOT_ON_PLAN.some((re) => re.test(text))) return 'model-not-on-plan';
   if (SIGNED_OUT.some((re) => re.test(text))) return 'signed-out';
   if (AT_LIMIT.some((re) => re.test(text))) return 'at-limit';
   if (WORKSPACE.some((re) => re.test(text))) return 'workspace';
@@ -183,6 +202,16 @@ export function troubleCause(raw) {
   // the fact worth saying.
   if (INTERRUPTED.some((re) => re.test(text))) return 'interrupted';
   return 'unknown';
+}
+
+// A SUBSCRIPTION THAT HAS ENDED IS REFUSED IN AN ADMIN'S WORDS. Claude Code
+// 2.1.293 told a lapsed personal Max login "Your organization has disabled
+// Claude subscription access for Claude Code" (2026-10-11), the same line a
+// workspace policy prints, so the text alone cannot tell them apart. The
+// login's own file can: `plan` is main/claude-plan.mjs's reading of it, and
+// `ended` is its billing gone to "none". Anything else keeps its cause.
+export function refineCause(cause, plan) {
+  return cause === 'org-blocked' && plan?.ended ? 'subscription-ended' : cause;
 }
 
 // WHEN THE LIMIT LETS GO, straight off the line the CLI printed.
@@ -238,7 +267,7 @@ export function needsHerHands(cause) {
   // same person: one is her, in a terminal; one is an admin of a workspace she
   // may not run. What they share is the only thing this question asks — trying
   // again in thirty minutes cannot possibly help.
-  return cause === 'signed-out' || cause === 'org-blocked';
+  return cause === 'signed-out' || cause === 'org-blocked' || cause === 'subscription-ended';
 }
 
 // WHAT SHE READS WHEN NOT ONE AGENT CAN START ANYWHERE.
@@ -247,6 +276,7 @@ export function needsHerHands(cause) {
 export function troubleSentence(cause) {
   if (cause === 'signed-out') return 'No agents can start. Your Claude login has run out.';
   if (cause === 'org-blocked') return 'No agents can start. Your organization has turned Claude Code off.';
+  if (cause === 'subscription-ended') return 'No agents can start. Your Claude subscription has ended.';
   if (cause === 'at-limit') return 'No agents can start. Your Claude plan is at its limit.';
   if (cause === 'workspace') return 'No agents can start. Claude will not run in this folder.';
   if (cause === 'interrupted') return 'No agents can start. The connection to Claude keeps dropping.';
@@ -261,6 +291,7 @@ export function troubleRemedy(cause) {
   // thing to type.
   if (cause === 'signed-out') return 'Open Claude in a terminal, type /login, and they pick straight back up.';
   if (cause === 'org-blocked') return 'Ask an admin of that Claude workspace to turn Claude Code back on.';
+  if (cause === 'subscription-ended') return 'Renew it at claude.ai, or pick another account in Settings.';
   if (cause === 'at-limit') return 'They start again on their own when it resets.';
   if (cause === 'workspace') return 'Open the folder in Claude once and say yes to trusting it.';
   if (cause === 'interrupted') return `Nothing to do. ${Name} tries them again on its own.`;
@@ -290,10 +321,12 @@ export function accountSentence(cause, dir) {
   if (cause === 'org-blocked') {
     return 'Signed in, but its organization has turned Claude Code off. Only an admin of that workspace can turn it back on.';
   }
+  if (cause === 'subscription-ended') return 'Signed in, but its Claude subscription has ended. Renew it at claude.ai to use this account again.';
   if (cause === 'at-limit') return 'At its limit. It rejoins on its own when the limit resets.';
   if (cause === 'workspace') return 'Claude would not run in the folder this was asked to work in.';
   if (cause === 'interrupted') return `Its runs keep getting cut off. ${Name} is trying them again.`;
-  return `Its sessions are dying on arrival. ${Name} is keeping the other one busy.`;
+  // A cause we cannot name points at the account, not at the app (2026-10-11).
+  return 'Claude Code would not start on this account. Check that its plan is active at claude.ai.';
 }
 
 /* ------------------ the same fact about a whole ENGINE -------------------- */
@@ -438,8 +471,10 @@ const DEAD_RUN_OPENERS = {
   workspace: "would not start in this project's folder, so nothing has been done here.",
   'signed-out': 'could not sign in, so nothing has been done on this task.',
   'org-blocked': 'is switched off for that account by its organization, so nothing has been done.',
+  'subscription-ended': "cannot run because that account's Claude subscription has ended, so nothing has been done.",
   'at-limit': 'is at its usage limit, so nothing has been done on this task.',
   interrupted: 'was cut off in the middle, so nothing has been done on this task.',
+  'model-not-on-plan': "could not use this task's model on that account's plan, so nothing has been done.",
   unknown: 'stopped before it did anything, so this task has not been started.',
 };
 
@@ -454,10 +489,13 @@ const DEAD_RUN_OPENERS = {
  */
 const RUN_STOPPED = {
   'signed-out': 'This run stopped because the account was signed out.',
-  'org-blocked': 'This run stopped because that account is switched off by its organization.',
+  // Same refusal text for an admin's block and an ended subscription, and this
+  // line has only the text, so it says what is true of both.
+  'org-blocked': 'This run stopped because Claude Code will not run on that account.',
   'at-limit': 'This run stopped because the account hit its usage limit.',
   workspace: "This run stopped because it would not start in this project's folder.",
   interrupted: 'This run was cut off in the middle.',
+  'model-not-on-plan': "This run stopped because that account's plan does not include the model.",
   unknown: 'This run stopped before it finished.',
 };
 
@@ -465,7 +503,9 @@ export function runStoppedLine(raw) {
   return RUN_STOPPED[troubleCause(raw)] ?? RUN_STOPPED.unknown;
 }
 
-export function deadRunSentence({ engineWord = 'The agent', cause = 'unknown', runs = 1, resetsAt = null } = {}) {
+// `elsewhere` is only read for 'model-not-on-plan': whether another signed-in
+// login's plan has the model, so the task moves there rather than waiting on her.
+export function deadRunSentence({ engineWord = 'The agent', cause = 'unknown', runs = 1, resetsAt = null, elsewhere = false } = {}) {
   const opener = `${engineWord} ${DEAD_RUN_OPENERS[cause] ?? DEAD_RUN_OPENERS.unknown}`;
 
   const again = runs > 1 ? ` This has happened ${runs} times on this task.` : '';
@@ -477,10 +517,16 @@ export function deadRunSentence({ engineWord = 'The agent', cause = 'unknown', r
     ? ' Sign that account back in and it picks straight up.'
     : cause === 'org-blocked'
       ? ' Only an admin of that Claude workspace can turn it back on.'
+      : cause === 'subscription-ended'
+      ? ' Renew it at claude.ai, or pick another account in Settings.'
       : cause === 'at-limit'
       ? (resetsAt ? ` It starts again on its own at ${resetsAt}.` : ' It starts again on its own when the limit resets.')
       : cause === 'interrupted'
         ? ` ${Name} runs it again on its own.`
+        : cause === 'model-not-on-plan'
+          ? (elsewhere
+            ? ` ${Name} runs it again on a Codex account whose plan has it.`
+            : ' Pick another model for this task, or sign in a Codex account whose plan has it.')
         : ` ${Name} keeps trying, and it will keep failing the same way until this is fixed.`;
 
   return `${opener}${again}${next}`;
@@ -560,9 +606,11 @@ export function deadRunCause(text) {
 export function causeWord(cause) {
   if (cause === 'signed-out') return 'a signed-out login';
   if (cause === 'org-blocked') return 'an organization that blocks Claude Code';
+  if (cause === 'subscription-ended') return 'an ended Claude subscription';
   if (cause === 'at-limit') return 'your Claude limit';
   if (cause === 'workspace') return 'a folder Claude will not run in';
   if (cause === 'interrupted') return 'runs getting cut off';
+  if (cause === 'model-not-on-plan') return "a model the account's plan does not include";
   return 'something we cannot name';
 }
 
@@ -573,9 +621,11 @@ export function causeWhat(cause, count) {
   const n = Math.max(0, Math.trunc(count ?? 0));
   if (cause === 'signed-out') return `${n} stopped by a signed-out Claude login`;
   if (cause === 'org-blocked') return `${n} stopped by an organization that blocks Claude Code`;
+  if (cause === 'subscription-ended') return `${n} stopped by an ended Claude subscription`;
   if (cause === 'at-limit') return `${n} waiting on your Claude limit`;
   if (cause === 'workspace') return `${n} in a folder Claude will not run in`;
   if (cause === 'interrupted') return `${n} cut off mid-run`;
+  if (cause === 'model-not-on-plan') return `${n} asking for a model no signed-in Codex plan includes`;
   return `${n} stopped for a reason we cannot name`;
 }
 
@@ -584,9 +634,11 @@ export function causeWhat(cause, count) {
 export function causeNext(cause, resetsAt = null) {
   if (cause === 'signed-out') return 'Type /login in a terminal and they pick straight up.';
   if (cause === 'org-blocked') return 'Ask an admin of that Claude workspace to turn Claude Code back on.';
+  if (cause === 'subscription-ended') return 'Renew it at claude.ai, or pick another account in Settings.';
   if (cause === 'at-limit') return resetsAt ? `They start again on their own at ${resetsAt}.` : 'They start again on their own when it resets.';
   if (cause === 'workspace') return 'Open the folder in Claude once and say yes to trusting it.';
   if (cause === 'interrupted') return `Nothing to do. ${Name} is trying them again.`;
+  if (cause === 'model-not-on-plan') return 'Pick another model on each, or sign in a Codex account whose plan has it.';
   return `${Name} keeps trying on its own.`;
 }
 
@@ -615,7 +667,7 @@ export function causeBreakdown(rows = [], resetsAt = null) {
       what: causeWhat(cause, count),
       next: causeNext(cause, cause === 'at-limit' ? resetsAt : null),
       act: causeAct(cause),
-      hers: needsHerHands(cause) || cause === 'workspace',
+      hers: needsHerHands(cause) || cause === 'workspace' || cause === 'model-not-on-plan',
     }))
     .sort((a, b) => (b.hers - a.hers) || (b.count - a.count) || a.cause.localeCompare(b.cause));
 }

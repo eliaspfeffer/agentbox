@@ -171,8 +171,11 @@ describe('the card carries code the agent did not type into a tool', () => {
     // is the whole mechanism rather than a detail of it.
     const src = fs.readFileSync(path.join(ROOT, 'main', 'supervisor.mjs'), 'utf8');
     expect(src.indexOf('snapshotRepo(cwd)')).toBeGreaterThan(-1);
-    expect(src.indexOf('snapshotRepo(cwd)')).toBeLessThan(src.indexOf("child.on('exit'"));
-    const exitHandler = src.slice(src.indexOf("child.on('exit'"));
+    // The exit handler's work is `settleExit` (a stop signal's death waits a
+    // moment to be judged: tests/a-worker-stopped-with-the-app-is-not-a-failed-run).
+    const at = src.indexOf('const settleExit = (code, signal, how) => {');
+    expect(src.indexOf('snapshotRepo(cwd)')).toBeLessThan(at);
+    const exitHandler = src.slice(at);
     expect(exitHandler).toContain('changeFromRepo(session.repoBefore)');
     expect(exitHandler).toMatch(/repos,/);
   });

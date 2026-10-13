@@ -15,7 +15,7 @@
 
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
-import { matchesQuery, rankMatches } from '../renderer/src/palette-rows.ts';
+import { LATER_KEYWORDS, matchesQuery, rankMatches } from '../renderer/src/palette-rows.ts';
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -29,7 +29,9 @@ const ITEM_COMMANDS = [
   { id: 'done', label: 'Close This Task' },
   { id: 'reply', label: 'Reply' },
   { id: 'read', label: 'Mark Read' },
-  { id: 'snooze', label: 'Remind Me (Snooze)' },
+  // Drawn as Later since w-66e3ece93d; "remind me" is in its keywords, which
+  // is what "rem" still finds it by.
+  { id: 'snooze', label: 'Later', keywords: LATER_KEYWORDS },
 ];
 
 const type = (query, rows = ITEM_COMMANDS) =>
@@ -68,10 +70,11 @@ describe('everything else in the list', () => {
   });
 
   it('is left alone on a query Remind Me does not answer to', () => {
-    // No "a" anywhere in "Remind Me (Snooze)", so nothing is hoisted here and
-    // Remote Control keeps the head of the list it already had. It matches on
-    // the "a" in its own keywords, which are searched and never shown.
-    expect(type('a')).toEqual(['remote-control', 'open-terminal', 'done', 'read']);
+    // No "con" anywhere in "Later" or its keywords, so nothing is hoisted here
+    // and Remote Control keeps the head of the list it already had. Open
+    // Terminal matches on "console" in its own keywords, which are searched
+    // and never shown.
+    expect(type('con')).toEqual(['remote-control', 'open-terminal']);
   });
 
   // "re" is the two letters before the bug, and Remind Me answers to those as
@@ -90,8 +93,8 @@ describe('the wiring', () => {
   // this silently and the palette would go back to what she photographed.
   it('App.tsx still calls the Remind Me row "snooze"', () => {
     const app = read('renderer/src/App.tsx');
-    expect(app).toContain("{ id: 'snooze', label: 'Remind Me (Snooze)'");
-    expect(app).toContain("{ id: 'snooze', label: `Remind Me (Snooze ${n} selected)`");
+    expect(app).toContain("{ id: 'snooze', label: 'Later', keywords: LATER_KEYWORDS");
+    expect(app).toContain("{ id: 'snooze', label: `Later (${n} selected)`, keywords: LATER_KEYWORDS");
   });
 
   it('the palette ranks what it filters', () => {

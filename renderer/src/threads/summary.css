@@ -199,6 +199,10 @@
 .ts-line:hover .ts-pen, .ts-line:focus-visible .ts-pen { opacity: 1; }
 .ts-line:focus-visible { outline: none; border-color: var(--line-strong); }
 .ts-line.dim { color: var(--text-dim); }
+/* WHAT EVERY RUN OF A REPEATING TASK IS TOLD (w-5e3f2e047f). An instruction
+   can run to a page, so at rest it shows its first eight lines and the whole
+   of it once clicked. */
+.ts-line-rule { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 8; overflow: hidden; color: var(--text-dim); }
 .ts-edit { resize: none; overflow: hidden; border-color: var(--line-strong); background: var(--wash); outline: none; caret-color: var(--accent); }
 /* THE DONE TRAIL (w-54e9c7243f): smaller and dimmer than the Context over it,
    each step a dot joined to the next by a thin line, the newest dot a shade

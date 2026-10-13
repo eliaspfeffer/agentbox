@@ -4,9 +4,10 @@
 // can be minutes into one command, and calling that a failure made her re-send
 // a message the agent then received twice (w-d92559b84f).
 import {it,expect,vi} from 'vitest';import {EventEmitter} from 'node:events';
-import {attachClaudeInput,claudeStreamArgs} from '../main/claude-input.mjs';
+import {attachClaudeInput,streamInputArgs} from '../main/claude-input.mjs';
+import {harnessDefinition} from '../shared/harness-definitions.mjs';
 function fake(){const c=new EventEmitter();c.stdout=new EventEmitter();c.stdin={writable:true,write:()=>true,end:()=>{c.stdin.writable=false;},on:()=>{}};return c;}
-it('keeps grants and resumes while moving only the prompt to stdin',()=>{expect(claudeStreamArgs(['-p','hello','--resume','session','--permission-mode','default'])).toEqual(['-p','--resume','session','--permission-mode','default','--input-format','stream-json','--replay-user-messages']);});
+it('keeps grants and resumes while moving only the prompt to stdin',()=>{expect(streamInputArgs(harnessDefinition('claude').run,['-p','hello','--resume','session','--permission-mode','default'])).toEqual(['-p','--resume','session','--permission-mode','default','--input-format','stream-json','--replay-user-messages']);});
 it('waits for the matching user acknowledgement',async()=>{const c=fake();let frame;c.stdin.write=s=>{frame=JSON.parse(s);};attachClaudeInput(c);const p=c.steer('correction');let done=false;p.then(()=>done=true);await Promise.resolve();expect(done).toBe(false);c.stdout.emit('data',JSON.stringify({type:'user',uuid:frame.uuid})+'\n');await p;expect(done).toBe(true);});
 it('keeps waiting past two minutes while the agent is inside one long command',async()=>{vi.useFakeTimers();try{const c=fake();let frame;c.stdin.write=s=>{frame=JSON.parse(s);};attachClaudeInput(c);let failed=false,done=false;const p=c.steer('late but real');p.then(()=>done=true,()=>failed=true);await vi.advanceTimersByTimeAsync(10*60*1000);expect(failed).toBe(false);expect(done).toBe(false);c.stdout.emit('data',JSON.stringify({type:'user',uuid:frame.uuid})+'\n');await p;expect(done).toBe(true);}finally{vi.useRealTimers();}});
 it('rejects pending delivery on exit and refuses subsequent sends',async()=>{const c=fake();attachClaudeInput(c);const p=c.steer('x');c.emit('exit',1);await expect(p).rejects.toThrow();await expect(c.steer('y')).rejects.toThrow();});

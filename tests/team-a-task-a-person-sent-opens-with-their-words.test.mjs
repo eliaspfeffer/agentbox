@@ -28,13 +28,21 @@ describe('a task Maya sent Theo', () => {
   });
 });
 
+// ON ONE MAC IT WAS FALSE TOO. This used to pin the solo app's old reading,
+// "An agent opened this" above the person's own message. The pre-deploy
+// check's live drive photographed exactly that on 2026-10-11, over a task typed
+// by hand, and it was changed to open with the person's words there as well
+// (tests/a-task-you-type-opens-as-yours-with-nobody-signed-in).
 describe('on one Mac, with nobody signed in', () => {
-  it('reads exactly as it always has', () => {
+  it('opens with their words too, not with an agent', () => {
     const lines = [
       line(T0, 'system', { title: 'Tidy the footer', status: 'open', kind: 'directive' }),
       line(T0 + 2, 'founder', { title: 'Tidy the footer', body: 'Make the footer links one line.' }),
     ];
-    expect(threadEvents(lines).map((e) => e.said)).toEqual(['An agent opened this', 'You opened this']);
+    const events = threadEvents(lines);
+    expect(events.map((e) => e.said)).not.toContain('An agent opened this');
+    expect(events[0]).toMatchObject({ who: 'you' });
+    expect(events[0].words).toContain('Make the footer links one line.');
   });
 });
 

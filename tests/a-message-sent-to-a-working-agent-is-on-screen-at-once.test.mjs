@@ -162,7 +162,12 @@ describe('what the wait actually is', () => {
     const app = read('renderer/src/App.tsx');
     const failed = app.slice(app.indexOf('        failed: (error: Error) => {'), app.indexOf('    // TAKING A SEND BACK'));
     expect(failed).not.toContain('setFocused(item)');
-    expect(failed).toContain('focusedNow.current');
+    // The words that say where the message went are shared by both reply
+    // paths since 2026-10-13 (`putBack`), so they are read where they live.
+    expect(failed).toContain('putBack(error)');
+    const putBack = app.slice(app.indexOf('    const putBack = (error: unknown) => {'));
+    expect(putBack.slice(0, 900)).not.toContain('setFocused(item)');
+    expect(putBack.slice(0, 900)).toContain('focusedNow.current');
   });
 });
 
@@ -180,7 +185,9 @@ describe('the pane it is drawn in', () => {
     // `gone` is the same message after the three second hold (w-5281ef1221):
     // the queue holds one object or the other, and a failure takes either down.
     expect(failed.slice(0, 400)).toContain('setSending((q) => q.filter((s) => s !== mine && s !== gone))');
-    expect(failed.slice(0, 400)).toContain('restoreFailedDraft');
+    expect(failed.slice(0, 400)).toContain('putBack(error)');
+    const putBack = app.slice(app.indexOf('    const putBack = (error: unknown) => {'));
+    expect(putBack.slice(0, 300)).toContain('restoreFailedDraft(item, sent?.words ?? text, sent?.attachments ?? [])');
   });
 
   // THE CONVERSATION IS NOT EMPTIED UNDER HER WHEN THE ROW IS WRITTEN TO.

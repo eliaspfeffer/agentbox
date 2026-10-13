@@ -15,6 +15,13 @@
 
 import type { UpdateState } from './types';
 import { NAME, Name } from '../../shared/product-name.mjs';
+import { MOVE_SAY, sayWhere } from '../../shared/where-it-runs-from.mjs';
+
+// WHERE THIS COPY IS RUNNING FROM, in the words main and the renderer share
+// (shared/where-it-runs-from.mjs). Re-exported here because this file is where
+// every surface already comes for the update words, and two doors to one set
+// of sentences is how a button and the row above it start disagreeing.
+export { MOVE_SAY };
 
 /** The id an update row had. Not in any ledger and never will be. */
 export const UPDATE_ID = 'update';
@@ -50,6 +57,31 @@ export function announcesUpdate(
   if (!state?.ready && !state?.installing) return false;
   return !(at.closed && at.closed === (state.newVersion ?? ''));
 }
+
+/**
+ * WHETHER THE APP SAYS IT CANNOT UPDATE ITSELF FROM WHERE IT IS.
+ *
+ *  The same shape as `announcesUpdate` and for the same reason: the sidebar
+ *  card and ⌘K both ask it, and two copies of the rule is how one surface
+ *  keeps offering a move the other has forgotten.
+ *
+ *  NOT DURING THE WALK, and not while a restart is running. `closed` is a
+ *  place whose card was closed with its × (`MOVE_CLOSED_KEY`), which hides the
+ *  card and leaves ⌘K and the Settings row offering it: this is the one press
+ *  that will ever get this copy an update, so nothing may throw it away.
+ */
+export function announcesMove(
+  state: UpdateState | null | undefined,
+  at: { walking: boolean; closed: string },
+): boolean {
+  if (at.walking) return false;
+  if (!state?.canMove || state.installing) return false;
+  return !(at.closed && at.closed === (state.place ?? ''));
+}
+
+/** The place whose card was closed with its ×. Separate from the waiting
+ *  version's key, because closing one is not closing the other. */
+export const MOVE_CLOSED_KEY = 'zero.moveClosed';
 
 // THE WORDS, IN ONE PLACE. No "click here", no key, no metaphor: the sentence
 // says what pressing it costs, which is the only part she cannot work out by
@@ -105,6 +137,9 @@ export type UpdateLook = {
   button: string;
   /** Pressing it restarts onto the new version rather than looking again. */
   restart: boolean;
+  /** Pressing it moves the app into Applications, which is the only thing
+   *  that will ever get this copy an update (shared/where-it-runs-from.mjs). */
+  move: boolean;
   /** Nothing to press: a check, a download or a rebuild is under way. */
   busy: boolean;
 };
@@ -118,12 +153,28 @@ export function updateLook(
   const ready = phase === 'ready';
   const source = !!state?.source;
   const busy = phase === 'checking' || phase === 'downloading' || installing;
-  const button = ready ? SAY.restart
+  // THE PLACE OUTRANKS THE CHECK, because it is why the check failed. A copy
+  // on the disk image reports `error` with Squirrel's refusal in it every six
+  // hours, and "Could not update" with a Check for updates button beside it is
+  // the app offering to fail again. It stands down for anything already on the
+  // disk and for anything in flight: a version waiting is a restart, not a
+  // move, and a move mid-download would take the bundle out from under it.
+  const move = !!state?.canMove && !ready && !busy;
+  const button = move ? MOVE_SAY.button
+    : ready ? SAY.restart
     : installing ? CHECK_SAY.updating
     : phase === 'checking' ? CHECK_SAY.checking
     : phase === 'downloading' ? CHECK_SAY.downloading
     : CHECK_SAY.check;
-  return { sentence: sentenceFor(phase, state, source), button, restart: ready, busy };
+  return { sentence: move ? moveSentence(state) : sentenceFor(phase, state, source), button, restart: ready, move, busy };
+}
+
+/** WHY IT CANNOT UPDATE AND WHAT ONE PRESS DOES, in that order. A move that
+ *  failed keeps its own reason, the way a restart that failed does. */
+function moveSentence(state: UpdateState | null | undefined): string {
+  if (state?.moveError) return `${state.moveError.replace(/\.?$/, '.')} ${MOVE_SAY.retry}`;
+  const where = sayWhere(state?.place ?? null);
+  return [where ?? MOVE_SAY.cannotUpdateHere, MOVE_SAY.fix].join(' ');
 }
 
 function sentenceFor(phase: string, state: UpdateState | null | undefined, source: boolean): string {
@@ -179,6 +230,16 @@ const windowStore = (): ClosedStore => (typeof localStorage === 'undefined' ? un
 
 export function readUpdateClosed(store: ClosedStore = windowStore()): string | null {
   try { return store?.getItem(UPDATE_CLOSED_KEY) || null; } catch { return null; }
+}
+
+/** The same two verbs for the move card, against its own key. */
+export function readMoveClosed(store: ClosedStore = windowStore()): string | null {
+  try { return store?.getItem(MOVE_CLOSED_KEY) || null; } catch { return null; }
+}
+
+export function writeMoveClosed(store: ClosedStore, place: string): void {
+  if (!place) return;
+  try { store?.setItem(MOVE_CLOSED_KEY, place); } catch { /* closed for this run only */ }
 }
 
 /** A version the app could not name is not kept: closing it lasts this run. */

@@ -1963,6 +1963,12 @@ body {
 .code-wrap:hover .code-copy, .code-wrap .code-copy.copied { opacity: 1; }
 .code-wrap .code-copy:hover { color: var(--text); border-color: var(--text-faint); }
 .code-wrap .code-copy.copied { color: var(--chip-review); }
+/* A Mermaid chart sits on the same surface a code block does. */
+.diagram { background: var(--bg-raised); padding: 18px 14px; border-radius: var(--radius); margin: 10px 0; overflow-x: auto; text-align: center; }
+.diagram svg { max-width: 100%; height: auto; }
+/* The library's drop shadow reads as a glow on a dark surface. */
+.diagram svg * { filter: none !important; }
+.diagram-pending { min-height: 120px; }
 .markdown blockquote { border-left: 3px solid var(--line); padding-left: 12px; color: var(--text-dim); margin: 8px 0; }
 .markdown strong { font-weight: 650; }
 .inline-image { max-width: 100%; border-radius: 0; border: 1px solid var(--line); margin: 8px 0; }
@@ -1978,24 +1984,33 @@ body {
 /* A sound or a film a worker named: its name, then the player, one per line
    even when five were written on one line (ArtifactMedia in Focus.tsx). */
 .inline-media { display: block; margin: 8px 0; }
-.inline-media-name {
-  display: block; padding: 0; border: 0; background: none; cursor: pointer;
-  font: inherit; color: var(--accent); text-align: left; margin-bottom: 4px;
+/* Its name is a mention (mention.css) on a line of its own above the player. */
+.inline-media-name.mention {
+  display: inline-block; border: 0; background: transparent; text-align: left;
+  margin: 0 -3px 6px;
 }
 .inline-media audio { display: block; width: min(420px, 100%); height: 36px; }
-.inline-media-missing .inline-media-name { display: inline; margin: 0; }
+.inline-media-missing .inline-media-name.mention { display: inline; margin: 0 -3px; }
 .inline-media video { display: block; max-width: 100%; max-height: 360px; border: 1px solid var(--line); }
 
 /* A folder a worker named on its own line: its name, then its newest pictures,
    three across (FolderPreview in Focus.tsx). Spans, because it sits in a <p>. */
 .folder-preview { display: block; margin: 8px 0 4px; }
+/* Its name is a folder icon and what the folder goes by, in the text colour
+   rather than the accent (w-a3a7d1a1ec); hover firms an underline in. */
 .folder-preview-name {
-  display: inline-flex; align-items: baseline; gap: 10px; padding: 0; border: 0;
-  background: none; cursor: pointer; font: inherit; text-align: left;
+  display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0;
+  background: none; cursor: pointer; font: inherit; text-align: left; color: var(--text);
 }
-.folder-preview-path { color: var(--accent); font-family: var(--mono, ui-monospace, monospace); font-size: 0.9em; }
-.folder-preview-count { color: var(--text-faint); font-size: 0.86em; }
-.folder-preview-name:hover .folder-preview-path { text-decoration: underline; }
+.folder-preview-name .mention-icon { width: 15px; height: 15px; margin: 0; vertical-align: 0; }
+.folder-preview-name:hover .mention-icon { color: var(--text); transition-duration: 120ms; }
+.folder-preview-path {
+  font-weight: 500;
+  text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px;
+  transition: text-decoration-color 200ms cubic-bezier(.2, 0, 0, 1);
+}
+.folder-preview-count { color: var(--text-faint); font-size: 0.9em; margin-left: 2px; }
+.folder-preview-name:hover .folder-preview-path { text-decoration-color: var(--text-faint); transition-duration: 120ms; }
 .folder-preview-grid {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 8px;
 }
@@ -3464,6 +3479,11 @@ img.app-mark { opacity: 1; border-radius: 0; }
   padding-bottom: 25vh;
 }
 
+/* THE IMPORT CARD THAT ENDS SETUP WAS DRAWN DIMMED. Setup's veil is 299 and
+   this backdrop was 40, so the veil lay over the card. It goes at 301, with
+   setup's own card, and stays under setup's way out (302, 303). */
+.modal-backdrop.in-walk { z-index: 301; }
+
 .modal-title { padding: 14px 18px 2px; font-weight: 600; }
 .modal-subtitle { padding: 0 18px 10px; color: var(--text-dim); font-size: 13px; }
 .modal-hint { padding: 10px 18px 12px; color: var(--text-faint); font-size: 12px; display: flex; align-items: center; gap: 10px; }
@@ -4034,16 +4054,36 @@ img.app-mark { opacity: 1; border-radius: 0; }
 /* --------------------------------- toast ---------------------------------- */
 .toast {
   position: fixed;
-  bottom: 58px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg-raised);
+  bottom: 30px;
+  right: 30px;
+  /* IN THE CORNER, ON THE CORNER MARK. 56px floated it 34px inside the pane
+     ("too much padding from bottom corner"); the pane's edge is 22px in and
+     its corner mark 8px further, so 30 puts the card's corner on the mark. */
+  /* THE CARD (w-f0bfe32859), picked out of fourteen drawn over four rounds.
+     Bottom right, out of the middle of what she is reading. The task's title
+     is read first and is the heaviest thing on it; under it one quiet line,
+     where it went on the left and the keys on the right; a thin orange line
+     along the foot is the time left to open it. Warm (the grey every menu
+     floats on), soft border, no capitals. Her words on the round before:
+     "not overwhelmingly distracting ... that's what makes it appealing". */
+  width: 360px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "title title" "line keys";
+  row-gap: 8px;
+  column-gap: 16px;
+  align-items: center;
+  padding: 14px 16px 15px;
+  background: var(--pop);
   border: 1px solid var(--line);
   color: var(--text);
-  padding: 9px 18px;
   border-radius: var(--radius);
+  font: inherit;
   font-size: 13.5px;
-  box-shadow: var(--shadow-md);
+  line-height: 1.3;
+  text-align: left;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
   /* ABOVE THE SETUP SCREENS, WHICH IS THE WHOLE POINT OF A TOAST. This was 60
      while `.fr-screen` was 300 with an opaque background, so every message the
      app tried to give somebody during the first run was painted underneath the
@@ -4056,7 +4096,7 @@ img.app-mark { opacity: 1; border-radius: 0; }
 }
 
 /* AND IT GETS OUT OF THE COMPOSER'S WAY WHILE THE REPLY BOX IS OPEN. The toast
-   sits at the bottom centre, which is exactly where the reply card is, so a
+   sits at the bottom, which is exactly where the reply card is, so a
    message raised BY the reply box lands ON it. Photographed at 900x900: the
    mode toast sat across the Send button for its whole 2.5 seconds, at the
    moment somebody has just picked a mode and is reaching for the send key. That
@@ -4069,28 +4109,67 @@ img.app-mark { opacity: 1; border-radius: 0; }
 */
 .app.composing .toast { bottom: auto; top: 74px; }
 
-/* THE ONE THAT OPENS THE TASK IT IS ABOUT. A `<button>` inherits none of the
-   div's type, so the face is restated rather than assumed, and the only things
-   added to it are the pointer, the focus ring and the words on the end.
-   Everything positional is above and shared, including the lift out of the
-   composer's way, because that rule is written against `.toast`.
-*/
-.toast-goes {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font: inherit;
-  font-size: 13.5px;
-  line-height: 1.3;
-  cursor: pointer;
-  text-align: left;
-}
-.toast-goes:hover .toast-go { color: var(--text); }
+/* THE ONE THAT OPENS THE TASK IT IS ABOUT: the whole card is the target, so
+   it is a `<button>`, and only the pointer and the focus ring are added. */
+.toast-goes { cursor: pointer; }
 .toast-goes:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
-/* IT SAYS WHAT THE CLICK DOES, because a pill that is quietly pressable is one
-   nobody presses. Underlined rather than boxed: the pill is already a box, and a
-   second box inside it reads as a button inside a button. */
-.toast-go { color: var(--text-dim); text-decoration: underline; white-space: nowrap; }
+
+/* The title wraps to two lines and stops, never cut at a character count,
+   and never leaves one word alone on its second line. */
+.toast-title {
+  grid-area: title;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--text);
+  text-wrap: pretty;
+}
+.toast-line {
+  grid-area: line;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* ITS KEYS ARE DRAWN, NOT SPELT OUT, in the app's own keycap (.row-keys kbd):
+   square, faint, one drawing of a key everywhere. */
+.toast-keys { grid-area: keys; justify-self: end; display: inline-flex; align-items: center; gap: 12px; }
+.toast-key { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.toast-key kbd {
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-faint);
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  padding: 0 4px;
+  line-height: 15px;
+}
+.toast-key-word { font-size: 12px; color: var(--text-faint); }
+.toast-key:hover .toast-key-word { color: var(--text); }
+.toast-key:hover kbd { border-color: var(--text-faint); color: var(--text); }
+/* THE TIMER her words asked for: "that little orange timer that tells you how
+   much time is left". It is the six seconds the card, and O, can open the
+   task. Z is not on it: Z undoes long after the card has gone. */
+.toast-clock {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: .7;
+  transform-origin: left;
+  animation: toast-drain linear forwards;
+}
+@keyframes toast-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+/* A message with no task: its sentence is the whole card. */
+.toast-plain { width: auto; max-width: 360px; display: flex; gap: 12px; padding: 11px 16px; }
+.toast-plain .toast-line { font-size: 13.5px; color: var(--text); white-space: normal; }
+
 
 /* It keeps the top bar's own 22px right margin so it lines up with the settings
    gear below it. It is the toast's shape because the toast is this app's
@@ -7470,26 +7549,22 @@ a.set-ghost { text-decoration: none; display: inline-block; }
   gap: 14px; text-align: left;
 }
 
-/* It looked wrong because it WAS wrong. A footnote is what you use for
-   something the reader may ignore, and this is the one thing on the card they
-   cannot ignore. So on the rare Mac that gets here the whole card changes job:
-   the missing sentence stops being a footnote in faint ink under a button and
-   becomes the card's own line, at the card's own size, directly under a
-   headline that names it. There is nothing else on the card to compete with it,
-   no confetti behind it and no way past it. Nothing here is a new shape. Same
-   card, same corner, same width, same headline and line sizes; only what is IN
-   it changes.
-*/
-.fr-finish.gate .fr-finish-line { margin-bottom: 6px; color: var(--text); }
-.fr-gate-do {
-  margin: 0 0 22px; font-size: 13px; line-height: 1.55; color: var(--text-faint);
-}
-/* THE TWO MOVES, SIDE BY SIDE, WITH THE ONE THAT SOLVES IT FIRST. Get Claude
-   Code wears the button the ending wore, because it is now the thing this card
-   is for; check again is the quieter of the two, because pressing it before
-   installing anything changes nothing. */
-.fr-gate-acts { display: flex; align-items: center; justify-content: center; gap: 10px; }
-.fr-gate-acts .fr-finish-go { text-decoration: none; display: inline-block; }
+/* THE GATE IS A QUESTION SCREEN NOW (w-ce8c1a9275, 2026-10-09). It was the
+   ending's 520px card with three buttons in a row, and four rules here dressed
+   that up: `.fr-finish.gate`, `.fr-gate-do`, `.fr-gate-acts` and
+   `.fr-gate-still`. The founder, on a photograph of it: "UI wise this is very
+   rough. In onboarding we already have a component for geting setup/selecting
+   your harness I feel like that's a better design an dpossibly placement."
+
+   So it wears `.fr-stack-folders` like the plan question and the folder screen,
+   and those four are deleted rather than left to be found by somebody grepping
+   for a class nothing renders.
+
+   `.fr-gate-again` STAYS, and it is the one that nearly went with them: it was
+   named for the gate and it is worn by the setup card's own two buttons, Open
+   the sign-in page again and Skip for now (components/PlanSetup.tsx). Deleting
+   it would have left those two unstyled on the one screen a brand new person
+   meets when a sign-in has gone wrong. */
 .fr-gate-again {
   font: inherit; font-size: 13.5px;
   padding: 9px 16px; border-radius: var(--radius); cursor: pointer;
@@ -7497,12 +7572,10 @@ a.set-ghost { text-decoration: none; display: inline-block; }
 }
 .fr-gate-again:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
 .fr-gate-again:disabled { cursor: default; opacity: 0.6; }
-/* AFTER A CHECK THAT FOUND NOTHING. Reserved space is not worth it: this line
-   only ever appears after a press, and the card is centred on the window, so it
-   grows downward from a fixed middle rather than shifting the buttons. */
-.fr-gate-still {
-  margin: 16px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-faint);
-}
+/* A ROW THAT IS A LINK IS STILL A ROW. `.fr-folder` is a <button> everywhere
+   else; the gate's install row is an <a>, so the browser would underline it and
+   paint it link-coloured in the middle of a list where nothing else is. */
+.fr-folder[href] { text-decoration: none; color: inherit; }
 /* ==========================================================================
    THE CHANGE THE AGENT MADE —, 2026-08-23.Nothing here is a new surface. The
    change is a third kind of file in the pane that already opens markdown and
@@ -8720,3 +8793,6 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
 .live-heading button[aria-label="Call beenden"] {flex-shrink:0;white-space:nowrap;}
 
 .ia-search {width:100%;box-sizing:border-box;padding:10px 12px;margin:8px 0 14px;background:transparent;color:var(--text);border:1px solid var(--line);font:inherit;}
+/* THE PHONE WHOSE KEY WAS RESET (renderer/src/browser-bridge.ts). */
+#phone-locked-out { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 32px; background: var(--surface); color: var(--text); font: 16px/1.45 system-ui, sans-serif; text-align: center; }
+#phone-locked-out p { margin-top: 8px; opacity: .8; }

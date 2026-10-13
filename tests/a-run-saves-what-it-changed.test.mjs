@@ -82,7 +82,9 @@ describe('a run saves what it changed', () => {
     // reading the run's own trace for paths (renderer/src/run-files.ts), so a
     // change written without one is a file nothing on screen can reach.
     const src = fs.readFileSync(path.join(ROOT, 'main', 'supervisor.mjs'), 'utf8');
-    const exitHandler = src.slice(src.indexOf("child.on('exit'"));
+    // The exit handler's work is `settleExit` (a stop signal's death waits a
+    // moment to be judged: tests/a-worker-stopped-with-the-app-is-not-a-failed-run).
+    const exitHandler = src.slice(src.indexOf('const settleExit = (code, signal, how) => {'));
     expect(exitHandler).toContain('writeChangeForRun(');
     expect(exitHandler.indexOf('writeChangeForRun(')).toBeLessThan(exitHandler.indexOf('trace?.end()'));
     expect(exitHandler).toMatch(/\[Write\]/);

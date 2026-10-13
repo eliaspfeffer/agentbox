@@ -52,9 +52,9 @@ describe('snoozing a thread', () => {
   it('draws each snooze as its own line saying until when', () => {
     const lines = everyLine(itemThread([...opened, ...snoozes], []));
     expect(lines.map((e) => `${e.verb} ${e.subject}`)).toEqual([
-      'You snoozed it until tomorrow 9:00am',
-      'You snoozed it until tomorrow 9:00am',
-      'You snoozed it until tomorrow 10:30am',
+      'You moved it to Later until tomorrow 9:00am',
+      'You moved it to Later until tomorrow 9:00am',
+      'You moved it to Later until tomorrow 10:30am',
     ]);
     expect(lines.map((e) => e.at)).toEqual(snoozes.map((l) => l.ts));
   });
@@ -68,10 +68,10 @@ describe('snoozing a thread', () => {
 
   it('never folds a snooze into the agent work beside it', () => {
     const work = (ts) => ({ kind: 'work', at: ts, verb: 'wrote', subject: 'a.md', output: '', lines: 0, failed: false });
-    const snooze = { kind: 'work', at: 2, verb: 'You snoozed it', subject: 'until 9:00am', output: '', lines: 0, failed: false, yours: true };
+    const snooze = { kind: 'work', at: 2, verb: 'You moved it to Later', subject: 'until 9:00am', output: '', lines: 0, failed: false, yours: true };
     const nodes = groupWork([work(1), snooze, work(3), work(4)], { min: 1 });
     expect(nodes.map((n) => n.kind === 'run' ? `run of ${n.items.length}` : n.verb))
-      .toEqual(['run of 1', 'You snoozed it', 'run of 2']);
+      .toEqual(['run of 1', 'You moved it to Later', 'run of 2']);
   });
 
   it('says the day when the snooze runs past tomorrow, and the date past a week', () => {
@@ -84,7 +84,7 @@ describe('snoozing a thread', () => {
   it('says it came back when you bring it back early', () => {
     const back = { id: 'w-1', ts: T + hr, source: 'founder', patch: { runAt: 0 } };
     const lines = everyLine(itemThread([...opened, snoozes[0], back], []));
-    expect(lines.map((e) => e.verb)).toEqual(['You snoozed it', 'You brought it back']);
+    expect(lines.map((e) => e.verb)).toEqual(['You moved it to Later', 'You brought it back']);
   });
 
   it('leaves an agent pausing the thread as the agent\'s, not yours', () => {
@@ -100,11 +100,11 @@ describe('snoozing a thread', () => {
     expect(built.outcome?.text).toBe(RESULT);
     // Above the answer: nothing of yours. Under it: the three snoozes.
     expect(yours(built.events)).toHaveLength(0);
-    expect(built.after.map((e) => e.verb)).toEqual(['You snoozed it', 'You snoozed it', 'You snoozed it']);
+    expect(built.after.map((e) => e.verb)).toEqual(['You moved it to Later', 'You moved it to Later', 'You moved it to Later']);
   });
 
   it('stays on screen while an agent is working, unlike its trailing commands', () => {
-    const snooze = { kind: 'work', at: 2, verb: 'You snoozed it', subject: '', output: '', lines: 0, failed: false, yours: true };
+    const snooze = { kind: 'work', at: 2, verb: 'You moved it to Later', subject: '', output: '', lines: 0, failed: false, yours: true };
     const work = { kind: 'work', at: 3, verb: 'ran', subject: 'ls', output: '', lines: 0, failed: false };
     expect(withoutTrailingWork([{ at: 1, who: 'it', text: 'hi' }, snooze, work])).toEqual([{ at: 1, who: 'it', text: 'hi' }, snooze]);
   });

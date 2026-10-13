@@ -65,8 +65,12 @@ export function threadLine(replies: readonly AgentTurn[], now = Date.now()): { c
  * readable; `max` stops a very wide window from making the thread the page;
  * `chat` is what the conversation always keeps beside it, so dragging the
  * panel all the way across never eats the chat it belongs to.
+ *
+ * `start` WAS 440 (w-140ac855b1, 2026-10-13): "the space for the reply and
+ * thread area could be a little bigger". At 480 the reply box carries the
+ * chat's whole formatting bar and Send without dropping any of it.
  */
-export const THREAD_WIDTH = { start: 440, min: 320, max: 760, chat: 560 } as const;
+export const THREAD_WIDTH = { start: 480, min: 320, max: 760, chat: 560 } as const;
 
 /** The width to draw, given what was dragged to and how wide the pane is. */
 export function clampThreadWidth(width: number, pane: number): number {

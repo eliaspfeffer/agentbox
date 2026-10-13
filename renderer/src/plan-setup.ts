@@ -36,7 +36,21 @@ export const COPY = {
   chatgptPlans: 'A paid ChatGPT plan',
   both: 'Both',
   bothPlans: 'Agents use whichever has room left',
-  notSure: 'I am not sure, check this computer for me',
+  /*
+   * THE ANSWER FOR SOMEBODY WHO ALREADY HAS ONE (w-ce8c1a9275). The search asks
+   * their own login shell first and then looks in sixteen places, which between
+   * them cover every ordinary install; what is left is a copy somewhere nobody
+   * would guess, and every one of those used to be a path we ship and a release
+   * they wait for. It belongs here, beside the other way out, because "I
+   * already have one" is an answer to "which plan do you pay for" and not a
+   * separate screen.
+   *
+   * IT NAMES NO TOOL AND NO FILE. The question above it is asked in words
+   * people know -- Claude, ChatGPT -- and this has to stay in them.
+   */
+  haveOne: 'I already have one, let me show you where',
+  /** After the panel refused what came out of it, or found nothing there. */
+  notThatOne: 'That is not something agents can run. Try another, or pick a plan above.',
   checking: 'Checking this computer…',
   nothingHere: 'Nothing is set up on this computer yet. Pick the plan you pay for above.',
   privacy: `You sign in on Claude's or OpenAI's own page. ${NAME} never sees your password.`,
@@ -100,6 +114,88 @@ export function afterCheck(readiness: Array<Pick<EngineSetupState, 'engine' | 'f
   if (there.length === 2) return { t: 'setup', plan: 'both' };
   if (there.length === 1) return { t: 'setup', plan: there[0] };
   return { t: 'nothing' };
+}
+
+/* ------------------------- WHAT THE QUESTION OFFERS ----------------------- */
+/**
+ * A ROW ON A QUESTION CARD: a mark, a name, a sentence, and whether it belongs
+ * to the separated group at the foot.
+ *
+ * These lists used to be built inline in components/PlanSetup.tsx, where no
+ * test could read them, so what the one screen a brand new person meets
+ * actually offers was eyeballed. Everything else in this file is here for that
+ * reason and these were the exception.
+ */
+export interface AskRow {
+  key: string;
+  /** The plan this answers with, when it answers with one. */
+  plan?: Plan;
+  mark?: string;
+  name: string;
+  sub?: string;
+  /**
+   * In the group under the rule, which is "a way out" rather than "a plan".
+   *
+   * AN `other` ROW IS ONE LINE AND CARRIES NO `sub`. That is the shape the
+   * screen was drawn in, and the stylesheet means it: `.fr-folder-other
+   * .fr-folder-name` spans the sub's own grid column, so a sub on one of these
+   * is squeezed against the right edge and clipped mid-word. Say it in the
+   * name instead.
+   */
+  other?: boolean;
+  /**
+   * A REAL LINK, when the row leaves the app. Drawn as an anchor rather than a
+   * button so the address is in the page: it can be copied, opened in a new
+   * window, and read by anything that reads pages. The gate's install row is
+   * the only one, and tests/the-inbox-does-not-open-without-claude-code is
+   * what noticed when it briefly stopped being one.
+   */
+  href?: string;
+}
+
+/**
+ * WHICH AI PLAN DO YOU PAY FOR, and the one answer that is not a plan.
+ *
+ * THE COMPUTER IS ASKED BY THE SCREEN ITSELF, NOT BY A ROW (w-ce8c1a9275,
+ * 2026-10-09). There used to be a fourth row, "I am not sure, check this
+ * computer for me". The founder: "I would think this step is actually better
+ * fit also checking first at the same time. Otherwise they may select something
+ * we cant run. Best to figure it out now."
+ *
+ * So `afterCheck` runs when the screen opens, against the reading the welcome
+ * step already took, and the question is only asked when asking is honest --
+ * see `planNote` below for what the screen says while that is happening. A row
+ * that re-runs something the screen has already done is a button that cannot
+ * change its own answer.
+ *
+ * WHAT NO AMOUNT OF LOOKING CAN REPLACE stays: a copy somewhere nobody would
+ * guess is exactly the case the search cannot reach, so "I already have one"
+ * is still an answer somebody can give.
+ */
+export function planRows(): AskRow[] {
+  return [
+    { key: 'claude', plan: 'claude', mark: 'C', name: COPY.claude, sub: COPY.claudePlans },
+    { key: 'codex', plan: 'codex', mark: 'G', name: COPY.chatgpt, sub: COPY.chatgptPlans },
+    { key: 'both', plan: 'both', mark: '+', name: COPY.both, sub: COPY.bothPlans },
+    { key: 'mine', name: COPY.haveOne, other: true },
+  ];
+}
+
+/**
+ * THE ONE LINE UNDER THE CARD, at this moment, and whether it is a complaint.
+ *
+ * Four states and the newest one wins. A refusal is about the press just made,
+ * so it beats everything; then the look, while it is running; then its answer,
+ * which is that the computer is empty -- NOT an error, because an empty
+ * computer is the ordinary case for this screen and the question above it is
+ * exactly the right question to be asking. The resting line is the promise
+ * about passwords, which is what this screen said before any of this.
+ */
+export function planNote(s: { looking?: boolean; looked?: boolean; refused?: boolean }): { text: string; bad: boolean } {
+  if (s.refused) return { text: COPY.notThatOne, bad: true };
+  if (s.looking) return { text: COPY.checking, bad: false };
+  if (s.looked) return { text: COPY.nothingHere, bad: false };
+  return { text: COPY.privacy, bad: false };
 }
 
 export interface StepRow {

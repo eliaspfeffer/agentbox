@@ -275,26 +275,7 @@ export function placeholderFor(person: Person | null | undefined): string {
   return person ? `Message ${firstName(person)}` : 'What do you need done?';
 }
 
-/**
- * The bottom left of a message to a person, in the card and in the reply box.
- *
- * It used to read "Only you and Maya see this.", which repeated what was already
- * on the screen: the To field one line above names the person, and a
- * conversation's header names them again beside both faces. So the corner says
- * the one thing neither of those says, that a message to a teammate is not a
- * chat bubble but a thread landing in the inbox they already work out of.
- *
- * NOT EMPTY, EVER. Dropping the old line and leaving the corner bare is the one
- * outcome ruled out: a bare corner here reads as a control that failed to draw.
- *
- * The possessive sits on the last name only: "Maya and Jun's inboxes".
- */
-export function landsIn(names: readonly string[]): string {
-  if (!names.length) return '';
-  return `Goes to ${joinNames(names)}'s ${names.length > 1 ? 'inboxes' : 'inbox'}.`;
-}
-
-/** "Maya", "Maya and Jun", "Maya, Jun and Priya". The card, the reply box and
+/** "Maya","Maya and Jun", "Maya, Jun and Priya". The card, the reply box and
  *  the line above all say a group of people the same way. */
 export function joinNames(names: readonly string[]): string {
   if (names.length <= 1) return names[0] ?? '';

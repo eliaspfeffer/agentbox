@@ -219,6 +219,25 @@ export function supabaseBackend(client) {
       }));
     },
 
+    // THE FILES A CONVERSATION'S MESSAGES LINK TO (w-140ac855b1). Row level
+    // security decides who may read and add one (20261013000000_message_files.sql).
+    async hasFiles(projectId, names) {
+      if (!names.length) return [];
+      const rows = must(await client.from('message_files').select('name').eq('project_id', projectId).in('name', names), 'asking which pictures your team has');
+      return rows.map((r) => r.name);
+    },
+
+    async getFile(projectId, name) {
+      const rows = must(await client.from('message_files').select('data').eq('project_id', projectId).eq('name', name).limit(1), 'taking a picture a teammate sent');
+      return rows[0]?.data ?? null;
+    },
+
+    async putFile(projectId, name, data) {
+      const me = await myId();
+      const rows = must(await client.from('message_files').upsert({ project_id: projectId, name, by_person: me, data }, { onConflict: 'project_id,name', ignoreDuplicates: true }).select('name'), 'sending a picture');
+      return (rows?.length ?? 0) > 0;
+    },
+
     subscribe(onChange) {
       const channel = client.channel(`team-${Math.random().toString(36).slice(2)}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'lines' }, () => onChange())

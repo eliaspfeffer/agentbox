@@ -66,10 +66,14 @@ function outsideStrings(src) {
 }
 
 describe('the sentences a person reads', () => {
-  it('asks to check this computer, not a Mac', () => {
-    expect(plan.notSure).toBe('I am not sure, check this computer for me');
+  // `notSure` was the fourth row, "I am not sure, check this computer for me".
+  // It went on 2026-10-09 (w-ce8c1a9275) because the screen does that itself
+  // on arrival now, so the two sentences it used to lead to are the whole of
+  // what a person reads about the look. Both still say computer.
+  it('says this computer, not a Mac, about the look it runs', () => {
     expect(plan.checking).toBe('Checking this computer…');
     expect(plan.nothingHere).toBe('Nothing is set up on this computer yet. Pick the plan you pay for above.');
+    expect(plan.haveOne).toBe('I already have one, let me show you where');
   });
 
   it('names this computer on the lines beside that row', () => {

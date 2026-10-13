@@ -171,6 +171,8 @@ describe('where the two lists read it', () => {
   // The team branch answers before the pure rule does, so a shared project
   // would otherwise hand the agent-to-agent rows straight back.
   it('a shared project hides them too', () => {
-    expect(app).toMatch(/if \(shared === true\) return i\.status !== 'done' && !\(hiddenAt\(i\) > now\) && !isProposal\(i\);/);
+    // A waiting thread is held back on the same line (w-5244c90c33), so the
+    // line may go on after the proposal check; it may not drop it.
+    expect(app).toMatch(/if \(shared === true\) return i\.status !== 'done' && !\(hiddenAt\(i\) > now\) && !isProposal\(i\)( && [^;]+)?;/);
   });
 });

@@ -203,10 +203,15 @@ describe('the three states, in Claude Code\'s own vocabulary', () => {
 /* ===================== and the facts behind the states ================== */
 
 describe('the three states are the finder\'s answer, not a guess', () => {
+  // `chosen` since w-ce8c1a9275: whether this path is one somebody pointed at
+  // rather than one the search found. It is the one thing the card cannot work
+  // out from the path alone, and the row that offers the search back needs it.
+  // A configured path, which is what this case hands in, is chosen by
+  // definition.
   it('says found, with the path, when Codex is really there', () => {
     const bin = realFile();
     const state = codexState({ codexBinConfigured: bin });
-    expect(state).toEqual({ bin, found: true, certain: true, url: INSTALL_URL });
+    expect(state).toEqual({ bin, found: true, certain: true, url: INSTALL_URL, chosen: true });
   });
 
   // AND THE PATH IS EMPTY WHEN THERE IS NONE, never the installer's guess.

@@ -131,6 +131,11 @@ const PICK = /^Option (\d+): ([^\n]+)$/;
 // by hand after answering it.
 const REPLY_LIFTS_MS = 60_000;
 
+// HOW CLOSE A TASK'S BIRTH STAMP AND THE PERSON'S OWN LINE ARE WRITTEN. The
+// composer writes them milliseconds apart; a minute leaves the same room for a
+// slow disk, and anything later is an edit, not the person sending it.
+const COMPOSE_GAP_MS = 60_000;
+
 /**
  * The ledger's lines for ONE item, oldest first, as sentences.
  *
@@ -247,9 +252,19 @@ export function threadEvents(lines: LedgerLine[], engine?: string | null): Threa
       // THEIR LINE MAY HOLD ONLY A TITLE. A task typed as one line has no body,
       // and requiring one is what opened a tester's thread as the agent's on
       // 2026-10-01 (tests/team-a-one-line-task-opens-as-yours-not-the-agents).
+      //
+      // AND WITH NOBODY SIGNED IN, the same pair is still the person sending a
+      // task; it just carries no `by`. There the pair is told apart by what
+      // `composeItem` writes: their line follows the stamp within moments and
+      // carries the same title. A later edit of theirs is not the birth
+      // (tests/a-task-you-type-opens-as-yours-with-nobody-signed-in).
       const next = lines[at_ + 1];
-      const theirs = line.source === 'system' && !!line.by && !words(patch!.body)
-        && next?.source === 'founder' && next.by === line.by;
+      const composedTogether = !line.by && !next?.by
+        && String(next?.patch?.title ?? '') === String(patch!.title ?? '')
+        && Math.abs(Number(next?.ts) - Number(line.ts)) <= COMPOSE_GAP_MS;
+      const theirs = line.source === 'system' && !words(patch!.body)
+        && next?.source === 'founder'
+        && (line.by ? next.by === line.by : composedTogether);
       // Their line carries the title too, so it is the birth.
       if (theirs && has(next!.patch, 'title')) continue;
       first = false;
@@ -381,7 +396,7 @@ export function threadEvents(lines: LedgerLine[], engine?: string | null): Threa
       } else {
         events.push({
           at, who,
-          said: mine ? 'You snoozed it' : 'It paused this',
+          said: mine ? 'You moved it to Later' : 'It paused this',
           words: snoozeWords(runAt, at),
         });
       }
@@ -398,6 +413,12 @@ export function threadEvents(lines: LedgerLine[], engine?: string | null): Threa
         continue;
       }
       if (status === 'blocked') {
+        // recordSessionResult delivers the agent's answer, then parks the
+        // thread with a system status. That is delivery, not a question.
+        if (line.source === 'system' && !askedACommand && events.at(-1)?.field === 'result') {
+          askedACommand = false;
+          continue;
+        }
         // HER OWN BLOCKED IS NOT THE AGENT STOPPING. She has no control that
         // writes it; the one thing that does is a Z putting a row back where
         // her reply found it (`withdrawReply`), and it read as "It stopped and
@@ -412,6 +433,12 @@ export function threadEvents(lines: LedgerLine[], engine?: string | null): Threa
         continue;
       }
       if (status === 'open') {
+        // THE APP DELIVERING ITS OWN NOTE IS NOT A HAND-BACK. A run that died
+        // before doing anything gets the app's sentence as its result, then a
+        // system line reopening the row; drawn as "It handed this back", that
+        // repeated once per attempt over a thread out of usage
+        // (tests/an-out-of-usage-thread-does-not-say-it-handed-this-back).
+        if (line.source === 'system' && events.at(-1)?.field === 'result') continue;
         events.push({ at, who, said: mine ? 'You sent it back' : 'It handed this back' });
         continue;
       }

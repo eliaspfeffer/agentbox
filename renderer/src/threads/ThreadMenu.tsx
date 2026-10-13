@@ -23,7 +23,7 @@
 // only places it under the dots.
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 
-export type ThreadMenuRowId = 'run' | 'code' | 'terminal' | 'done';
+export type ThreadMenuRowId = 'run' | 'code' | 'terminal' | 'pin' | 'done';
 export interface ThreadMenuRow { id: ThreadMenuRowId; label: string; key: string | null }
 
 /**
@@ -37,17 +37,23 @@ export interface ThreadMenuRow { id: ThreadMenuRowId; label: string; key: string
  * a project's place in the order outweighs any tag, and only Urgent could take
  * a running slot. This row is the one-time "this task, now" that was missing;
  * supervisor.runNow says what it does.
+ *
+ * PIN THREAD keeps it at the top of the list (w-20323283e6), just above Mark
+ * done. `pin` is null where a thread cannot be pinned, else whether it is now,
+ * so the row says what pressing it does.
  */
-export function threadMenuRows({ change, terminal, finish, runNow = false }: {
+export function threadMenuRows({ change, terminal, finish, runNow = false, pin = null }: {
   change: boolean;
   terminal: 'open' | 'closed' | null;
   finish: boolean;
   runNow?: boolean;
+  pin?: 'pinned' | 'unpinned' | null;
 }): ThreadMenuRow[] {
   const rows: ThreadMenuRow[] = [];
   if (runNow) rows.push({ id: 'run', label: 'Run now', key: null });
   if (change) rows.push({ id: 'code', label: 'View code changes', key: null });
   if (terminal) rows.push({ id: 'terminal', label: terminal === 'open' ? 'Hide terminal' : 'Open terminal', key: '⌘J' });
+  if (pin) rows.push({ id: 'pin', label: pin === 'pinned' ? 'Unpin thread' : 'Pin thread', key: null });
   if (finish) rows.push({ id: 'done', label: 'Mark done', key: 'E' });
   return rows;
 }
@@ -70,7 +76,11 @@ function DoneMark() {
 function RunMark() {
   return <svg {...mark}><path d="M5 5v14" /><path d="m9 5 10 7-10 7z" /></svg>;
 }
-const MARKS: Record<ThreadMenuRowId, typeof CodeMark> = { run: RunMark, code: CodeMark, terminal: TerminalMark, done: DoneMark };
+/** A square-headed pin, because every shape in this skin is square. */
+export function PinMark({ size = 16, className }: { size?: number; className?: string }) {
+  return <svg {...mark} width={size} height={size} className={className}><path d="M8 3h8l-1.5 6 3.5 3.5H6L9.5 9z" /><path d="M12 12.5V21" /></svg>;
+}
+const MARKS: Record<ThreadMenuRowId, typeof CodeMark> = { run: RunMark, code: CodeMark, terminal: TerminalMark, pin: () => <PinMark />, done: DoneMark };
 
 /** Three square dots, because every shape in this skin is square. */
 function Dots() {
@@ -104,7 +114,7 @@ export function ThreadMenuList({ rows, change, onPick }: {
 
 /* ----------------------------------------------------------------- button */
 
-export function ThreadMenu({ change = null, onViewChange, terminal = null, onToggleTerminal, onFinish = null, onRunNow = null }: {
+export function ThreadMenu({ change = null, onViewChange, terminal = null, onToggleTerminal, onFinish = null, onRunNow = null, pinned = null, onPin }: {
   /** The change figures, or null when this run changed no code. */
   change?: ReactNode | null;
   onViewChange?: () => void;
@@ -114,8 +124,11 @@ export function ThreadMenu({ change = null, onViewChange, terminal = null, onTog
   onFinish?: (() => void) | null;
   /** Non-null only on a task that is waiting its turn and not yet pushed. */
   onRunNow?: (() => void) | null;
+  /** Whether the thread is pinned now, or null where it cannot be. */
+  pinned?: boolean | null;
+  onPin?: (pin: boolean) => void;
 }) {
-  const rows = threadMenuRows({ change: !!change, terminal, finish: !!onFinish, runNow: !!onRunNow });
+  const rows = threadMenuRows({ change: !!change, terminal, finish: !!onFinish, runNow: !!onRunNow, pin: pinned === null || !onPin ? null : pinned ? 'pinned' : 'unpinned' });
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLSpanElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -180,6 +193,7 @@ export function ThreadMenu({ change = null, onViewChange, terminal = null, onTog
     if (id === 'run') onRunNow?.();
     else if (id === 'code') onViewChange?.();
     else if (id === 'terminal') onToggleTerminal?.();
+    else if (id === 'pin') onPin?.(!pinned);
     else onFinish?.();
   };
 

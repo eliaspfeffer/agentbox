@@ -16,12 +16,18 @@ function turnClosed(message) {
 // before the session is closed anyway. Measured wakes arrive in about a second.
 const WAKE_GRACE_MS = 2 * 60 * 1000;
 
-export function claudeStreamArgs(args) {
+// THE PROMPT LEAVES THE LINE WHEN REPLIES ARRIVE ON STDIN. Both the print flag
+// and the input-format flags are read off the engine's `run` definition, so an
+// engine of this family that spells either of them differently is a definition
+// and not a change here. An engine with no `input` cannot take corrections on
+// stdin, and gets its line back as it was.
+export function streamInputArgs(run, args) {
+  if (!run?.input) return [...args];
   const copy = [...args];
-  const index = copy.indexOf('-p');
+  const index = copy.indexOf(run.print);
   if (index < 0) throw Error('Missing print prompt');
   copy.splice(index + 1, 1);
-  return [...copy, '--input-format', 'stream-json', '--replay-user-messages'];
+  return [...copy, ...run.input];
 }
 
 // Replay-user-messages acknowledges the exact UUID when Claude consumes it.

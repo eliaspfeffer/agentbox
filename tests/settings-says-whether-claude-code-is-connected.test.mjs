@@ -199,10 +199,16 @@ describe('where it lives', () => {
      menu beside it, so the place to look is the word being looked for. On that
      page the status comes first, above usage and logins, whenever there is
      something wrong to say; a healthy Mac is not told "connected" again. */
+  /* AND ONE HEALTHY STATE DOES DRAW IT NOW (w-ce8c1a9275, 2026-10-08): a path
+     somebody pointed at themselves. The card is the only place that choice can
+     be handed back, and a choice that could only be undone by hand-editing
+     zero.config.json is not a door, it is a trap. Nothing else about this
+     claim moves: the status is still above Usage, and it still reads main's
+     answer rather than deriving a second one. */
   it('is the first thing on Claude Code\'s own page, which the menu names', () => {
     expect(read('renderer/src/settings-search.ts')).toContain("{ id: 'claude', label: 'Claude Code', group: 'Agents' }");
     const page = settings.slice(settings.indexOf('const enginePage = (engine'), settings.indexOf('<div className="set-nav">'));
-    expect(page).toContain('(!agent.found || agent.trouble) && (engine === \'codex\' ? <CodexCli {...status} /> : <ClaudeCode {...status} />)');
+    expect(page).toContain('(!agent.found || agent.trouble || agent.chosen)\n          && (engine === \'codex\' ? <CodexCli {...status} /> : <ClaudeCode {...status} />)');
     expect(page.indexOf('<ClaudeCode')).toBeLessThan(page.indexOf('label="Usage"'));
     // And the card still reads main's answer rather than deriving a second one.
     expect(settings).toContain('found: !!w.claudeFound');

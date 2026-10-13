@@ -214,7 +214,13 @@ describe('where it sits in the walk', () => {
     const ia = fs.readFileSync(
       path.join(import.meta.dirname, '..', 'renderer/src/components/ImportAgents.tsx'), 'utf8');
     // The walk's card draws its own headline and its own one line, and no list.
-    const card = tsx.slice(tsx.indexOf('className="fr-finish-head"'), tsx.indexOf('className="fr-finish-go"'));
+    //
+    // THAT CARD IS THE GATE SINCE 2026-10-09 (w-ce8c1a9275) and it is the only
+    // one left: the branch above it returns the import card for every unblocked
+    // Mac, so the `fr-finish` panel this used to slice was only ever drawn when
+    // blocked. It wears the walk's question-screen classes now, `fr-page` and
+    // `fr-lede`, which is what the anchors below follow. The claim is unchanged.
+    const card = tsx.slice(tsx.indexOf('className="fr-page"'), tsx.indexOf('<AskList'));
     expect(card.split('card.line').length - 1).toBe(1);
     expect(card.includes('className="fr-offer"')).toBe(false);
     expect(card.includes('COPY.agentsClause')).toBe(false);
@@ -229,8 +235,11 @@ describe('where it sits in the walk', () => {
     //
     // CHANGED 2026-10-05 (w-db6f5e331e): the one-list card says one line over
     // its list in the walk and in ⌘K alike, and only when there is a list.
-    expect(ia).toContain('{read && some && <p className="ia-line">{LIST.line}</p>}');
-    expect(ia.split('LIST.line').length - 1).toBe(1);
+    //
+    // AND SINCE w-e46f2e9cea THE LINE IS PICKED BY `listLine`, which says "From
+    // the last 10 days" unless the card had to reach back for older sessions.
+    expect(ia).toContain('{read && some && <p className="ia-line">{listLine(threads ?? [])}</p>}');
+    expect(ia.split('listLine(').length - 1).toBe(1);
     expect(ia).not.toContain('COPY.agentsRead');
   });
 });

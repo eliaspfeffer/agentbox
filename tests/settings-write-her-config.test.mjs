@@ -339,12 +339,13 @@ describe('the workspace settings', () => {
   it('holds sessions-at-once inside a range a person could mean', () => {
     const config = loadConfig(appDir);
     setWorkspaceSetting({ config, supervisor: supervisor() }, { key: 'sessionsAtOnce', value: 99 });
-    expect(onDisk().maxConcurrentSessions).toBe(12);
+    // Written as the whole computer's number since w-ec27ff1a51.
+    expect(onDisk().agentsAtOnce).toBe(12);
     // The same answer on any machine, which is the point: the clamp cannot be
     // the hardware or this assertion would move from laptop to laptop.
-    expect(onDisk().maxConcurrentSessions).not.toBe(machineSlots().slots === 12 ? -1 : machineSlots().slots);
+    expect(onDisk().agentsAtOnce).not.toBe(machineSlots().slots === 12 ? -1 : machineSlots().slots);
     setWorkspaceSetting({ config, supervisor: supervisor() }, { key: 'sessionsAtOnce', value: 0 });
-    expect(onDisk().maxConcurrentSessions).toBe(1);
+    expect(onDisk().agentsAtOnce).toBe(1);
   });
 
   // The drive had a master switch here. It is deleted (w-d19d6d387c).

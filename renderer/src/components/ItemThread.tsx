@@ -26,6 +26,8 @@ import { ThreadPanel } from '../team/ThreadPanel';
 import { TeamContext } from '../team/people';
 import { useReactionsNow, type Press } from '../team/reactions-now';
 import { api } from '../api';
+import { onPhone } from '../phone-screen';
+import { pollEvery } from '../phone-polls';
 import { changePathFor, type Change } from '../code-artifact';
 import { filedOnTurn } from '../filed-in-thread';
 import { itemThread, type PendingSaid } from '../item-thread';
@@ -231,7 +233,7 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
     // line appearing when it happens and appearing up to eight seconds later.
     // The read itself is unchanged and already guards against overlapping.
     const off = api.onChanged(read);
-    const timer = setInterval(read, REFRESH_MS);
+    const timer = setInterval(read, pollEvery(REFRESH_MS, onPhone()));
     return () => { live = false; off(); clearInterval(timer); };
   }, [item.product, item.id, item.updatedAt, session?.startedAt]);
 
@@ -342,6 +344,7 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
       {/* THE OPEN THREAD, beside the chat rather than in it (w-920461cbe6). */}
       {chat && thread && openParent && thread.host && createPortal(
         <ThreadPanel
+          product={item.product}
           parent={openParent}
           replies={built.replies[openParent.uid!] ?? []}
           md={(text) => md(clean(text))}

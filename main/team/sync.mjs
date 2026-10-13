@@ -20,9 +20,13 @@
 //   4. PRIVATE WORK. One title-free line per open task in a private project
 //      (who, what state, when it moved), and only when that set changed.
 //
+//   And in a conversation, the files its messages link to (below, FILES).
+//
 // Everything outside this file is passed in, so two "Macs" can run in one test
 // over an in-memory cloud. The app wires the real ones in main/team/index.mjs.
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { whatATeammateMaySet, whatYourOtherCopyMaySet } from '../../shared/team-rules.mjs';
 
 const PAGE = 500;
@@ -30,6 +34,49 @@ const PAGE = 500;
 // share a project, and each one becomes a folder here; past this many, a pass
 // joins no more, so a teammate cannot fill this disk with folders.
 export const MAX_SHARED_PROJECTS = 50;
+
+// FILES: A PICTURE IN A MESSAGE GOES WITH IT (w-140ac855b1, 2026-10-13).
+//
+// A picture pasted into a message is saved in the project's attachments folder
+// and the message links to it, `![…](attachments/…)`. Only the line used to
+// cross, so every picture sent to a teammate arrived as "missing image". Now
+// the sender's Mac puts each file it links to in the cloud BEFORE pushing the
+// line, and the reader's Mac takes the file down BEFORE the line lands, so a
+// message is never drawn without its picture (a picture drawn as missing stays
+// missing until the thread is reopened).
+//
+// Only in a conversation: an ordinary shared project's words never cross
+// (shared/team-rules.mjs), so nothing they link to does either. And every file
+// call is best effort. A cloud without the table, or one file that will not
+// come, must never stop a message.
+export const MAX_MESSAGE_FILE_BYTES = 10 * 1024 * 1024;
+// A file named in a message the cloud does not have yet, which is a sender who
+// has not updated. Asked about again at most once a minute, for two weeks.
+const WANTED_MAX = 200;
+const WANTED_EVERY_MS = 60_000;
+const WANTED_FOR_MS = 14 * 24 * 60 * 60 * 1000;
+// A PLAIN NAME and nothing else: no slash, no leading dot. The reader writes
+// what a teammate's line names, so a name is all a line may hand it.
+const NAMED = /\]\(attachments\/([A-Za-z0-9][\w.-]{0,159})\)/g;
+
+/** The files a ledger line's message links to, by name, each once. */
+export function filesNamedIn(line) {
+  if (!line || typeof line !== 'object' || !line.patch) return [];
+  return [...new Set([...JSON.stringify(line.patch).matchAll(NAMED)].map((m) => m[1]))];
+}
+
+// The attachments folder of a project on this Mac.
+export const diskFiles = {
+  size(dir, name) {
+    try { const st = fs.statSync(path.join(dir, 'attachments', name)); return st.isFile() ? st.size : null; } catch { return null; }
+  },
+  read: (dir, name) => fs.readFileSync(path.join(dir, 'attachments', name)),
+  // `wx`: a file already here under that name is never replaced.
+  write(dir, name, bytes) {
+    fs.mkdirSync(path.join(dir, 'attachments'), { recursive: true });
+    try { fs.writeFileSync(path.join(dir, 'attachments', name), bytes, { flag: 'wx' }); } catch (err) { if (err.code !== 'EEXIST') throw err; }
+  },
+};
 
 // Where each shared project's cursors stand, kept between runs.
 export function memorySyncState() {
@@ -78,8 +125,65 @@ function adopt(line, me) {
   return { ...line, by: line.by || me, uid };
 }
 
-export function createTeamSync({ backend, disk, state, listShared, joinProject, listCards = () => [], teamIdOf = () => null }) {
+export function createTeamSync({ backend, disk, state, listShared, joinProject, listCards = () => [], teamIdOf = () => null, files = diskFiles, now = Date.now, log = () => {} }) {
   let running = null;
+  const quietly = async (what, fn, fallback) => {
+    try { return await fn(); } catch (err) { log(`team files: ${what}: ${err?.message ?? err}`); return fallback; }
+  };
+
+  // Takes down whichever of `names` the cloud has and this Mac does not.
+  // Answers the names still missing.
+  async function takeFiles(project, names) {
+    const missing = [...new Set(names)].filter((n) => files.size(project.dir, n) == null);
+    if (!missing.length || !backend.hasFiles) return missing;
+    const there = new Set(await quietly('asking', () => backend.hasFiles(project.projectId, missing), []));
+    for (const name of missing.filter((n) => there.has(n))) {
+      // One at a time: each can be ten megabytes.
+      const data = await quietly(`taking ${name}`, () => backend.getFile(project.projectId, name), null);
+      const bytes = typeof data === 'string' ? Buffer.from(data, 'base64') : null;
+      if (bytes && bytes.length <= MAX_MESSAGE_FILE_BYTES) await quietly(`saving ${name}`, () => files.write(project.dir, name, bytes));
+    }
+    return missing.filter((n) => files.size(project.dir, n) == null);
+  }
+
+  // Every line written here since the last look: the files your messages name
+  // go up, and the files anyone's name that are not here are wanted. The first
+  // look after updating starts at the top of the ledger, which is what sends a
+  // picture from before this existed.
+  async function sendFiles(project, me) {
+    if (!backend.putFile) return;
+    const cursor = state.get(project.projectId);
+    const { lines, end } = disk.readLinesFrom(project.dir, cursor.filesFrom ?? 0);
+    const mine = new Set();
+    const wanted = new Map((cursor.wanted ?? []).map((w) => [w.name, w]));
+    for (const line of lines) {
+      for (const name of filesNamedIn(line)) {
+        const size = files.size(project.dir, name);
+        if (size == null) { if (!wanted.has(name)) wanted.set(name, { name, since: now(), checked: 0 }); }
+        else if ((!line.by || line.by === me) && size <= MAX_MESSAGE_FILE_BYTES) mine.add(name);
+      }
+    }
+    if (mine.size) {
+      const there = await quietly('asking', () => backend.hasFiles(project.projectId, [...mine]), null);
+      if (!there) return; // Not now; this stretch of the ledger is looked at again next pass.
+      for (const name of [...mine].filter((n) => !there.includes(n))) {
+        const sent = await quietly(`sending ${name}`, async () => { await backend.putFile(project.projectId, name, files.read(project.dir, name).toString('base64')); return true; }, false);
+        if (!sent) return;
+      }
+    }
+    state.set(project.projectId, { ...state.get(project.projectId), filesFrom: end, wanted: [...wanted.values()].slice(-WANTED_MAX) });
+  }
+
+  async function takeWanted(project) {
+    const cursor = state.get(project.projectId);
+    const at = now();
+    const wanted = (cursor.wanted ?? []).filter((w) => at - w.since < WANTED_FOR_MS && files.size(project.dir, w.name) == null);
+    const due = wanted.filter((w) => at - w.checked >= WANTED_EVERY_MS).map((w) => w.name);
+    const still = new Set(due.length ? await takeFiles(project, due) : []);
+    const kept = wanted.filter((w) => !due.includes(w.name) || still.has(w.name))
+      .map((w) => (due.includes(w.name) ? { ...w, checked: at } : w));
+    if (kept.length !== (cursor.wanted ?? []).length || due.length) state.set(project.projectId, { ...state.get(project.projectId), wanted: kept });
+  }
 
   async function pushProject(project, me) {
     const cursor = state.get(project.projectId);
@@ -103,6 +207,8 @@ export function createTeamSync({ backend, disk, state, listShared, joinProject, 
         // teammate's keeps only what they may set here (shared/team-rules.mjs).
         .map((l) => (l.by === me ? whatYourOtherCopyMaySet(l, { direct }) : whatATeammateMaySet(l, { direct })))
         .filter(Boolean);
+      // The pictures first, so no message lands without its own.
+      if (direct) await takeFiles(project, bring.flatMap(filesNamedIn));
       pulled += disk.appendForeignLines(project.dir, bring);
       // Lines pulled in move the file's end, but they were never ours to push,
       // and a push cursor left behind them would only re-read and skip them.
@@ -143,8 +249,10 @@ export function createTeamSync({ backend, disk, state, listShared, joinProject, 
     for (const project of cloudProjects) {
       const here = local.get(project.id);
       if (!here) continue;
+      if (here.direct === true) await sendFiles(here, me);
       report.pushed += await pushProject(here, me);
       report.pulled += await pullProject(here, me);
+      if (here.direct === true) await takeWanted(here);
     }
 
     report.cards = await publishCards();

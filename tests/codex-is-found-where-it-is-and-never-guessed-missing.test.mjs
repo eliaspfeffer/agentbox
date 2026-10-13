@@ -86,7 +86,11 @@ describe('finding Codex', () => {
     expect(found).toMatchObject({ path: viaNvm, found: true, from: 'disk' });
   });
 
-  it('asks the shell only after every cheap check has missed', () => {
+  // THE SHELL IS ASKED FIRST SINCE 2026-10-08 (w-ce8c1a9275), not third: the
+  // list is a guess and the shell is their actual PATH. The order itself is
+  // pinned in tests/one-finder-asks-the-shell-before-any-list.test.mjs; what
+  // this case is about is that a path no list could hold is still reachable.
+  it('finds a Codex no list could have held, because the shell knows where it is', () => {
     const odd = '/opt/somewhere/nobody/lists/codex';
     const found = findCodexBin({
       home: HOME, exists: only(odd), shellLookup: () => ({ path: odd, answered: true }),

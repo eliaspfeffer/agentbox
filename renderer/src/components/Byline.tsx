@@ -115,7 +115,7 @@ export function Byline({ item, facts, returned, lead, stateShown, onAddPeople }:
           progress" and "In your inbox", which is where she looks for it. Drawing
           both would be the same word twice on a line that is already too
           crowded. The snooze chip stays: nothing on the line says that. */}
-      {returned && <span className="chip chip-returned">back from snooze</span>}
+      {returned && <span className="chip chip-returned">back from Later</span>}
       {addPeople}
     </div>
   );

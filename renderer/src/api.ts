@@ -4,7 +4,7 @@ import {updateFixture} from './agent-update-fixture';
 // bridge; fixtures mode (?fixtures=1) serves canned data so the UI can be
 // developed, reviewed, and screenshotted without a live store or any agents.
 
-import type { AgentConversation, AnswerMode, DemoOpened, FolderListing, FreshUser, PermissionMode, RepeatRule, RepeatShape, Settings, Snapshot, TeamCallResult, ThreadEditPatch, UpdateState, WorkItem } from './types';
+import type { AgentConversation, AnswerMode, DemoOpened, FolderListing, FreshUser, PermissionMode, PhoneLink, PhoneRoute, RepeatRule, RepeatShape, Settings, Snapshot, TeamCallResult, TeamMessageFile, ThreadEditPatch, UpdateState, Usage, WorkItem } from './types';
 import type { LedgerLine } from './thread-history';
 import type { AgentFile as AgentFileRow } from './onboarding';
 import type { AgentFolder, SessionThread } from './agent-import-card';
@@ -14,6 +14,8 @@ import { fixtureEngineWorld, fixtureEngineSettings, fixtureSecondEngine } from '
 import { fixtureFolders } from './fixtures';
 import { NAME, Name } from '../../shared/product-name.mjs';
 import { checkProjectFolder } from '../../shared/project-folder-check.mjs';
+import { USAGE_UNREADABLE } from '../../shared/usage.mjs';
+import { MOVE_SAY } from '../../shared/where-it-runs-from.mjs';
 // THE SECOND FRONT DOOR, AND IT HAS TO BE BUILT BEFORE THE LINE BELOW RUNS.
 // `useFixtures` reads `window.zero` once, at module load, and on the desktop
 // preload.cjs has already put it there. In a browser tab nothing has, so this
@@ -94,7 +96,7 @@ const emptySettings: Settings = {
     // A screen that could not reach the main process says the switch is on and
     // that there is nowhere to send to, which is the truth about a copy that
     // cannot even read its own settings.
-    diagnostics: true, diagnosticsDestination: false, adhdMode: false,
+    diagnostics: true, diagnosticsDestination: false, adhdMode: false, cornerTag: true,
     storePath: '', homePath: '', claudeBin: '', claudeFound: false, claudeCertain: false, claudeInstallUrl: '',
     standingLines: 0,
     messageRulesLines: 0, projectsWithInstructions: 0, projectCount: 0,
@@ -114,13 +116,51 @@ const fixtureSettingsState: any = structuredClone(fixtureSettings);
 // she runs, which leaves the object exactly as ./fixtures wrote it.
 const engineSettings = fixtureEngineSettings(engineFixtures);
 if (engineSettings) Object.assign(fixtureSettingsState.workspace, structuredClone(engineSettings));
+// &memory=held draws the Running page the way it read when memory ran out on
+// 2026-10-11 (w-ec27ff1a51): six running, memory tight, commands waiting, and
+// new agents held. &memory=fine is the same page with memory back to normal.
+if (params.get('memory')) {
+  const held = params.get('memory') === 'held';
+  Object.assign(fixtureSettingsState.workspace, { running: 6, capacity: 6, agentsTotal: 6, agentsAuto: true });
+  fixtureSettingsState.workspace.memoryGate = {
+    ...fixtureSettingsState.workspace.memoryGate, on: true,
+    reading: {
+      heavy: held ? 0 : 1, waiting: held ? 3 : 0, pressure: held ? 'tight' : 'normal', usedPct: held ? 74 : 48,
+      asked: 488, waited: 36, refused: 0, holding: held,
+    },
+  } as any;
+}
+// ?account=org-blocked or ?account=subscription-ended: the second account
+// picked as In use and unable to run, so the usage box that says why can be seen.
+const accountTroubleNotes: Record<string, string> = {
+  'org-blocked': 'Signed in, but its organization has turned Claude Code off. Only an admin of that workspace can turn it back on.',
+  'subscription-ended': 'Signed in, but its Claude subscription has ended. Renew it at claude.ai to use this account again.',
+};
+// ?account=unreadable: the second account in use with nothing known wrong, and
+// every Refresh coming back empty, for the sentence a cause we cannot name gets.
+const accountTrouble = params.get('account') ?? '';
+if (accountTrouble === 'unreadable') {
+  const [first, second] = fixtureSettingsState.workspace.accounts;
+  if (first) first.chosen = false;
+  if (second) second.chosen = true;
+}
+if (accountTroubleNotes[accountTrouble]) {
+  const [first, second] = fixtureSettingsState.workspace.accounts;
+  if (first) first.chosen = false;
+  if (second) Object.assign(second, {
+    chosen: true, live: false, state: accountTrouble,
+    trouble: { cause: accountTrouble, since: Date.now(), note: accountTroubleNotes[accountTrouble] },
+    ...(accountTrouble === 'subscription-ended' ? { plan: { label: 'Subscription ended', max: false } } : {}),
+  });
+}
 
 function fixtureWrite(scope: 'project' | 'workspace', p: any): Settings {
   const w = fixtureSettingsState.workspace;
   if (scope === 'workspace') {
     if (p.key === 'sessionsAtOnce') {
       w.sessionsAtOnce = Math.max(1, Math.min(w.slotsMax ?? 12, Number(p.value) || 1));
-      w.capacity = w.sessionsAtOnce * Math.max(1, w.accounts.length);
+      w.capacity = w.sessionsAtOnce;
+      w.agentsAuto = false;
     } else if (p.key === 'memoryGate' && w.memoryGate) {
       w.memoryGate = { ...w.memoryGate, on: !!p.value, now: p.value ? 'Memory is fine. Nothing heavy running.' : null };
     } else if (p.key === 'cleanupLeftovers' && w.leftovers) {
@@ -175,6 +215,16 @@ export function updateShape(wanted: string): UpdateState {
     },
     current: { phase: 'current' },
     error: { phase: 'error', error: 'Could not reach the internet.' },
+    // A COPY THAT CANNOT UPDATE ITSELF FROM WHERE IT IS
+    // (shared/where-it-runs-from.mjs). This is the state two real installs
+    // were in for a week, and the only way to look at the card and the row
+    // without a disk image and a packaged build.
+    'disk-image': { phase: 'error', error: MOVE_SAY.cannotUpdateHere, canMove: true, place: 'disk-image' },
+    translocated: { phase: 'error', error: MOVE_SAY.cannotUpdateHere, canMove: true, place: 'translocated' },
+    'move-failed': {
+      phase: 'error', error: MOVE_SAY.cannotUpdateHere, canMove: true, place: 'disk-image',
+      moveError: 'The move did not work.',
+    },
     // WHY A COPY DOES NOT UPDATE ITSELF AT ALL, which is the state most
     // teammates' checkouts are actually in (main/source-updater.mjs SAY).
     unsupported: {
@@ -198,6 +248,17 @@ export function updateShape(wanted: string): UpdateState {
 export const api = {
   isFixtures: useFixtures,
 
+  // IS A SCREEN READER RUNNING. Asked by the terminal pane before it builds an
+  // xterm, so the accessibility tree is built for the people it is for rather
+  // than for everybody (main/ipc.mjs 'zero:assistiveTech').
+  //
+  // Every failure is "no": fixtures, a preload from before this channel
+  // existed, or a refused call. A terminal that cannot ask the question still
+  // has to open, and this is awaited inside the effect that builds one.
+  async assistiveTech(): Promise<boolean> {
+    if (useFixtures) return false;
+    try { return !!(await window.zero?.assistiveTech?.()); } catch { return false; }
+  },
   async snapshot(): Promise<Snapshot> {
     if (emptyFixtures) {
       const empty = { ...structuredClone(fixtureSnapshot), items: [], approvals: [], supervisor: { paused: false, running: [], capacity: 3 } };
@@ -269,6 +330,17 @@ export const api = {
     return window.zero!.snapshot();
   },
 
+  async refreshUsage(): Promise<{ ok: boolean; reading?: Usage; error?: string }> {
+    if (useFixtures) {
+      if (params.get('account') === 'unreadable') return { ok: false, error: USAGE_UNREADABLE };
+      const reading = fixtureSnapshot.usageByEngine?.find(r => r.engine === 'claude') ?? (fixtureSnapshot.usage?.engine === 'claude' ? fixtureSnapshot.usage : null);
+      return reading ? { ok: true, reading: { ...structuredClone(reading), profile: 'default', at: Date.now() } } : { ok: false, error: 'No usage reading yet.' };
+    }
+    if (!window.zero?.refreshUsage) return { ok: false, error: RESTART_NOTE };
+    try { return await window.zero.refreshUsage(); }
+    catch { return { ok: false, error: USAGE_UNREADABLE }; }
+  },
+
   // THE NEXT PAGE OF FINISHED THREADS THE SNAPSHOT LEFT OUT (w-fda2165ec6),
   // asked for at the foot of Done and All. Fixtures have none: their ledgers
   // are small, which is what an app with nothing cut off answers.
@@ -292,6 +364,19 @@ export const api = {
   async updateInstall(): Promise<{ started: boolean }> {
     if (useFixtures) return { started: true };
     return window.zero!.updateInstall();
+  },
+
+  // MOVING THE APP INTO APPLICATIONS, for a copy that cannot update itself
+  // from where it is (shared/where-it-runs-from.mjs). A real move relaunches
+  // the app, so fixtures answer the only interesting half: `?update=move-failed`
+  // is the refusal, which is the one state that has anything left to draw.
+  async updateMove(): Promise<{ moved: boolean; error: string | null }> {
+    if (useFixtures) {
+      return params.get('update') === 'move-failed'
+        ? { moved: false, error: 'The move did not work.' }
+        : { moved: true, error: null };
+    }
+    return window.zero!.updateMove();
   },
 
   // THE USER'S WORDS, INTO ONE OF THEIR OWN RUNNING AGENTS. Through the seam like
@@ -531,11 +616,24 @@ export const api = {
   // A MESSAGE TO A PERSON (people get messages, never tasks), at the level the
   // sender picked. The level counts on the first message of a conversation and
   // is ignored after, which is the main process's rule (main/team/index.mjs).
-  async teamMessage(to: string | string[], body: string, priority?: number): Promise<TeamCallResult> { return teamCall(() => window.zero!.teamMessage({ to, body, priority })); },
+  // And the files the card carries, saved into the conversation once the main
+  // process knows which one it is.
+  async teamMessage(to: string | string[], body: string, priority?: number, files?: TeamMessageFile[]): Promise<TeamCallResult> { return teamCall(() => window.zero!.teamMessage({ to, body, priority, files })); },
   // An edit to a thread's summary, visibility or priority, made in place.
   async threadEdit(product: string, id: string, patch: ThreadEditPatch): Promise<{ ok: boolean; error?: string }> {
     if (useFixtures || !window.zero?.threadEdit) return { ok: true };
     try { return await window.zero.threadEdit({ product, id, patch }); } catch (err) { return { ok: false, error: String((err as Error)?.message ?? err) }; }
+  },
+  // Threads dragged to a place of their own in the list (w-6e5b532a95).
+  async setThreadPlaces(places: Record<string, number | null>): Promise<void> {
+    if (useFixtures || !window.zero?.setThreadPlaces) return;
+    await window.zero.setThreadPlaces({ places });
+  },
+  // Threads pinned to the top of the list (w-20323283e6). Optional on the
+  // bridge: an older main process under a newer window has no such door.
+  async setThreadPins(pins: Record<string, true | null>): Promise<void> {
+    if (useFixtures || !window.zero?.setThreadPins) return;
+    await window.zero.setThreadPins({ pins });
   },
 
   async compose(p: { product: string; title: string; body?: string; kind?: string; priority?: number; runAt?: number; start?: 'later' | 'manual' | 'now'; labels?: string[]; model?: string; engine?: string; effort?: string; assignee?: string; due?: string; visibility?: 'team' | 'people' | 'private'; visibleTo?: string[] }): Promise<WorkItem | null> {
@@ -684,7 +782,7 @@ export const api = {
 
   async snooze(p: { product: string; id: string; snoozedUntil: number }): Promise<WorkItem | null> {
     if (useFixtures) return null;
-    if (!window.zero?.snooze) throw new Error('Restart the app to use inbox snooze');
+    if (!window.zero?.snooze) throw new Error('Restart the app to use Later');
     return window.zero.snooze(p);
   },
 
@@ -862,12 +960,50 @@ export const api = {
     }
   },
 
+  /* * POINT AT THE CODING AGENT YOURSELF, when neither search can find it
+     (w-ce8c1a9275). The picker opens in the main process and the choice is
+     applied in the same call, so this call hands over WHICH agent and nothing
+     else: no path off anybody's disk is ever passed back to be trusted.
+
+     `search` is the way out of a wrong choice, and it needs no picker: it takes
+     the path out of the config and lets the search have it again.
+
+     A refusal is WORDS, not an error. Picking a folder, or a file that cannot
+     be run, is an ordinary mistake at a file panel and the row prints what came
+     back. Cancelling the panel is neither: `ok` with nothing changed.
+  */
+  async engineBin(engine: 'claude' | 'codex', action?: 'search'): Promise<Settings & { canceled?: boolean; refused?: string }> {
+    if (useFixtures) return { ...emptySettings, ok: true, canceled: true };
+    const zero = window.zero as any;
+    if (!zero?.engineBin) return { ...emptySettings, ok: false, error: RESTART_NOTE };
+    try {
+      return await zero.engineBin({ engine, ...(action ? { action } : {}) });
+    } catch (err) {
+      return { ...emptySettings, ok: false, error: String((err as Error)?.message ?? err) };
+    }
+  },
+
   // SETTING UP THEIR PLAN FOR THEM (w-9f6975906c): install a coding agent and
   // start its own sign-in. A page that cannot reach the main process answers
   // READY, because a walk that asks a question it can do nothing about is a
   // walk that traps somebody; the inbox's own checks still stand behind it.
   async engineSetup(action: 'ready' | 'start' | 'status' | 'again' | 'cancel', engine: 'claude' | 'codex'): Promise<EngineSetupState> {
     const assumeReady: EngineSetupState = { engine, phase: 'ready', error: null, log: '', found: true, signedIn: true };
+    /*
+     * A FIXTURE WORLD THAT SAYS THE COMPUTER IS EMPTY IS ANSWERED THAT WAY
+     * (w-ce8c1a9275, 2026-10-09). The plan question runs this probe on arrival
+     * now, so `assumeReady` below walked every fixture copy straight past the
+     * one screen a brand new person meets and there was no url that could draw
+     * it. `engines=nowhere` is exactly the machine it is for.
+     */
+    if (useFixtures && engineFixtures === 'nowhere') {
+      return { engine, phase: 'idle', error: null, log: '', found: false, signedIn: false };
+    }
+    // AND THE MACHINE THE QUESTION MUST NOT ASK: Codex on the disk, signed out.
+    // `afterCheck` reads this as "we already know which plan they have".
+    if (useFixtures && engineFixtures === 'signedout') {
+      return { engine, phase: 'idle', error: null, log: '', found: engine === 'codex', signedIn: false };
+    }
     const zero = window.zero as any;
     if (!zero?.engineSetup) return assumeReady;
     try {
@@ -1016,7 +1152,7 @@ export const api = {
     return zero.projectInstructionsWrite({ product, text });
   },
 
-  async createProduct(p: { name: string; repoPath?: string | null; codexFolder?: boolean }) {
+  async createProduct(p: { name: string; repoPath?: string | null; codexFolder?: boolean; ofMany?: boolean }) {
     if (useFixtures) return null;
     return window.zero!.createProduct(p);
   },
@@ -1184,5 +1320,20 @@ export const api = {
   onChanged(fn: () => void): () => void {
     if (useFixtures) return () => {};
     return window.zero!.onChanged(fn);
+  },
+
+  /** The phone door (main/phone-link.mjs). Null where there is none: the
+   *  fixtures, and a browser tab, whose server has no such channel. */
+  async phoneLink(p: { action: 'status' | 'on' | 'off' | 'reset' | 'via' | 'stop-alerts'; via?: PhoneRoute; device?: string }): Promise<PhoneLink | null> {
+    if (useFixtures) return null;
+    const zero = window.zero as any;
+    if (!zero?.phoneLink) return null;
+    try { return await zero.phoneLink(p); } catch { return null; }
+  },
+
+  onPhoneChanged(fn: () => void): () => void {
+    const zero = window.zero as any;
+    if (useFixtures || !zero?.onPhoneChanged) return () => {};
+    return zero.onPhoneChanged(fn);
   },
 };

@@ -163,7 +163,8 @@ describe('the run is in the task, and the task is the conversation', () => {
   // has to notice.
   it('keeps reading the trace while a session is running', () => {
     const item = read('renderer/src/components/ItemThread.tsx');
-    expect(item).toMatch(/setInterval\(read, REFRESH_MS\)/);
+    // At the phone's slower pace on a phone (renderer/src/phone-polls.ts).
+    expect(item).toMatch(/setInterval\(read, pollEvery\(REFRESH_MS, onPhone\(\)\)\)/);
     expect(item).toMatch(/if \(!session\) return \(\) => \{ live = false; \};/);
   });
 });
