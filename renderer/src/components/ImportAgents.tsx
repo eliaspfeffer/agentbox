@@ -433,7 +433,8 @@ export function ImportAgents({ products, filter, walk, chatsOnly = false, onDone
         <div className="ia-top">
           <h1 className="ia-head">{query.trim()&&read&&!some?'Keine passenden Chats':chatsOnly?'Bestehenden Chat hinzufügen':read && !some ? (alreadyIn > 0 ? CARD.headAllIn : CARD.headNone) : LIST.head}</h1>
         </div>
-        {read && some && <p className="ia-line">{chatsOnly ? "Wähle die Chats aus, die du hinzufügen möchtest. Die Namenssuche findet auch ältere Chats." : LIST.line}</p>}
+        {!chatsOnly && <>{read && some && <p className="ia-line">{LIST.line}</p>}</>}
+        {chatsOnly && read && some && <p className="ia-line">Wähle die Chats aus, die du hinzufügen möchtest. Die Namenssuche findet auch ältere Chats.</p>}
         {!walk && <input className="ia-search" type="search" aria-label="Search existing chats by name" placeholder="Chatname suchen …" value={query} onChange={e=>setQuery(e.target.value)} maxLength={160}/>}
         {!walk && <p className="ia-line">Suche nach lokal vorhandenen Codex- und Claude-Chats.</p>}
 
