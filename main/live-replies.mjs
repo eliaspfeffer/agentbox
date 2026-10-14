@@ -86,6 +86,9 @@ export function submitReply(supervisor, payload, commit) {
         if (!session.stoppedByUs) supervisor.deliverMidflightReply({ ...item, answer: null, wrote: {} }, null);
       }
     }
+    if (!steered && item && status !== 'done' && typeof answer === 'string' && answer.trim() && answer !== '(withdrawn)') {
+      supervisor.runNow?.(product, id);
+    }
     return item;
   });
   sends.set(key, operation);
