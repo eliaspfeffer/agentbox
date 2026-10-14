@@ -1,3 +1,4 @@
+import {ModelUsageContext} from './components/Model';
 import {DictationStatus} from './components/Dictation';
 import {DesktopLive} from './components/DesktopLive';
 import {desktopLiveActions,desktopLiveView,desktopLiveRows} from '../../shared/desktop-live-actions.mjs';
@@ -5331,6 +5332,7 @@ export default function App() {
   // `.toast` in the stylesheet and says why it moves to the top rather than
   // merely further up.
   return (
+    <ModelUsageContext.Provider value={snap.usageByEngine ?? (snap.usage ? [snap.usage] : [])}>
     <TeamContext.Provider value={team}>
     <ChatAgentsContext.Provider value={chatAgents}>
     <LiveContext.Provider value={liveIds}>
@@ -7115,5 +7117,6 @@ export default function App() {
     </LiveContext.Provider>
     </ChatAgentsContext.Provider>
     </TeamContext.Provider>
+    </ModelUsageContext.Provider>
   );
 }

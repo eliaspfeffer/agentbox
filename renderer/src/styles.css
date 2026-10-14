@@ -8807,3 +8807,7 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
 .compose-sentence:has(.dictation-waveform) > .dock-stop { display: none; }
 .dictation-buttons:has(.dictation-waveform) { flex: 1; min-width: 0; flex-wrap: nowrap; }
 .dictation-buttons:has(.dictation-waveform) button { flex: 0 0 36px; height: 36px; padding: 0; white-space: nowrap; }
+
+.model-usage { display: grid; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: normal; max-width: 310px; font-size: 12px; }
+.model-usage small { display: block; opacity: .7; font-size: 11px; line-height: 1.4; }
+.model-usage-limit { display: grid; gap: 2px; }
