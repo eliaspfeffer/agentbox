@@ -3675,7 +3675,7 @@ export class Supervisor {
     let forgot = false;
     const home = this.config.home || os.homedir();
     for (const [key, trouble] of Object.entries(this._profileTrouble ?? {})) {
-      if (key.startsWith('codex:') && trouble?.cause === 'unknown' && BUSY_CODEX_THREAD.test(trouble.raw ?? '')) {
+      if (key.startsWith('codex:') && trouble?.cause === 'unknown' && (BUSY_CODEX_THREAD.test(trouble.raw ?? '') || troubleCause(trouble.raw) === 'interrupted')) {
         this._clearProfileTrouble(key); forgot = true; continue;
       }
       if (trouble?.cause !== 'subscription-ended') continue;

@@ -129,6 +129,7 @@ const AT_LIMIT = [
 // the single biggest cause of a dead run anywhere in the app is her own Mac
 // going to sleep mid-response, 133 runs across 63 rows.
 const INTERRUPTED = [
+  /the connection to codex app-server is corrupt/i,
   /went to sleep/i,
   /connection (closed|lost|dropped)/i,
   /response stopped arriving/i,

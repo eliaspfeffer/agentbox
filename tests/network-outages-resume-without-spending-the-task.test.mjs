@@ -60,7 +60,7 @@ describe.each(['codex', 'claude'])('%s after an internet outage', engine => {
   });
 });
 
-it.each(['stream disconnected before completion', 'streamDisconnected', 'ENETUNREACH', 'EAI_AGAIN', 'fetch failed', 'API Error: Connection error.', 'httpConnectionFailed'])('recognizes the provider network error %s', error => {
+it.each(['stream disconnected before completion', 'streamDisconnected', 'ENETUNREACH', 'EAI_AGAIN', 'fetch failed', 'API Error: Connection error.', 'httpConnectionFailed', 'config/read: the connection to codex app-server is corrupt, a frame passed 16777216 characters with no end to it'])('recognizes the provider network error %s', error => {
   expect(troubleCause(error)).toBe('interrupted');
 });
 
