@@ -18,7 +18,11 @@ export const GRIPS: readonly ['tl', 'tr', 'bl', 'br'];
 export type Grip = 'tl' | 'tr' | 'bl' | 'br';
 
 /** The nine dots, in whole pixels, for a tag this tall. */
-export function latticeCell(height: number): { dot: number; gap: number };
+export const LATTICE: { box: number; dot: number; gap: number };
+export function latticeGrid(box: number, dpr?: number): {
+  dot: number; gap: number; pitch: number; side: number; size: number;
+  dots: { cx: number; cy: number }[];
+};
 
 /** How much of the tag's size the list takes; it is read, not glanced at. */
 export function cardScale(scale: number): number;

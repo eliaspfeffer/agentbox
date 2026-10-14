@@ -32,15 +32,32 @@ const ATTRS = ['src', 'poster'];
 // 2026-10-12). Each picture is marked loading, ready or failed, and phone.css
 // draws a loading one as a shimmering box of a picture's shape.
 const STATE = 'data-phone-img';
-type PictureLike = Pick<HTMLImageElement, 'complete' | 'naturalWidth' | 'setAttribute' | 'addEventListener'>;
+type PictureLike = Pick<HTMLImageElement, 'complete' | 'naturalWidth' | 'setAttribute' | 'getAttribute' | 'addEventListener'> & { naturalHeight?: number; style?: { aspectRatio?: string } };
 const watched = new WeakSet<object>();
 
+// THE SHAPE EACH PICTURE HAD, by address, for as long as the page is open. A
+// picture is never served from memory (main/serve.mjs), so one drawn again
+// loads again, and its 4:3 box was a third the height of a phone screenshot:
+// everything under it jumped down and back each time (2026-10-13,
+// tests/a-thread-on-a-phone-holds-still-while-something-above-it-changes).
+const shapes = new Map<string, string>();
+export const shapeOf = (src: string) => shapes.get(src) ?? null;
+
 export function watchPicture(img: PictureLike) {
+  const src = img.getAttribute('src') ?? '';
+  const loading = !img.complete;
   img.setAttribute(STATE, img.complete ? (img.naturalWidth > 0 ? 'ready' : 'failed') : 'loading');
+  // While it loads, the box is the shape it had last time, if it has been seen.
+  const shape = (value: string) => { if (img.style) img.style.aspectRatio = value; };
+  shape(loading ? shapes.get(src) ?? '' : '');
   if (watched.has(img)) return;
   watched.add(img);
-  img.addEventListener('load', () => img.setAttribute(STATE, 'ready'));
-  img.addEventListener('error', () => img.setAttribute(STATE, 'failed'));
+  img.addEventListener('load', () => {
+    if (img.naturalWidth > 0 && (img.naturalHeight ?? 0) > 0) shapes.set(img.getAttribute('src') ?? '', `${img.naturalWidth} / ${img.naturalHeight}`);
+    shape('');
+    img.setAttribute(STATE, 'ready');
+  });
+  img.addEventListener('error', () => { shape(''); img.setAttribute(STATE, 'failed'); });
 }
 
 /** Every picture drawn from now on, and again whenever its address changes. */

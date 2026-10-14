@@ -364,6 +364,18 @@ export function clearComposeDraft(store?: DraftStore): void {
 }
 
 /**
+ * The card's words, taken off it as Send is pressed (w-461fbd8d2d). The card
+ * closes before the computer answers now, so clearing the draft when the
+ * answer came would empty whatever card was opened in between. The send
+ * carries what it took, for Z, and puts it back if it does not stand.
+ */
+export function takeComposeDraft(store?: DraftStore): ComposeDraft {
+  const taken = readComposeDraft(store);
+  clearComposeDraft(store);
+  return taken;
+}
+
+/**
  * Undo of a NEW TASK: the whole card goes back, exactly as she sent it.
  *
  * Both halves of this were broken. Sending was the one action in the app that put

@@ -42,7 +42,7 @@ describe('while a task waits for a yes', () => {
 
   it('draws no keyboard letter inside the press', () => {
     expect(html).not.toContain('made-a"');
-    expect(html.match(/>Approve</g)).toHaveLength(2);
+    expect(html.match(/>Start new thread</g)).toHaveLength(2);
   });
 });
 

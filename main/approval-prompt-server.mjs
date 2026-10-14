@@ -39,10 +39,17 @@ const PUBLIC_KEY = process.env.ZERO_APPROVALS_PUBKEY;
 const TIMEOUT_MS = 15 * 60_000;
 const POLL_MS = 2_000;
 
+// A QUESTION IS NOT AN APPROVAL. Workers launch without AskUserQuestion
+// (Supervisor.prepareClaudePermissions); one that arrives here anyway is
+// turned back to the thread before any card exists, because the card has
+// nowhere to put an answer (w-ab1f2f1d82).
+const ASK_IN_THE_THREAD = 'Questions are not asked here. Finish what you can without the answer, then end your turn with the question as your last message and its choices listed under Options. Their reply comes back to this session.';
+
 const send = (msg) => process.stdout.write(JSON.stringify(msg) + '\n');
 
 async function decide(args) {
   try {
+    if (args?.tool_name === 'AskUserQuestion') return { behavior: 'deny', message: ASK_IN_THE_THREAD };
     if (!SPOOL) return { behavior: 'deny', message: 'approvals spool is not configured' };
     // NO KEY IS A CHANNEL THAT CANNOT TELL HER ANSWER FROM A WORKER'S, and a
     // channel that cannot tell must not guess. It refuses here rather than

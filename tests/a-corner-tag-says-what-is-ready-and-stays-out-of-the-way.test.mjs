@@ -195,8 +195,28 @@ describe('which way the list opens', () => {
     const short = { x: 0, y: 0, width: 1728, height: 300 };
     const low = { x: 1570, y: 160, width: 140, height: 26 };
     const p = cardPlacement(low, { width: 360, height: 200 }, short);
-    expect(p.card.y).toBeGreaterThanOrEqual(0);
-    expect(p.card.y + p.card.height).toBeLessThanOrEqual(300);
+    expect(p.above).toBe(true);
+    expect(p.card.y + p.card.height).toBeLessThanOrEqual(low.y);
+  });
+
+  it('never covers the tag, whichever side it ends up on', () => {
+    // She sizes the tray from this list (2026-10-13): "this component should
+    // not cover up the actual little tray component that shows. Otherwise you
+    // can't decide on the sizing." On a screen too short for either side, the
+    // list runs off the screen's own edge rather than over the tag.
+    const covers = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+    const screens = [area, { x: 0, y: 0, width: 1728, height: 300 }, { x: 0, y: 0, width: 900, height: 240 }];
+    const cards = [card, { width: 360, height: 200 }, { width: 420, height: 260 }];
+    for (const screen of screens) {
+      for (const c of cards) {
+        for (const y of [screen.y, screen.y + screen.height / 2 - 13, screen.y + screen.height - 26]) {
+          for (const x of [screen.x, screen.x + screen.width - 140]) {
+            const tag = { x, y, width: 140, height: 26 };
+            expect(covers(cardPlacement(tag, c, screen).card, tag)).toBe(false);
+          }
+        }
+      }
+    }
   });
 
   it('stays on screen when the tag sits right against an edge', () => {

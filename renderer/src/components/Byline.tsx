@@ -104,7 +104,7 @@ export function Byline({ item, facts, returned, lead, stateShown, onAddPeople }:
           waiting for her, which is the one fact "last moved" would get wrong. */}
       {lead || stateShown
         ? <Said parts={stateLedParts(f, f.age ? `last moved ${f.age} ago` : null)} />
-        : <Said parts={[f.project, f.whereWord, f.engineWord, f.age
+        : <Said parts={[f.project, f.whereWord, f.placeWord, f.engineWord, f.age
           ? (isTroubleRow(item) ? `nothing has started for ${f.age}`
             : isUpdateRow(item) ? `downloaded ${f.age} ago`
               : `last moved ${f.age} ago`)

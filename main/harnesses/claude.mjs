@@ -33,7 +33,22 @@ export const claudeHarness = {
     return [path.join(home, '.claude.json'), ...definition.credentialFiles.map(file => path.join(dir, file))];
   },
   tooling: profile => linkAccountTooling(profile),
-  spawn(sup, plan, { cwd, item, profile, env }) {
+  spawn(sup, plan, { cwd, item, profile, env, cloud = false }) {
+    // A CLOUD RUN: THE SAME ARGUMENTS, A DIFFERENT PROGRAM (docs/cloud/PLAN.md).
+    // main/cloud/run-cli.mjs runs Claude Code in the sandbox with exactly these
+    // arguments and is, to everything above, the worker: its stdout is the
+    // agent's stream, its stdin reaches the agent, its exit comes after the
+    // agent's work is back in `cwd`. The account folder is always named,
+    // because the run unpacks the transcript and tooling into exactly that
+    // path. No memory-gate variables: that gate is about this Mac's memory.
+    if (cloud) {
+      return spawn(process.execPath, [sup._cloudRunPath(), ...streamInputArgs(definition.run, plan.args)], {
+        cwd,
+        env: { ...env, ELECTRON_RUN_AS_NODE: '1', STORE_ACCOUNT_ID: sup.config.accountId, ...storeRootEnv(sup.config.storeRoot),
+          CLAUDE_CONFIG_DIR: sup._claudeConfigDir(profile), ZERO_PRODUCT: item.product, ZERO_ITEM: item.id },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+    }
     // The binary is the one this definition names, not a field spelled out
     // here: that is the last place an engine of this family needed code.
     return spawn(sup.config[definition.binKey], streamInputArgs(definition.run, plan.args), {

@@ -73,10 +73,12 @@ describe('the crumb itself', () => {
   it('reads: where you came from, a slash, the name', () => {
     expect(text(draw())).toBe('Needs you / First frame white background fix');
   });
-  it('is one control, the way back, and keeps the back hint and the Esc wording', () => {
+  // CHANGED 2026-10-13 (w-ab3d51dc7d): it was one control, the whole line the
+  // way back. Only the arrow and the tab now go back, and the name renames
+  // (a-thread-can-be-renamed-and-the-crumb-goes-back-one-level.test.mjs).
+  it('goes back from the arrow and the tab, with the back hint and the Esc wording', () => {
     const html = draw();
-    expect(html.match(/<button/g)).toHaveLength(1);
-    expect(html).toMatch(/class="back-esc thread-crumb"/);
+    expect(html).toMatch(/class="back-esc thread-crumb-back"/);
     expect(html).toMatch(/data-hint="back"/);
     expect(html).toMatch(/aria-label="Back to Needs you \(esc\)"/);
   });
@@ -103,7 +105,7 @@ describe('the thread view wears the crumb when it has a summary', () => {
   });
   it('draws the bar thin while the crumb is in it, and in the app\'s mono capitals', () => {
     expect(css).toMatch(/\.workspace-layout\.workspace-task:has\(\.thread-crumb\) > \.topbar \{[^}]*height: 56px/);
-    const crumb = css.match(/\.workspace-task-header > \.back-esc\.thread-crumb \{([^}]*)\}/)[1];
+    const crumb = css.match(/\.workspace-task-header > \.thread-crumb \{([^}]*)\}/)[1];
     expect(crumb).toMatch(/text-transform: uppercase/);
     expect(crumb).toMatch(/var\(--mono\)/);
     expect(crumb).toMatch(/white-space: nowrap/);

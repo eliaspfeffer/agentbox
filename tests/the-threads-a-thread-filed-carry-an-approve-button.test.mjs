@@ -90,11 +90,14 @@ describe('the button, drawn in the list', () => {
 
   it('is one press per waiting thread and none on the rest', () => {
     expect(html.match(/class="made-approve"/g)).toHaveLength(1);
-    expect(html).toContain('>Approve<');
+    // RENAMED 2026-10-13 (w-554834e749): the bare "Approve" was the confusing
+    // part, and approving a proposal has always meant starting a new thread.
+    expect(html).toContain('>Start new thread<');
+    expect(html).not.toContain('>Approve<');
   });
 
   it('names the thread it would start, so the press is never ambiguous', () => {
-    expect(html).toContain('aria-label="Approve: Say why Send is off"');
+    expect(html).toContain('aria-label="Start new thread: Say why Send is off"');
   });
 
   it('still opens the thread, which is a second press and not the same one', () => {
@@ -120,8 +123,8 @@ describe('the button, drawn in the list', () => {
   // A row that can be approved says APPROVE where it would have said NEEDS YOU,
   // and nothing is held in reserve, so every word and every press ends at the
   // same right-hand edge.
-  it('says APPROVE in the place of the state word, not beside it', () => {
-    expect(html).toContain('>Approve<');
+  it('says START NEW THREAD in the place of the state word, not beside it', () => {
+    expect(html).toContain('>Start new thread<');
     // The waiting row's own word is gone; the running row below it keeps its.
     expect(html).not.toContain('>Needs you<');
     expect(html).toContain('>In progress<');
@@ -141,30 +144,17 @@ describe('the button, drawn in the list', () => {
     expect(none.match(/class="made-state/g)).toHaveLength(2);
   });
 
-  // THE OTHER HALF OF THE DECISION (w-9cf2b43110, second round). A proposal
-  // nobody answers now waits in Later and brings its thread back a day later,
-  // so there has to be a way to say no from the same row. It is the ordinary
-  // close — "there is no decline" in App.tsx still holds — and it is drawn
-  // quietly, under the cursor, because a list of three offers should not read
-  // as six buttons.
-  it('offers a No beside the press, named with its thread', () => {
+  // THE NO IS GONE (w-554834e749). It shipped in w-9cf2b43110's second round,
+  // drawn under the cursor, and was taken out on 2026-10-13: "No basically
+  // means reject so it's a different functionality... Ignoring it is
+  // basically rejecting it." A proposal is closed from its own row instead.
+  it('draws no No, on any row', () => {
     const both = renderToStaticMarkup(React.createElement(ThreadsMade, {
-      rows, onOpen: () => {}, onApprove: () => {}, onReject: () => {},
+      rows, onOpen: () => {}, onApprove: () => {}, onHere: () => {},
     }));
-    expect(both.match(/class="made-reject"/g)).toHaveLength(1);
-    expect(both).toContain('aria-label="Reject: Say why Send is off"');
-    expect(both).toContain('>No<');
-  });
-
-  it('draws no No on a row with nothing to approve', () => {
-    const none = renderToStaticMarkup(React.createElement(ThreadsMade, {
-      rows: rows.map(({ approve, ...r }) => r), onOpen: () => {}, onApprove: () => {}, onReject: () => {},
-    }));
-    expect(none).not.toContain('made-reject');
-  });
-
-  it('draws none at all where no rejection is wired, which is every other list', () => {
-    expect(html).not.toContain('made-reject');
+    expect(both).not.toContain('made-reject');
+    expect(both).not.toContain('>No<');
+    expect(both).not.toContain('Reject:');
   });
 
   it('draws nothing at all when there are no rows', () => {
@@ -178,7 +168,7 @@ describe('where the press is wired', () => {
 
   it('reaches the opened thread knowing which of its children can be approved', () => {
     expect(app).toMatch(/approve: approvableFiled\(i, stateOfMine\(i\)\)/);
-    expect(app).toMatch(/import \{ threadsMade, approvableFiled \}/);
+    expect(app).toMatch(/import \{ threadsMade, approvableFiled[\w\s,]*\}/);
   });
 
   it('approves the child without taking you off the thread you are reading', () => {
@@ -190,9 +180,9 @@ describe('where the press is wired', () => {
     expect(focus).toMatch(/onApprove=\{[^}]*onApproveFiled/);
   });
 
-  it('says no with the ordinary close, from the thread that proposed it', () => {
-    expect(app).toMatch(/onRejectFiled=\{\(i\) => markDone\(i, \{ stay: true \}\)\}/);
-    expect(focus).toMatch(/onReject=\{onRejectFiled && rejectFiled\}/);
+  it('wires no No from the thread any more (w-554834e749)', () => {
+    expect(app).not.toContain('onRejectFiled');
+    expect(focus).not.toContain('onRejectFiled');
   });
 });
 
@@ -215,8 +205,12 @@ describe('the press looks like a press', () => {
     expect(rule).toMatch(/var\(--accent\)/);
   });
 
+  // The title's press fills the row (flex: 1), which is what pushes the
+  // presses after it to the right-hand edge; since there can be two of them,
+  // neither carries its own auto margin, or they would split the space.
   it('is pushed to the right-hand edge the state words end at', () => {
-    expect(rule).toMatch(/margin-left: auto/);
+    expect(css).toMatch(/\.made-open \{[^}]*flex: 1/);
+    expect(rule).not.toMatch(/margin-left: auto/);
     // The reserved spacer is gone with the room it reserved.
     expect(css).not.toContain('made-approve-room');
   });
@@ -232,7 +226,9 @@ describe('the press looks like a press', () => {
   //   column of text always reads as further out than the text does.
   it('is tight inside and close to the edge', () => {
     expect(css).toMatch(/\.made-row \{[^}]*padding-right: 10px/);
-    expect(rule).toMatch(/padding: 3px 7px/);
+    // 4px 9px since w-554834e749, the size in the drawing that was picked
+    // ("this one wins"), so it matches the grey press beside it.
+    expect(rule).toMatch(/padding: 4px 9px/);
     expect(rule).toMatch(/margin-right: -2px/);
   });
 });

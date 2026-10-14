@@ -14,7 +14,7 @@
 // - Off both the tag and the list for a moment, and the list shuts.
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { GRIPS, Grip, HIDE_CHOICES, cardLines, cardScale, latticeCell, tagSays } from '../../../shared/corner-tag.mjs';
+import { GRIPS, Grip, HIDE_CHOICES, cardLines, cardScale, tagSays } from '../../../shared/corner-tag.mjs';
 import { NAME } from '../../../shared/product-name.mjs';
 import { Lattice, Move, markMoves } from './lattice';
 import './corner-tag.css';
@@ -29,7 +29,8 @@ type Bridge = {
   onReset: (fn: () => void) => () => void;
   onDragging: (fn: (dragging: boolean) => void) => () => void;
   ready: (part: Part) => Promise<unknown>;
-  size: (part: Part, w: number, h: number) => Promise<unknown>;
+  size: (part: Part, w: number, h: number, glass?: { x: number; y: number; width: number; height: number }) => Promise<unknown>;
+  clickable: (on: boolean) => Promise<unknown>;
   hover: (part: Part, inside: boolean) => Promise<unknown>;
   toggle: () => Promise<unknown>;
   // grip and corner say the press landed on one of the four resize corners.
@@ -37,6 +38,7 @@ type Bridge = {
   release: (cancelled?: boolean) => Promise<unknown>;
   go: (id: string | null) => Promise<unknown>;
   hide: (choice: string) => Promise<unknown>;
+  resize: (by: number) => Promise<unknown>;
   settings: () => Promise<unknown>;
   menu: () => Promise<unknown>;
 };
@@ -75,9 +77,6 @@ function useTagState() {
     if (!state.scale) return;
     const root = document.documentElement;
     root.style.setProperty('--ct-s', String(state.scale));
-    const { dot, gap } = latticeCell(28 * state.scale);
-    root.style.setProperty('--ct-dot', `${dot}px`);
-    root.style.setProperty('--ct-gap', `${gap}px`);
     // The list follows the tag only part of the way: it is read a line at a
     // time and should sit near the size of everything else on the screen.
     root.style.setProperty('--ct-cs', String(cardScale(state.scale)));
@@ -88,7 +87,7 @@ function useTagState() {
 // The mark, and the one place that decides when it moves: whenever the words
 // change, markMoves says whether this is news worth a turn, a count worth a
 // pop, or nothing at all.
-function Mark({ says }: { says: { kind: string; count: number } }) {
+function Mark({ says, scale }: { says: { kind: string; count: number }; scale: number }) {
   const before = useRef<{ kind: string; count: number } | null>(null);
   const [beat, setBeat] = useState<{ move: Move; n: number }>({ move: 'none', n: 0 });
   useEffect(() => {
@@ -96,7 +95,7 @@ function Mark({ says }: { says: { kind: string; count: number } }) {
     before.current = says;
     if (move !== 'none') setBeat((b) => ({ move, n: b.n + 1 }));
   }, [says.kind, says.count]);
-  return <Lattice lit={says.kind === 'ready'} move={beat.move} beat={beat.n} />;
+  return <Lattice box={10 * scale} lit={says.kind === 'ready'} move={beat.move} beat={beat.n} />;
 }
 
 // The way into the app, drawn at the tag's end.
@@ -104,7 +103,7 @@ function Go() {
   return (
     <span className="ct-go" aria-hidden>
       <svg width="7" height="10" viewBox="0 0 7 10">
-        <path d="M1.5 1.5 5 5 1.5 8.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M1.5 1.5 5 5 1.5 8.5" fill="none" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </span>
   );
@@ -115,7 +114,20 @@ function useReportSize(ref: React.RefObject<HTMLElement>, which: Part, key: unkn
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !bridge) return;
-    const report = () => { const r = el.getBoundingClientRect(); bridge.size(which, r.width, r.height); };
+    // The tag's window is the glass plus the clear band around it, so the
+    // GLASS'S OWN RECTANGLE goes with the measurement: everything that places
+    // the window works from that, not from the window's own edge. It used to
+    // send one number, the band on the left, and the rest was worked out from
+    // it — which is only true while the window is exactly the size the page
+    // asked for. A drag widens the window first and lets the page catch up, so
+    // the last guess of a drag can outlive it, and then the list lined up with
+    // a window edge that was no longer the glass: "it is a little too far to
+    // the right... it's just the right sides" (2026-10-13).
+    const report = () => {
+      const r = el.getBoundingClientRect();
+      const g = el.querySelector('.ct-tag')?.getBoundingClientRect() ?? r;
+      bridge.size(which, r.width, r.height, { x: g.x - r.x, y: g.y - r.y, width: g.width, height: g.height });
+    };
     report();
     const ro = new ResizeObserver(report);
     ro.observe(el);
@@ -152,14 +164,27 @@ function Tag({ state, forceOpen = false }: { state: State; forceOpen?: boolean }
     bridge?.release(cancelled);
   };
 
+  // WHAT IS UNDER THE POINTER RIGHT NOW. The window is the glass plus a clear
+  // band, so a click in that band belongs to whatever is underneath; the main
+  // process is told which it is, and lets the click through when it is not
+  // ours. Moves keep arriving either way, because the window forwards them.
+  const overUs = (e: React.PointerEvent) => {
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    return !!el?.closest('.ct-tag, .ct-grip');
+  };
+
   return (
     <div
       ref={ref}
+      className={`ct-frame${demo ? ' is-demo' : ''}`}
+      onPointerMove={(e) => bridge?.clickable(overUs(e))}
+      onPointerLeave={() => bridge?.clickable(false)}
+    >
+    <div
       role="button"
       aria-label={`${text}. Click to open ${NAME}, drag to move.`}
       aria-expanded={open}
       className={`ct-glass ct-tag ${says.kind}${open ? ' is-open' : ''}${dragging ? ' is-dragging' : ''}`}
-      style={demo ? { position: 'relative' } : undefined}
       onPointerEnter={() => bridge?.hover('tag', true)}
       onPointerLeave={() => { if (!pressed.current) bridge?.hover('tag', false); }}
       onPointerDown={(e) => {
@@ -178,17 +203,19 @@ function Tag({ state, forceOpen = false }: { state: State; forceOpen?: boolean }
       onLostPointerCapture={() => letGo(true)}
       onContextMenu={(e) => { e.preventDefault(); bridge?.menu(); }}
     >
-      <Mark says={{ kind: says.kind, count: says.kind === 'ready' ? counts.ready : counts.working }} />
+      <Mark scale={state.scale ?? 1} says={{ kind: says.kind, count: says.kind === 'ready' ? counts.ready : counts.working }} />
       <span className="ct-words">{text}</span>
       <Go />
-      {/* EVERY CORNER RESIZES IT (2026-10-13). The first version put one small
-          ledge in the bottom left, and nothing said it was there: "there was no
-          way to discover that it was actually expandable... I'm not a fan of
-          that UI." So all four corners take a drag, each with a hand-sized
-          patch to aim at, and pointing at one draws a small arrow along its
-          diagonal. The press goes through the same door as a move, flagged as
-          the grip, so the main process reads the cursor exactly as it does for
-          a drag: the page is never sent every move. */}
+    </div>
+      {/* EVERY CORNER TAKES A DRAG, AND DRAWS NOTHING (2026-10-13). First a
+          ledge, then an arrow on each corner: "you accidentally see something
+          flash and you're like, oh wait, what was that... it really kills the
+          vibes". So the corners are bare: the pointer turning into the resize
+          arrow over them is the system's own affordance, and nothing in the
+          corner of her screen moves. Making it discoverable is the open
+          question, proposed rather than guessed at. The press goes through the
+          same door as a move, flagged as the grip, so the main process reads
+          the cursor exactly as it does for a drag. */}
       {GRIPS.map((corner) => (
         <span
           key={corner}
@@ -211,9 +238,14 @@ function Tag({ state, forceOpen = false }: { state: State; forceOpen?: boolean }
           onPointerCancel={() => letGo(true)}
           onLostPointerCapture={() => letGo(true)}
         >
-          <svg viewBox="0 0 10 10" aria-hidden>
-            <path d="M8.5 1.5 1.5 8.5M8.5 5.2V1.5H4.8M1.5 4.8v3.7h3.7" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          {/* NOTHING IS DRAWN HERE ANY MORE (2026-10-13). An arrow that
+              appears as the pointer crosses a corner reads as a glitch:
+              "you accidentally see something flash and you're like, oh wait,
+              what was that... it really kills the vibes". The corner still
+              takes a drag and the pointer still turns into the resize arrow
+              over it, which is the system's own affordance and costs the tag
+              nothing. How somebody is meant to FIND that is a separate
+              question, and an open one. */}
         </span>
       ))}
     </div>
@@ -237,7 +269,7 @@ function CardBody({ state }: { state: State }) {
       {!lines.length && <div className="ct-quiet ct-static">Nothing is ready for you yet</div>}
       {state.working > 0 && (
         <button className="ct-line ct-quiet" onClick={() => bridge?.go(null)}>
-          <Lattice lit={false} move="none" beat={0} />
+          <Lattice box={10 * cardScale(state.scale ?? 1)} lit={false} move="none" beat={0} />
           {lines.length ? `${state.working} others working` : `${state.working} working`}
         </button>
       )}
@@ -246,6 +278,23 @@ function CardBody({ state }: { state: State }) {
         {HIDE_CHOICES.map((c: { key: string; label: string }) => (
           <button key={c.key} onClick={() => bridge?.hide(c.key)}>{c.label}</button>
         ))}
+        {/* SIZING THE TRAY FROM THE LIST (2026-10-13, her pick). It lives here
+            because the list only opens when she asks for it, so nothing is
+            drawn on the tag itself, and because the tag stays in plain sight
+            beside it while she decides: "you still need to see the component
+            to be able to make those decisions". Two halves of one small pill
+            rather than a pair of loose characters. */}
+        <span className="ct-size">
+          <span className="ct-size-name">Size</span>
+          <span className="ct-steps">
+            <button aria-label="Smaller" title="Smaller" onClick={() => bridge?.resize(-1)}>
+              <svg viewBox="0 0 10 10" aria-hidden><path d="M2.4 5h5.2" /></svg>
+            </button>
+            <button aria-label="Bigger" title="Bigger" onClick={() => bridge?.resize(1)}>
+              <svg viewBox="0 0 10 10" aria-hidden><path d="M2.4 5h5.2M5 2.4v5.2" /></svg>
+            </button>
+          </span>
+        </span>
         <span className="ct-sep" />
         <button className="ct-off" onClick={() => bridge?.settings()}>Turn off…</button>
       </div>

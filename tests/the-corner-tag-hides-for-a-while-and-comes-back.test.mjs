@@ -20,6 +20,7 @@
 // window to the front, and the reworked version passed 12 of 12 real checks.
 import { describe, expect, it } from 'vitest';
 import { createCornerTag, CLOSE_AFTER_MS, DRAG_FROM_PX, OPEN_AFTER_MS } from '../main/corner-tag.mjs';
+import { EDGE_SLACK } from '../shared/corner-tag.mjs';
 
 function rig({ config = {}, focused = false, at = 1_000_000 } = {}) {
   const handlers = {};
@@ -328,7 +329,7 @@ describe('pointing opens the list, a click opens the app, a press that moves is 
     expect(r.main.shown).toBe(0);
   });
 
-  it('a drag shuts an open list and cannot be dragged off the screen', () => {
+  it('a drag shuts an open list and may tuck it past the edge, but no further', () => {
     const r = rig();
     r.showTag();
     r.point();
@@ -336,7 +337,12 @@ describe('pointing opens the list, a click opens the app, a press that moves is 
     r.pressAndMove(900, 900);
     expect(r.win('card').visible).toBe(false);
     r.call('corner-tag:release', { cancelled: false });
-    expect(r.config.cornerTagSpot).toEqual({ x: 1728 - 80, y: 1080 - 26 });
+    // She asked for this on 2026-10-13: a drag to the right used to stop flush
+    // against the edge and spring back from anything beyond it ("I often want
+    // it a little bit further to the right side of the screen"). It may hang
+    // off by the slack now, which is a tuck and never a disappearance.
+    expect(r.config.cornerTagSpot).toEqual({ x: 1728 - 80 + EDGE_SLACK, y: 1080 - 26 + EDGE_SLACK });
+    expect(EDGE_SLACK).toBeLessThan(80 / 2);
   });
 
   it('a press whose release never comes lets go by itself after a minute', () => {
@@ -600,7 +606,9 @@ describe('the app window closing, and screens changing', () => {
     r.area.height = 800;
     r.screenListeners['display-metrics-changed']();
     expect(r.win('card').visible).toBe(false);
-    expect(r.win().bounds.x + r.win().bounds.width).toBeLessThanOrEqual(1200);
-    expect(r.win().bounds.y + r.win().bounds.height).toBeLessThanOrEqual(800);
+    // back on the smaller screen, give or take the tuck she is allowed
+    expect(r.win().bounds.x + r.win().bounds.width).toBeLessThanOrEqual(1200 + EDGE_SLACK);
+    expect(r.win().bounds.y + r.win().bounds.height).toBeLessThanOrEqual(800 + EDGE_SLACK);
+    expect(r.win().bounds.x).toBeLessThan(1200);
   });
 });

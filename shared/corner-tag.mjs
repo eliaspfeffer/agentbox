@@ -18,6 +18,17 @@
 /** Space between the tag and the edge of the screen when it rests in a corner. */
 export const MARGIN = 18;
 
+/**
+ * HOW FAR PAST THE EDGE SHE MAY PARK IT (2026-10-13). The resting rule used to
+ * hold the whole tag inside the screen, so a drag to the right stopped with
+ * the tag flush against the edge and sprang back from anything further: "I
+ * can't seem to put it further to the right. It snaps back into place in this
+ * slot but I often want it a little bit further to the right side of the
+ * screen." It may now hang this far off any edge — enough to tuck it away,
+ * never enough to lose it.
+ */
+export const EDGE_SLACK = 24;
+
 /** The ways to hide it. All of them come back; none of them is permanent. */
 export const HIDE_CHOICES = [
   { key: '5m', label: '5 min' },
@@ -157,30 +168,59 @@ export function cardScale(scale) {
 }
 
 /**
- * THE NINE DOTS ARE WHOLE PIXELS, not a share of the tag (2026-10-13). They
- * used to be 2.7 and 0.95 points multiplied by the scale, which at 31px came
- * out as 2.99 and 1.05: every row and column rounded somewhere different, so
- * the gaps were uneven and a dot that small turned into an aliased square.
- * She caught it in the running app: "the dots aren't even here".
+ * THE NINE DOTS ARE ONE DRAWING, not nine boxes (2026-10-13).
  *
- * So each height gets a dot and a gap in whole pixels. Every track is then
- * identical at any pixel ratio, and a dot has enough pixels to be round.
+ * They were boxes in a grid, and twice the fix was to give the dot and the gap
+ * whole pixels. That only holds on a screen whose point is a whole device
+ * pixel. Hers is not: a Mac in a scaled mode draws 1.5 device pixels to the
+ * point, so a 3pt dot is 4.5 and a 1pt gap is 1.5, and the browser snaps every
+ * box on its own — 5,5,5 across with gaps of 2 and 1. Rasterised through the
+ * real page, 16 of 28 sizes came out uneven at that scale and none at 1x or
+ * 2x. "It's the same issue we've had six times before."
+ *
+ * An svg of nine circles on one pitch is rasterised in one go, so the spacing
+ * cannot round apart whatever the screen does, and the geometry can go back to
+ * the launch film's own: dots of 2.7 and gaps of 0.95 in a box of 10.
  */
-export const LATTICE_CELLS = {
-  31: { dot: 3, gap: 1 },
-  36: { dot: 4, gap: 1 },
-  42: { dot: 4, gap: 2 },
-  48: { dot: 5, gap: 2 },
-};
+export const LATTICE = { box: 10, dot: 2.7, gap: 0.95 };
 
-/** The dot and gap for a tag this tall. */
-export function latticeCell(height) {
-  const h = Number.isFinite(height) ? Math.round(height) : TAG_HEIGHTS[0].px;
-  if (LATTICE_CELLS[h]) return LATTICE_CELLS[h];
-  // A height nobody planned for still draws something even: about a tenth of
-  // the tag for a dot, a third of that for the gap, both whole.
-  const dot = Math.max(2, Math.round(h / 10));
-  return { dot, gap: Math.max(1, Math.round(dot / 3)) };
+/**
+ * The mark for a box this many points across, on a screen drawing this many
+ * device pixels to the point.
+ *
+ * THE PITCH IS A WHOLE NUMBER OF DEVICE PIXELS. That is the whole trick. Every
+ * dot then sits at the same distance from a device-pixel boundary as every
+ * other, so all nine are rasterised identically and the spacing cannot round
+ * apart — however the mark's own corner happens to land. Whole POINTS were the
+ * old rule, and a point on her screen is 1.5 device pixels, which is why it
+ * kept coming back.
+ */
+export function latticeGrid(box, dpr = 1) {
+  const px = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+  const want = (Number.isFinite(box) && box > 0 ? box : LATTICE.box) * px;
+  // Both whole numbers either side of the film's dot and gap, and the pair
+  // whose mark comes closest to the size asked for — a dot and a gap rounded
+  // on their own can leave the mark a fifth too big, which shows.
+  const ideal = { dot: (want * LATTICE.dot) / LATTICE.box, gap: (want * LATTICE.gap) / LATTICE.box };
+  const ways = [];
+  for (const dot of [Math.floor(ideal.dot), Math.ceil(ideal.dot)]) {
+    for (const gap of [Math.floor(ideal.gap), Math.ceil(ideal.gap)]) {
+      const d = Math.max(2, dot);
+      const g = Math.max(1, Math.min(gap, d - 1));
+      ways.push({ dot: d, gap: g, side: 3 * d + 2 * g });
+    }
+  }
+  // A dot five times its gap is a mark whose dots all but touch, and one twice
+  // its gap is a loose one; the film's is 2.84. Keep inside that band if any
+  // pair can, and among those take the closest size.
+  const inBand = ways.filter((w) => w.dot / w.gap >= 2 && w.dot / w.gap <= 4);
+  const pick = (inBand.length ? inBand : ways)
+    .sort((a, b) => Math.abs(a.side - want) - Math.abs(b.side - want)
+      || Math.abs(a.dot / a.gap - LATTICE.dot / LATTICE.gap) - Math.abs(b.dot / b.gap - LATTICE.dot / LATTICE.gap));
+  const { dot, gap, side } = pick[0];
+  const pitch = dot + gap;
+  const at = [0, 1, 2].map((i) => dot / 2 + i * pitch);
+  return { dot, gap, pitch, side, size: side / px, dots: at.flatMap((cy) => at.map((cx) => ({ cx, cy }))) };
 }
 
 /**
@@ -276,8 +316,10 @@ export function spotFor(place, size, area) {
   if (!place?.corner) return null;
   const right = place.corner.endsWith('r');
   const lower = place.corner.startsWith('b');
-  const dx = clamp(Number.isFinite(place.dx) ? place.dx : MARGIN, 0, Math.max(0, area.width - size.width));
-  const dy = clamp(Number.isFinite(place.dy) ? place.dy : MARGIN, 0, Math.max(0, area.height - size.height));
+  // A gap may be negative: that is the tag tucked past the edge, which she
+  // asked for and which the resting rule now allows.
+  const dx = clamp(Number.isFinite(place.dx) ? place.dx : MARGIN, -EDGE_SLACK, Math.max(0, area.width - size.width));
+  const dy = clamp(Number.isFinite(place.dy) ? place.dy : MARGIN, -EDGE_SLACK, Math.max(0, area.height - size.height));
   return {
     x: right ? area.x + area.width - size.width - dx : area.x + dx,
     y: lower ? area.y + area.height - size.height - dy : area.y + dy,
@@ -295,14 +337,20 @@ export function keepCorner(bounds, size, area) {
  * screen, so it never runs off an edge, lined up with the tag's outer edge.
  */
 export function cardPlacement(tag, card, area, gap = 8) {
-  let above = inLowerHalf(tag, area);
   const alignRight = inRightHalf(tag, area);
   const x = clamp(alignRight ? tag.x + tag.width - card.width : tag.x, area.x, area.x + area.width - card.width);
-  const up = tag.y - gap - card.height;
-  const down = tag.y + tag.height + gap;
-  // A tall list near a short screen's middle may not fit the side it prefers.
-  if (above && up < area.y) above = false;
-  else if (!above && down + card.height > area.y + area.height) above = true;
-  const y = clamp(above ? up : down, area.y, area.y + area.height - card.height);
+  // Which side has the room. The list may never cover the tag: she adjusts the
+  // tray's size from this list ("you still need to see the component to be able
+  // to make those decisions"), and a list over the thing it is sizing is no
+  // use. So the side is picked by which has more room, the list is kept on
+  // that side of the tag, and only then is it brought onto the screen — a list
+  // taller than its side runs off the screen's edge rather than over the tag.
+  const room = { above: tag.y - area.y, below: area.y + area.height - (tag.y + tag.height) };
+  let above = inLowerHalf(tag, area);
+  if (above && room.above < card.height + gap && room.below > room.above) above = false;
+  else if (!above && room.below < card.height + gap && room.above > room.below) above = true;
+  const y = above
+    ? Math.min(tag.y - gap - card.height, Math.max(area.y, tag.y - gap - card.height))
+    : Math.max(tag.y + tag.height + gap, Math.min(area.y + area.height - card.height, tag.y + tag.height + gap));
   return { above, alignRight, card: { x, y, width: card.width, height: card.height } };
 }

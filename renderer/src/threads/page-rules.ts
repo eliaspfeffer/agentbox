@@ -305,18 +305,27 @@ export function placesForDrop(rows: { id: string; score: number }[], id: string,
  * The gap ON the line, under the last pinned row and over the first of the
  * rest, belongs to whichever side the row came from: dragging a pinned row to
  * the foot of its group must not unpin it. `pin` is null when it stays as it was.
+ *
+ * THE PLACE IS WORKED OUT AMONG THE GROUP IT LANDS IN, never across the line
+ * (w-844ae75078, 2026-10-13: "Suddenly I can't seem to drag threads"). The
+ * pins are drawn above the rest whatever they score, so at the line the two
+ * neighbours' scores can be upside down, and a place between them put a thread
+ * dragged to the top of the rest back at the bottom, and a pin dragged to the
+ * foot of the pins back at the top.
  */
 export function dropWithPins(rows: { id: string; score: number; pinned?: boolean }[], id: string, beforeId: string | null): { places: Record<string, number> | null; pin: boolean | null } {
-  const places = placesForDrop(rows, id, beforeId);
   const moved = rows.find((r) => r.id === id);
-  if (!moved || !places) return { places, pin: null };
+  if (!moved || !placesForDrop(rows, id, beforeId)) return { places: null, pin: null };
   const rest = rows.filter((r) => r.id !== id);
   const at = beforeId ? rest.findIndex((r) => r.id === beforeId) : -1;
   const below = at < 0 ? undefined : rest[at];
   const above = at < 0 ? rest[rest.length - 1] : rest[at - 1];
   const onTheLine = !!above?.pinned && !!below && !below.pinned;
   const lands = onTheLine ? !!moved.pinned : !!(below ?? above ?? moved).pinned;
-  return { places, pin: lands === !!moved.pinned ? null : lands };
+  // Let go on the line among the pins is the foot of the pins.
+  const group = rows.filter((r) => r.id === id || !!r.pinned === lands);
+  const before = below && !!below.pinned === lands ? below.id : null;
+  return { places: placesForDrop(group, id, before), pin: lands === !!moved.pinned ? null : lands };
 }
 
 /* ------------------------------------------------------- the tabs and Tab */

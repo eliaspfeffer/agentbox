@@ -65,33 +65,55 @@ describe('the size she drags to is a multiple of the automatic one', () => {
 });
 
 describe('the corners she drags', () => {
-  it('are all four, each with an arrow that shows itself when pointed at', () => {
-    // One ledge in one corner was not discoverable: "there was no way to
-    // discover that it was actually expandable".
+  it('are all four, and draw nothing at all', () => {
+    // An arrow that appeared as the pointer crossed a corner read as a glitch:
+    // "you accidentally see something flash... it really kills the vibes". The
+    // affordance is the pointer, which the system turns into a resize arrow.
     for (const corner of ['tl', 'tr', 'bl', 'br']) expect(css).toContain(`.ct-grip-${corner}`);
     expect(page).toContain('GRIPS.map');
-    expect(css).toMatch(/\.ct-tag:hover \.ct-grip[^}]*opacity/);
-    expect(css).toMatch(/\.ct-grip:hover[^}]*opacity/);
+    expect(css).toContain('cursor: nwse-resize');
+    expect(css).toContain('cursor: nesw-resize');
+    expect(css).not.toContain('.ct-grip svg');
+    expect(css).not.toMatch(/\.ct-grip[^}]*opacity/);
+    expect(page).not.toContain('const ARROW');
     // and a patch big enough to aim at, not a few pixels of ledge
-    expect(css).toMatch(/\.ct-grip \{[^}]*width: calc\(16px/);
+    expect(css).toMatch(/\.ct-grip \{[^}]*width: calc\(20px/);
   });
 
   it('press through the same door as a drag, saying which corner it is', () => {
     expect(bridge).toContain('press: (x, y, grip, corner)');
     expect(page).toContain('bridge?.press(e.screenX, e.screenY, true, corner)');
   });
+
+  it('tells the main process where the glass is, and what is under the pointer', () => {
+    expect(page).toContain('bridge.size(which, r.width, r.height, { x: g.x - r.x');
+    expect(page).toContain('bridge?.clickable(overUs(e))');
+    expect(bridge).toContain('clickable: (on)');
+    expect(bridge).toContain('size: (part, width, height, glass)');
+  });
 });
 
-describe('the corners do not steal the tag itself', () => {
-  it('leaves the middle of the tag to the mark and the chevron', () => {
-    // The grips are strips across the top and bottom of each end. If they took
-    // the full height, a press on the nine dots or on the chevron would start
-    // a resize instead of opening the app: exactly the kind of quirk she asked
-    // me to find before pushing.
-    const grip = css.match(/\.ct-grip \{[^}]*\}/)[0];
-    expect(grip).toMatch(/height: calc\(8px \* var\(--ct-s\)\)/);
-    expect(grip).not.toContain('height: 50%');
-    // the strips are shorter than the mark is tall, which is 10px of a 28 tag
-    expect(8 * 2).toBeLessThan(28 - 10);
+
+describe('sizing it from the foot of its own list', () => {
+  // Her pick, 2026-10-13: a handle on the tag flashed and read as a glitch, so
+  // the control lives in the list, which only opens when she asks for it. Two
+  // things she asked for by name: the tag must stay in sight while she decides
+  // ("you still need to see the component"), and the pair of signs must be one
+  // small thing rather than two loose characters ("the ± UI is pretty ugly").
+  it('puts Size in the foot, beside Hide for and Turn off', () => {
+    expect(page).toContain('ct-size-name');
+    expect(page).toMatch(/aria-label="Smaller"[\s\S]*aria-label="Bigger"/);
+    expect(page).toContain("bridge?.resize(-1)");
+    expect(page).toContain('bridge?.resize(1)');
+    expect(bridge).toContain("resize: (by)");
+  });
+
+  it('draws the two signs instead of typing them, in one joined pill', () => {
+    // a minus and a plus as characters never sit on the same baseline
+    expect(page).not.toContain('−');
+    expect(page).not.toMatch(/>\s*\+\s*</);
+    expect(css).toMatch(/\.ct-foot \.ct-steps \{[^}]*border-radius: 999px/);
+    expect(css).toMatch(/\.ct-foot \.ct-steps button \+ button \{ border-left/);
+    expect(css).toMatch(/\.ct-foot \.ct-steps svg \{[^}]*stroke: currentColor/);
   });
 });

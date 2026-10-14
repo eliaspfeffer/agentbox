@@ -76,6 +76,13 @@ const DEFAULTS = {
   // commands may run at once; null is Auto, one per 8 GB.
   memoryGate: false,
   memoryGateSlots: null,
+  // RUN THE OVERFLOW IN THE CLOUD (docs/cloud/PLAN.md). Null is "when this Mac
+  // has been set up for it": nothing happens anywhere until somebody has run
+  // scripts/cloud-setup.mjs and scripts/cloud-signin.mjs, and before that the
+  // app is exactly the app it was. `false` turns it off even then.
+  // `maxCloudSessions` is the cloud's own cap, apart from this Mac's.
+  cloudRuns: null,
+  maxCloudSessions: 10,
   // STOP WHAT FINISHED AGENTS LEAVE RUNNING (main/leftovers.mjs). Its own
   // switch, off until somebody turns it on; `cleanupLeftoversSince` is the
   // moment they did, so nothing is stopped sooner than the idle time after it.

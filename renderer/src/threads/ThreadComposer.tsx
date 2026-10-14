@@ -43,7 +43,7 @@ import { conversationWith } from './page-rules';
 import { collectFiles, fromPaste, persistAttachments, type PendingAttachment } from '../attachments';
 import { AttachRow } from '../components/AttachRow';
 import { PRIORITIES, priorityLabelOf, priorityValueOf, startingPriority, type PriorityId } from '../priority';
-import { readComposeDraft, saveComposeDraft, clearComposeDraft } from '../drafts';
+import { readComposeDraft, clearComposeDraft, saveComposeDraft, takeComposeDraft, type ComposeDraft } from '../drafts';
 import { LAST_PRODUCT_KEY } from '../compose-project';
 import { practiceRefusal, noProjectYet } from '../compose-says';
 import { defaultModelFor, engineModelLabel, readLastModel, writeLastModel, type ModelChoice } from '../models';
@@ -64,7 +64,6 @@ import './thread-composer.css';
 export interface ThreadSent {
   kind: 'task' | 'repeat' | 'message';
   background?: boolean;
-  draft?: ReturnType<typeof readComposeDraft>;
   product?: string;
   title?: string;
   /** A Send later moment, when there was one. */
@@ -77,12 +76,14 @@ export interface ThreadSent {
   toMany?: string[];
   /** The person a message went to. */
   to?: string;
+  /** What the card held when Send was pressed, for Z to put back. */
+  draft?: ComposeDraft;
 }
 
 type MenuKey = 'to' | 'model' | 'project' | 'priority' | 'visibility' | 'later';
 
 export function ThreadComposer({
-  products, items, engines, codexModels, codexModelDefault, defaultProduct, initial, scripted, onOpenMenu, onClose, onSent, onOpenConversation, onReorderProjects, onNewProject,
+  products, items, engines, codexModels, codexModelDefault, defaultProduct, initial, scripted, onOpenMenu, onClose, onSent, onSending, onFailed, onOpenConversation, onReorderProjects, onNewProject,
 }: {
   products: Product[];
   items: WorkItem[];
@@ -126,8 +127,17 @@ export function ThreadComposer({
    *  from the menu you are already in, whether you have none or ten. */
   onNewProject?: () => void;
   onClose: () => void;
-  /** Called once the send stands, BEFORE the draft is cleared, so the caller can still read it for an undo. */
+  /** Called once the send stands, with the words it took off the card (`sent.draft`) for an undo. */
   onSent: (item: WorkItem | null, sent?: ThreadSent) => void;
+  /**
+   * THE MOMENT SEND IS PRESSED, before anything is asked of the computer
+   * (w-461fbd8d2d). Given, the caller closes the card here and says it is on
+   * its way, and `onFailed` is how a send that then does not stand comes back.
+   * Not given (the tutorial), the card stays up until the answer as it did.
+   */
+  onSending?: (p: { kind: ThreadSent['kind']; product?: string; to?: string; toMany?: string[]; runAt?: number; start?: 'later' | 'manual' }) => void;
+  /** A send handed over with `onSending` that did not stand. The words are back in the draft. */
+  onFailed?: (reason: string, p: { to?: string; also?: string[] }) => void;
 }) {
   const team = useContext(TeamContext);
   const others = useMemo(() => (team ? teammates(team.state.people, team.me) : []), [team]);
@@ -368,10 +378,17 @@ export function ThreadComposer({
     setSending(true);
     setError(null);
     setOpen(null);
+    // HANDED OVER BEFORE ANYTHING IS ASKED OF THE COMPUTER (w-461fbd8d2d). The
+    // card used to sit here, words and all, until the answer came back: a few
+    // milliseconds on the desktop and a relay round trip on a phone, which read
+    // as Send not having worked. The words come off the card now and go with
+    // the send, for Z, and back onto it if the send does not stand.
+    const taken = background ? {text:[text,spoken].filter(Boolean).join("\n\n"),attachments,priority:prio,when:{runAt:0,repeat:null},dropped:0} : takeComposeDraft();
+    try { localStorage.setItem(LAST_PRODUCT_KEY, product.slug); } catch { /* the send still stands */ }
+    if (!background) onSending?.({ kind: when.repeat ? 'repeat' : 'task', product: product.slug, ...(when.runAt ? { runAt: when.runAt } : {}), ...(when.start ? { start: when.start } : {}) });
     try {
       const attached = await persistAttachments(product.slug, attachments);
       const body = [message.body, attached].filter(Boolean).join('\n\n');
-      try { localStorage.setItem(LAST_PRODUCT_KEY, product.slug); } catch { /* the send still stands */ }
       const harness = harnessFields({
         engine: pick.engine, model: pick.model,
         effort: effortPicked(effort, effortRows) ? effort : null,
@@ -385,7 +402,7 @@ export function ThreadComposer({
           product: product.slug, title: message.title, body: body || undefined, priority, rule: when.repeat,
           ...(harness.engine ? { engine: harness.engine } : {}), ...(harness.model ? { model: harness.model } : {}),
         });
-        onSent(null, { kind: 'repeat', product: product.slug, title: message.title, ruleId: rule?.id });
+        onSent(null, { kind: 'repeat', product: product.slug, title: message.title, ruleId: rule?.id, draft: taken });
       } else {
         const made = await api.compose({
           product: product.slug, title: message.title, body: body || undefined, kind: 'directive', priority,
@@ -399,13 +416,16 @@ export function ThreadComposer({
           // The tutorial's own task, and only ever that one. See `scripted`.
           ...(scripted ? { labels: scripted.labels } : {}),
         });
-        onSent(made, { background, ...(background?{draft:{text:[text,spoken].filter(Boolean).join('\n\n'),attachments,priority:prio,when:{runAt:0,repeat:null},dropped:0}}:{}), kind: 'task', product: product.slug, title: message.title, ...(when.runAt ? { runAt: when.runAt } : {}), ...(when.start ? { start: when.start } : {}) });
+        onSent(made, { background, kind: 'task', product: product.slug, title: message.title, draft: taken, ...(when.runAt ? { runAt: when.runAt } : {}), ...(when.start ? { start: when.start } : {}) });
       }
-      if(!background && readComposeDraft().text===text)clearComposeDraft();
     } catch (err) {
-      // The card stays open with every word in it: a send that failed and also
-      // ate what she wrote is two failures, and the second is the expensive one.
-      setError(`Not sent: ${String((err as Error)?.message ?? err)}`);
+      // Every word goes back: a send that failed and also ate what she wrote
+      // is two failures, and the second is the expensive one. With the card
+      // already closed, the caller reopens it on them.
+      if (!background) saveComposeDraft(taken);
+      const said = `Not sent: ${String((err as Error)?.message ?? err)}`;
+      if (!background && onFailed) { onFailed(said, {}); return; }
+      setError(said);
       setSending(false);
       if(background)throw err;
     }
@@ -415,6 +435,16 @@ export function ThreadComposer({
     if (!canSend || !person) return;
     setSending(true);
     setError(null);
+    // Handed over at once, as a task is (sendTask above).
+    const taken = takeComposeDraft();
+    const toMany = extra.length ? [person.id, ...also] : undefined;
+    onSending?.({ kind: 'message', to: person.id, ...(toMany ? { toMany } : {}) });
+    const failed = (said: string) => {
+      saveComposeDraft(taken);
+      if (onFailed) { onFailed(said, { to: person.id, ...(also.length ? { also } : {}) }); return; }
+      setError(said);
+      setSending(false);
+    };
     // THE LEVEL GOES WITH THE WORDS (w-7ba439c883): it decides where the
     // message sits in the inbox it lands in. Only on the first message of a
     // conversation, which is the main process's rule, not this card's.
@@ -425,19 +455,23 @@ export function ThreadComposer({
     // reading of the message (main/message-priority.mjs): a level the sender
     // chose is theirs and is left alone, and a message nobody ranked is still
     // sorted there rather than arriving flat.
-    const res = await api.teamMessage(
-      extra.length ? [person.id, ...also] : person.id,
-      text.trim(),
-      prio ? priorityValueOf(prio) : undefined,
-      attachments.map(({ name, dataBase64, srcPath }) => ({ name, dataBase64, srcPath })),
-    );
-    if (!res.ok) {
-      setError(`Not sent: ${res.error ?? 'the team cloud did not answer.'}`);
-      setSending(false);
+    let res: Awaited<ReturnType<typeof api.teamMessage>>;
+    try {
+      res = await api.teamMessage(
+        toMany ?? person.id,
+        text.trim(),
+        prio ? priorityValueOf(prio) : undefined,
+        attachments.map(({ name, dataBase64, srcPath }) => ({ name, dataBase64, srcPath })),
+      );
+    } catch (err) {
+      failed(`Not sent: ${String((err as Error)?.message ?? err)}`);
       return;
     }
-    onSent(null, { kind: 'message', to: person.id, ...(extra.length ? { toMany: [person.id, ...also] } : {}) });
-    clearComposeDraft();
+    if (!res.ok) {
+      failed(`Not sent: ${res.error ?? 'the team cloud did not answer.'}`);
+      return;
+    }
+    onSent(null, { kind: 'message', to: person.id, draft: taken, ...(toMany ? { toMany } : {}) });
   };
 
   const send = () => (person ? sendMessage() : sendTask());

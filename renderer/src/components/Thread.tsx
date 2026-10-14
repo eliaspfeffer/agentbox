@@ -30,6 +30,7 @@ import { activitySummary, keepActivityKeyLocal } from '../activity-summary';
 import { actWhen, actWords } from '../act-line';
 import { herTurnEnds, herTurnStarts } from '../her-turns';
 import { holdAtBottom } from '../thread-bottom';
+import { onPhone } from '../phone-screen';
 import { typedParts } from '../typed-message';
 import { clock, dayHeading } from '../thread-history';
 import { chatLayout } from '../team/chat-layout';
@@ -188,7 +189,8 @@ export function Thread({ events, omitted = 0, onWhole, onOpenOrigin, onSendNow, 
   // rebuilt every time somebody says something.
   useEffect(() => {
     const box = foot.current?.closest('.focus-scroll') as HTMLElement | null;
-    return holdAtBottom(box);
+    // A phone's Safari does not keep her place when something above changes height.
+    return holdAtBottom(box, { keepPlace: onPhone() });
   }, [landOn]);
 
   // Where the missing middle is: after the opening, which is always kept. Drawn

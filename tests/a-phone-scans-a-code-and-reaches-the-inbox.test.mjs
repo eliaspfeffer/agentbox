@@ -285,7 +285,8 @@ describe('alerts on the phone', () => {
     link.arrivals([{ id: 'w-2', title: 'Pick a name', kind: 'item' }]);
     await wait(60);
     expect(sent).toHaveLength(1);
-    expect(sent[0].body).toMatchObject({ title: 'Agents are ready', body: 'Pick a name', open: 'w-2', count: 3 });
+    // Headed by the thread (tests/a-phone-alert-is-headed-by-the-thread-it-is-about).
+    expect(sent[0].body).toMatchObject({ title: 'Pick a name', body: 'Agents are ready', open: 'w-2', count: 3 });
     // Told once; more items stay quiet until the inbox is seen again...
     link.arrivals([{ id: 'w-3', title: 'Third', kind: 'item' }]);
     await wait(60);

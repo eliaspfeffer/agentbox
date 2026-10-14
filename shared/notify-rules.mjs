@@ -146,3 +146,21 @@ export function banner(waiting) {
     open: lead.kind === 'approval' ? null : (lead.id ?? null),
   };
 }
+
+// THE PHONE'S ALERT IS HEADED BY THE THREAD (2026-10-13). On a phone the
+// banner is read in a stack of others, and she asked for the bold line to be
+// "the specific chat title so I know which thread we're talking about". iOS
+// wraps the body and gives the title a line of its own, so the macOS reason
+// above for keeping a name out of the title does not hold there. The sentence
+// moves under it. An approval names the thread that is asking (`thread`) and
+// what it wants to run; with no thread to name, it is the desktop's words.
+export function phoneBanner(waiting) {
+  const say = banner(waiting);
+  if (!say) return null;
+  const items = waiting.filter(Boolean);
+  const asks = items.filter((i) => i.kind === 'approval');
+  const lead = asks.length ? asks[0] : items[items.length - 1];
+  const name = clip(asks.length ? lead.thread : lead.title, 80);
+  if (!name) return say;
+  return { title: name, body: asks.length ? `Waiting on you: ${say.body}` : say.title, open: say.open };
+}

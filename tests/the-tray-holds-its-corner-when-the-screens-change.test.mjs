@@ -8,7 +8,7 @@
 // she was not looking at. A corner and a gap mean the same thing on any
 // screen, so that is what is remembered now.
 import { describe, expect, it } from 'vitest';
-import { MARGIN, cornerPlace, spotFor } from '../shared/corner-tag.mjs';
+import { EDGE_SLACK, MARGIN, cornerPlace, restingSpot, spotFor } from '../shared/corner-tag.mjs';
 
 const laptop = { x: 0, y: 0, width: 1728, height: 1080 };
 // a 32" to the right of the laptop, as macOS lays them out
@@ -54,5 +54,38 @@ describe('the tag remembers a corner, not a point on the desktop', () => {
   it('says nothing when it has never been parked, so the first run still starts bottom right', () => {
     expect(spotFor(null, size, laptop)).toBe(null);
     expect(spotFor({}, size, laptop)).toBe(null);
+  });
+});
+
+describe('she may park it past the edge', () => {
+  // "I can't seem to put it further to the right. It snaps back into place in
+  // this slot but I often want it a little bit further to the right side of
+  // the screen." The resting rule used to hold the whole tag on screen, so a
+  // drag to the right stopped flush against the edge and sprang back from
+  // anything beyond it.
+  const parkable = (a) => ({
+    x: a.x - EDGE_SLACK, y: a.y - EDGE_SLACK,
+    width: a.width + 2 * EDGE_SLACK, height: a.height + 2 * EDGE_SLACK,
+  });
+
+  it('lets a hard drag to the right hang it off the edge, by the slack and no more', () => {
+    const spot = restingSpot({ x: 5000, y: 900 }, size, [parkable(laptop)]);
+    const past = spot.x + size.width - (laptop.x + laptop.width);
+    expect(past).toBe(EDGE_SLACK);
+  });
+
+  it('keeps that tuck when the screens change, instead of snapping it back', () => {
+    const tucked = { ...spotFor({ corner: 'br', dx: -EDGE_SLACK, dy: MARGIN }, size, laptop), ...size };
+    expect(laptop.x + laptop.width - (tucked.x + tucked.width)).toBe(-EDGE_SLACK);
+    const place = cornerPlace(tucked, laptop);
+    expect(place.dx).toBe(-EDGE_SLACK);
+    const onBig = spotFor(place, size, big);
+    expect(big.x + big.width - (onBig.x + size.width)).toBe(-EDGE_SLACK);
+  });
+
+  it('still never loses it: the slack is a tuck, not a disappearance', () => {
+    const spot = spotFor({ corner: 'br', dx: -9000, dy: -9000 }, size, laptop);
+    expect(laptop.x + laptop.width - (spot.x + size.width)).toBe(-EDGE_SLACK);
+    expect(EDGE_SLACK).toBeLessThan(size.width / 2);
   });
 });

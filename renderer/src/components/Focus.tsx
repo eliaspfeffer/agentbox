@@ -467,7 +467,7 @@ function ArtifactEmbed({ product, path, fallback, open, onOpen }: {
 // not the user's, and it is the part that was unnecessary. `filesFromRuns` stays,
 // because App.tsx still reads it to choose the design a card opens itself on.
 
-export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlot, inlineArtifacts, headerTarget, cornerHeaderTarget, crumbFrom, item, parent, blockedBy, filed = [], runningMode, engineChoice, runningEngine, engineChoices, codexModels, codexModelDefault, session, live, stoppable: stoppableIn, productDir, repoDir, selectedOption, interruptedFrom, onBackToInterrupted, returnedFromSnooze, scheduledUntil, scheduledByAgent, replyOpen, sending, stalled, openDoc, resumeAt, onScrolled, onOpenDoc, onRedeliver, onUnschedule, onClose, onResolve, onPick, onReply, onReplySend, onReplyClose, onDictationQueued, onStop, onRunNow, onPin, onReopen, onSnooze, onReveal, onOpenItem, onApproveFiled, onRejectFiled, closeAsk, onNotice, onHandToAgent, onAddPeople, repeat = null }: {
+export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlot, inlineArtifacts, headerTarget, cornerHeaderTarget, crumbFrom, item, parent, blockedBy, filed = [], runningMode, engineChoice, runningEngine, engineChoices, codexModels, codexModelDefault, session, live, stoppable: stoppableIn, productDir, repoDir, selectedOption, interruptedFrom, onBackToInterrupted, returnedFromSnooze, scheduledUntil, scheduledByAgent, replyOpen, sending, stalled, openDoc, resumeAt, onScrolled, onOpenDoc, onRedeliver, onUnschedule, onClose, onResolve, onPick, onReply, onReplySend, onReplyClose, onDictationQueued, onStop, onRunNow, onPin, onReopen, onSnooze, onReveal, onOpenItem, onApproveFiled, onHereFiled, closeAsk, onNotice, onHandToAgent, onAddPeople, repeat = null }: {
   previewSample?: string;
   /** The repeating task this thread is a run of, drawn in its summary. */
   repeat?: RepeatHandle | null;
@@ -538,10 +538,9 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   // row itself, except that it does not take you off the thread you are
   // reading: that is the whole point of the press being here.
   onApproveFiled?: (item: WorkItem) => void;
-  // AND SAYING NO TO ONE (w-9cf2b43110): the ordinary close, from the row it
-  // is about. A proposal nobody answers brings this thread back a day later,
-  // so there has to be a way to settle one without starting it.
-  onRejectFiled?: (item: WorkItem) => void;
+  // AND DOING IT HERE INSTEAD (w-554834e749): the proposal goes back to this
+  // thread's agent as a message, and its own thread closes.
+  onHereFiled?: (item: WorkItem) => void;
   /**
    * THE QUESTION A CLOSE ASKS when tasks this thread filed are still waiting
    * (w-d2744c6daa, ../close-asks-first.ts). While it is up it stands where the
@@ -660,7 +659,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
     return hit ? rowTitle(hit) : null;
   };
   const approveFiled = (id: string) => { const hit = filed.find((r) => r.id === id); if (hit) onApproveFiled?.(hit.item); };
-  const rejectFiled = (id: string) => { const hit = filed.find((r) => r.id === id); if (hit) onRejectFiled?.(hit.item); };
+  const hereFiled = (id: string) => { const hit = filed.find((r) => r.id === id); if (hit) onHereFiled?.(hit.item); };
   // ONE REASON THERE IS NO REPLY BOX, and it is a box. There was not one. A
   // quiet session is not stuck on anything — it is sitting at its prompt,
   // listening — and a message written to it lands and is worked on, measured
@@ -1302,9 +1301,14 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   // beside it says. It stays thin when the summary folds (w-20292d329f): the
   // crumb still names the thread, and a bar that changed shape every time the
   // summary opened or closed "looks a little weird".
-  const threadName = direct && talkFull ? talkFull : rowTitle(item);
+  // Its name renames it (w-ab3d51dc7d), except a conversation, which is named
+  // for the person in it.
+  const named = direct && talkFull;
+  const threadName = named ? talkFull : rowTitle(item);
+  const rename = named ? undefined
+    : (label: string) => api.threadEdit(item.product, item.id, { label }).then((r) => r.ok);
   const barContent = summaryOffered && crumbFrom
-    ? <ThreadCrumb from={crumbFrom} name={threadName} onBack={onClose} />
+    ? <ThreadCrumb from={crumbFrom} name={threadName} onBack={onClose} onRename={rename} threadKey={`${item.product}/${item.id}`} />
     : <>{backButton}{bandLine}</>;
 
   // ANYTHING ADDED TO THIS ELEMENT RIDES BESIDE THE LITERAL, NEVER INSIDE IT.
@@ -1537,7 +1541,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
               filed={filed.map((r) => ({ ...r, at: r.item.createdAt ?? 0 }))}
               onOpenFiled={openFiled}
               onApproveFiled={onApproveFiled && approveFiled}
-              onRejectFiled={onRejectFiled && rejectFiled}
+              onHereFiled={onHereFiled && hereFiled}
               // REPLY, AND HAND IT TO AN AGENT, both on the message rather than
               // under the conversation (w-560647d4db). Reply takes the same
               // road the review strip already takes into the reply box: write
@@ -1573,7 +1577,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
             label="Filed from this thread"
             onOpen={openFiled}
             onApprove={onApproveFiled && approveFiled}
-            onReject={onRejectFiled && rejectFiled}
+            onHere={onHereFiled && hereFiled}
           />
         )}
 

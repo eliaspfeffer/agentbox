@@ -163,7 +163,7 @@ export function buildTools({ holder } = {}) {
     },
     {
       name: 'create_work_item',
-      description: 'Record something that needs doing, on a product. kind and labels are free text and yours to choose; a question for the founder is a work item with kind "question". Anything you discover but cannot finish now belongs here rather than in a message, because the queue outlives this session and the message does not.',
+      description: 'Record something that needs doing, on a product. kind and labels are free text and yours to choose; a question for the person you work for is a work item with kind "question". ONE JOB IS ONE THREAD: ask how many answers you need rather than how many things you found, because every extra thread is one more thing they must read, rank and either start or close. Twenty findings they would answer in one breath are one thread, and one PR is one thread. Something you discovered but cannot finish usually belongs in the thread you are already on, under what is left to do, and work that can run in parallel goes to subagents inside this thread, not to new threads. When it really is its own job, file it under the thread it came from with parent.',
       schema: {
         product: z.string(),
         title: z.string(),
@@ -171,7 +171,7 @@ export function buildTools({ holder } = {}) {
         kind: z.string().optional(),
         labels: z.array(z.string()).optional(),
         priority: z.number().int().optional().describe('higher goes first; defaults to 0'),
-        parent: z.string().optional().describe('another work item id, for a subtask'),
+        parent: z.string().optional().describe('another work item id: the thread this one came out of. It decides where the filing lands. With a parent it is a proposal, waiting in Later and drawn on that thread with one press, so they answer it where the conversation already is; with none it is a row of its own in their inbox, addressed to them, whatever it says.'),
         runAt: z.number().int().optional().describe('epoch ms before which nothing happens with this item: it cannot be claimed and will not start. Use it when the work genuinely belongs to a later moment. A missed moment is not lost; the item simply becomes available once it passes.'),
       },
       run: ({ product, ...fields }) => json(claims.file(product, fields)),

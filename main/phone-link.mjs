@@ -32,7 +32,7 @@ import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
 import webpush from 'web-push';
-import { banner, shouldSpeak } from '../shared/notify-rules.mjs';
+import { phoneBanner, shouldSpeak } from '../shared/notify-rules.mjs';
 import { createHandler, sameKey } from './serve.mjs';
 import { createRelayClient } from './relay-client.mjs';
 import { Name } from '../shared/product-name.mjs';
@@ -442,7 +442,7 @@ export function createPhoneLink({ file, channels, listeners, dist, files = null,
     if (atDesk()) return seenAll();
     const items = [...unseen.values()];
     if (!shouldSpeak({ spoke, spokeAsk, waiting: items })) return;
-    const say = banner(items);
+    const say = phoneBanner(items);
     if (!say) return;
     spoke = true;
     if (items.some((i) => i.kind === 'approval')) spokeAsk = true;

@@ -7,7 +7,7 @@
 // The build puts main/phone-sw.js after this, so alerts and their taps work
 // exactly as they do on the Wi-Fi.
 import { relayIds, relayKeys } from '../../shared/relay-crypto.mjs';
-import { tunnelFetch } from './tunnel.mjs';
+import { tunnelFetch, withPatience } from './tunnel.mjs';
 import { readKey } from './store.mjs';
 
 const OWN = new Set(['/relay-sw.js', '/phone-icon.png', '/apple-touch-icon.png', '/favicon.ico']);
@@ -36,7 +36,11 @@ self.addEventListener('fetch', (event) => {
     const c = await context();
     // No key yet: the relay's own first page, which takes it from the address.
     if (!c) return fetch('/?boot=1');
-    const res = await tunnelFetch(event.request, c);
+    // Opening the app, from an alert above all, waits a little for a computer
+    // that is reconnecting rather than showing "not connected" on the first miss.
+    const res = event.request.mode === 'navigate'
+      ? await withPatience(() => tunnelFetch(event.request, c))
+      : await tunnelFetch(event.request, c);
     // Turned away by the Mac: the key it holds is not this one (a new code was
     // scanned, or the key was reset). The first page sorts out which.
     if (event.request.mode === 'navigate' && res.status === 400) return fetch('/?boot=stale');

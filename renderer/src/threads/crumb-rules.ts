@@ -13,6 +13,15 @@ export const CRUMB_NAME_MAX = 59;
 
 const SMALL = new Set(['a', 'an', 'the', 'for', 'to', 'of', 'on', 'in', 'at', 'and', 'or', 'but', 'so', 'by', 'with', 'from', 'before', 'after', 'until', 'it', 'as', 'is']);
 
+/** What a finished rename sends: the new name, on one line and trimmed, or
+ *  null when there is nothing to send. A blank box puts the old name back
+ *  rather than leave a row with none (w-ab3d51dc7d). */
+export function renameTo(draft: string, was: string): string | null {
+  const name = (draft ?? '').replace(/\s+/g, ' ').trim();
+  if (!name || name === (was ?? '').replace(/\s+/g, ' ').trim()) return null;
+  return name;
+}
+
 /** The thread's name as the bar shows it. */
 export function crumbName(title: string, max: number = CRUMB_NAME_MAX): string {
   const name = (title ?? '').replace(/\s+/g, ' ').trim();

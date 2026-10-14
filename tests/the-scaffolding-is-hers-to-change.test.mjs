@@ -188,14 +188,19 @@ describe('the folders a worker may touch', () => {
 // side may leave the fence comment where a session can read it.
 // THE SWITCH IS GONE (w-5737fe67cf, 2026-09-23): the rule is always on, and a
 // config left over from when it could be turned off does not take it out.
+// WHAT THE RULE SAYS IS NO LONGER PINNED HERE (w-31b2eb82ba, 2026-10-11). It
+// was rewritten after four threads came off one QA campaign, and its wording,
+// its length and the words the filing tool says beside it live together in
+// tests/one-job-is-one-thread.test.mjs, with the measurement. This file is
+// about the switch being gone, so it checks the rule ARRIVES and leaves what
+// it says to the test that owns it.
 describe('the subagent rule is always on', () => {
-  const THE_RULE = 'Split work into separate work items';
+  const THE_RULE = '## One job is one thread';
 
   it('reaches a session that has never seen the switch', () => {
     const s = makeSupervisor();
     const brief = s.buildBrief(item(), product(), { continuation: false });
     expect(brief).toContain(THE_RULE);
-    expect(brief).toContain('Twenty issues off one call are twenty rows');
     expect(brief).not.toContain('<!-- subagent-rule');
   });
 
@@ -203,7 +208,6 @@ describe('the subagent rule is always on', () => {
     const s = makeSupervisor({ subagentRule: false });
     const brief = s.buildBrief(item(), product(), { continuation: false });
     expect(brief).toContain(THE_RULE);
-    expect(brief).toContain('One row, or several');
     expect(brief).not.toContain('<!-- subagent-rule');
   });
 
@@ -214,16 +218,5 @@ describe('the subagent rule is always on', () => {
       expect(brief).toContain('## Doing the work');
       expect(brief).toContain('## Honesty');
     }
-  });
-
-  // She asked for it short "because tokens are scarce", and the brief it sits
-  // in is itself being cut down. A rule that grows past a paragraph is a rule
-  // that has stopped being the thing she asked for.
-  it('stays short enough to be worth its tokens', () => {
-    const brief = makeSupervisor().buildBrief(item(), product(), { continuation: false });
-    const from = brief.indexOf('## One row, or several');
-    const section = brief.slice(from, brief.indexOf('\n## ', from + 1));
-    expect(section.length).toBeLessThan(600);
-    expect(section.length).toBeGreaterThan(200);
   });
 });

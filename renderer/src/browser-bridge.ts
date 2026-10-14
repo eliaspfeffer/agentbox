@@ -86,7 +86,8 @@ function takeToken(): string | null {
   }
   if (fromUrl) {
     url.searchParams.delete('token');
-    history.replaceState(null, '', url.toString());
+    // The entry's own mark stays: on a phone it may be the floor (./phone-screen).
+    history.replaceState(history.state, '', url.toString());
     // Kept for the life of the tab only. A reload without the url is a reload
     // that cannot talk, and sessionStorage is what makes ⌘R survivable while
     // still being gone when the tab closes.

@@ -454,6 +454,9 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
       // while fixes landed underneath it, and a boot-time check cannot see
       // that. See main/staleness.mjs.
       restartNeeded: restartNeeded(supervisor.appDir),
+      // WHERE THREADS RUN, for the cloud button beside the filters
+      // (renderer/src/cloud-menu.ts). `setUp` false draws no button at all.
+      cloud: supervisor.cloudStatus(),
       // HER RATE LIMIT, WHICH IS WHAT ACTUALLY CAPS THE FLEET. Null until the
       // first reading lands, and the corner draws nothing at all until then
       // rather than a pill full of dashes.

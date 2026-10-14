@@ -425,3 +425,9 @@ body:has([data-sorting]) .hint-plate { display: none !important; }
 .saved-filters button {padding:6px;border:1px solid var(--line);background:transparent;color:var(--text-dim);font:inherit;cursor:pointer;}
 .saved-filter button:first-child {flex:1;text-align:left;}
 @media(max-width:700px){.th-right {flex-wrap:wrap;justify-content:flex-end;}}
+/* WHERE THREADS RUN: the cloud button and its menu (threads/Pages.tsx). */
+.th-cloud.count { width: auto; display: inline-flex; align-items: center; gap: 7px; padding: 0 10px 0 9px; font: inherit; font-size: 13px; }
+.th-cloud.count b { font-weight: 400; color: var(--text); font-variant-numeric: tabular-nums; }
+.th-cloud-pop .opts > button.picked, .th-cloud-pop .opts > button.picked:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--text); }
+.th-cloud-pop .th-cloud-note { padding-top: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-faint); }
+.th-cloud-pop .th-cloud-use { font-size: 13px; color: var(--text); }

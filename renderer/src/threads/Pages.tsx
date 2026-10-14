@@ -26,6 +26,7 @@ import { PinMark } from './ThreadMenu';
 import { cardClickIntent, cardsUnder, clickMarks, marqueeBox, marqueeMarks, type Box } from './board-select';
 import { shownToPeople } from '../../../shared/thread-cards.mjs';
 import { api } from '../api';
+import { CLOUD_MODES, cloudButtonCount, cloudMonthLine, type CloudMode, type CloudStatus } from '../cloud-menu';
 import './pages.css';
 
 // Before the frame is drawn in the app; a plain effect where there is no
@@ -106,10 +107,12 @@ function useOutside(open: boolean, close: () => void) {
 export type PeoplePick = { everyone: Person[]; picked: string[]; me: string | null; onPick: (picked: string[]) => void };
 
 /** Search, New thread and the Display icon, at the right of the Inbox and Team headers. */
-export function HeaderActions({ page, display, onDisplay, products, items, onSearch, onCompose, onImport, shown, total, tab, people }: {
+export function HeaderActions({ page, display, onDisplay, products, items, onSearch, onCompose, onImport, shown, total, tab, people, cloud, onCloudMode }: {
   page: PageId; display: Display; onDisplay: (d: Display) => void; products: Product[]; items?: WorkItem[];
   onSearch: () => void; onCompose: () => void; onImport?: () => void; shown?: number; total?: number; tab?: string;
   people?: PeoplePick;
+  /** Where threads run; no button at all on a Mac not set up for the cloud. */
+  cloud?: CloudStatus | null; onCloudMode?: (mode: CloudMode) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useOutside(open, () => setOpen(false));
@@ -128,6 +131,7 @@ export function HeaderActions({ page, display, onDisplay, products, items, onSea
     <button type="button" className="th-search" data-hint="search" data-hint-text="span" onClick={onSearch} title="Search threads (/)" aria-label="Search threads"><SearchGlyph /><span>Search</span></button>
     {onImport && <button type="button" className="th-new" onClick={onImport} title="Import existing Codex and Claude chats">Add chat</button>}
     <button type="button" className="th-new" data-hint="new-task" onClick={onCompose} title="New thread (N)"><PenIcon />New thread</button>
+    {cloud?.setUp && <CloudButton cloud={cloud} onMode={onCloudMode} />}
     <span ref={(el) => { ref.current = el; }} style={{ position: 'relative', display: 'inline-flex' }}>
       <button type="button" className={`th-disp${worn ? ' faces' : ''}${open ? ' open' : ''}`}
         aria-label={whose ? `View and filters, showing ${whose}` : 'View and filters'} title={whose ? `${whose} · View and filters` : 'View and filters'}
@@ -146,6 +150,37 @@ export function HeaderActions({ page, display, onDisplay, products, items, onSea
 const toggle = <T,>(list: T[], value: T) => (list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
 /** View, sort, and the filters: priority, project and when it was updated. */
+// WHERE THREADS RUN (approved 2026-10-13): a square button beside the filters
+// button, the same shape, wearing how many run in the cloud while any do. Its
+// menu is built like the filters menu: one line of three choices with the
+// picked one in orange, one line saying what it does, then this month's use
+// (renderer/src/cloud-menu.ts, tests/the-cloud-button-chooses-where-threads-run).
+const CloudIcon = () => <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /></svg>;
+
+function CloudButton({ cloud, onMode }: { cloud: CloudStatus; onMode?: (mode: CloudMode) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useOutside(open, () => setOpen(false));
+  const count = cloudButtonCount(cloud);
+  const picked = CLOUD_MODES.find((m) => m.id === cloud.mode) ?? CLOUD_MODES[1];
+  return <span ref={(el) => { ref.current = el; }} style={{ position: 'relative', display: 'inline-flex' }}>
+    <button type="button" className={`th-disp th-cloud${count ? ' count' : ''}${open ? ' open' : ''}`}
+      aria-label={count ? `Cloud, ${count} running there` : 'Cloud'} title="Where threads run"
+      onClick={() => setOpen((o) => !o)}>
+      <CloudIcon />{count && <b>{count}</b>}
+    </button>
+    {open && <div className="th-pop th-cloud-pop" role="dialog" aria-label="Where threads run">
+      <div className="line"><span className="lab">Cloud</span><span className="opts">
+        {CLOUD_MODES.map((m) => <button type="button" key={m.id} className={m.id === cloud.mode ? 'on picked' : ''} aria-pressed={m.id === cloud.mode} onClick={() => onMode?.(m.id)}>{m.label}</button>)}
+      </span></div>
+      <div className="line th-cloud-note"><span className="lab" /><span>{picked.note}</span></div>
+      <div className="rule" />
+      <div className="line"><span className="lab">This month</span><span className="th-cloud-use">{cloudMonthLine(cloud.month)}</span></div>
+      <div className="rule" />
+      <div className="foot"><span>{cloud.running ? `${cloud.running} running in the cloud now` : 'Nothing running in the cloud now'}</span></div>
+    </div>}
+  </span>;
+}
+
 export function DisplayMenu({ page, display, onDisplay, products, items = [], shown, total, tab, people }: {
   page: PageId; display: Display; onDisplay: (d: Display) => void; products: Product[];
   /** The tab the page is on, which Done's own order depends on. */

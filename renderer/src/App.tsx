@@ -23,7 +23,7 @@ import { readySkin, swapLook } from './look-switch';
 import type { AnswerMode, Approval, PermissionMode, Product, RepeatRule, RepeatShape, Snapshot, ThreadCard, ThreadStateWord, View, WorkItem } from './types';
 import { api } from './api';
 import { setClaudeModels } from './models';
-import { advanceAfter, nextAfterDictation, advanceLandsHere, nextAfterAdvance, type Advance } from './advance';
+import { advanceAfter, nextAfterDictation, advanceLandsHere, replyMovesOn, nextAfterAdvance, type Advance } from './advance';
 import { freshCopy, staysOnTheTask, stillFollowing, wayOut, type Followed } from './stay-with-a-command';
 import { List } from './components/List';
 import { isTroubleRow } from './trouble-row';
@@ -42,6 +42,7 @@ import { documentCandidates } from './message-artifacts';
 import { filesFromRuns } from './run-files';
 import { Rail } from './components/Rail';
 import { ThreadComposer } from './threads/ThreadComposer';
+import { joinNames } from './threads/composer-rules';
 import { NewProject } from './components/NewProject';
 import { shortFolder } from './project-folder';
 import { ImportAgents } from './components/ImportAgents';
@@ -70,7 +71,8 @@ import { approvalReads } from './approval-card';
 // The new task card's two sentences: why it will not take one, and where the
 // one it took went. Only the second is raised from here, because by the time
 // there is anything to confirm the card has closed.
-import { sentLine } from './compose-says';
+import { sentLine, sendingLine } from './compose-says';
+import { wearJustMade, type JustMade } from './just-made';
 import { belongsInInbox, belongsInProgress, belongsOnTheRail, byRunningOrder, clipToSentence, hiddenUntil, isProposal, notStarted, parkedByAgent, replyClearsSchedule, rowTitle, statusForReply, stoppable, threadsOwedAnAnswer, waitsInLater, waitsThatCanEnd, withdrawReply } from './list-rules';
 import { agentKey, agentRow, asksSomething, byRecency, listed as agentIsListed, onTheRail, railLine, reachesInbox, progressAfterReply, replyReaches, whereItRuns } from '../../shared/agents.mjs';
 import { opensATextField } from './keys';
@@ -127,7 +129,7 @@ import { withOlder } from './older-threads';
 import { NO_FILTER, filterBox, filterMenu, filterTags, isFiltering, toggleFilter, clearFilterPart, type BoxFilter as BoxFilterState, type FilterPart, type Harness } from './box-filter';
 import { BoxFilter } from './components/BoxFilter';
 import { itemPriority, moveProduct, placeScore, placedScore } from '../../shared/rank.mjs';
-import { threadsMade, approvableFiled } from './threads-made';
+import { threadsMade, approvableFiled, doItHereWrites } from './threads-made';
 import { waitingCounts } from './threads-made';
 import { closeAsk, KEEP_OPEN } from './close-asks-first';
 import { ChatAgentsContext, type ChatAgentsValue } from './team/ChatAgents';
@@ -421,6 +423,10 @@ export default function App() {
   // <html>; this is the same answer in a form the JSX below can ask.
   const [taskShape] = useState<TaskShape>(() => resolveTaskShape(localStorage.getItem(TASK_SHAPE_KEY)));
   const [modal, setModal] = useState<Modal>(null);
+  // Read by a send that lands after its card has closed, which must not close
+  // or cover whatever has been opened since.
+  const modalNow = useRef<Modal>(null);
+  modalNow.current = modal;
   // A hint promises a key, so it may not be drawn where the key is swallowed.
   // A modal takes the keyboard whole, so nothing underneath one may advertise
   // anything, and the hint the pointer was already on has to go with it: the
@@ -1529,10 +1535,22 @@ export default function App() {
   // A snapshot held back by a drag is asked for again shortly, so a reply or a
   // state change that arrived mid-drag is not left waiting for the next poll.
   const refreshAgain = useRef<() => void>(() => {});
+  // AND THREADS JUST MADE, which the computer has handed back and a snapshot
+  // asked for before the write may not carry yet (./just-made).
+  const justMade = useRef<JustMade[]>([]);
   const refresh = useCallback(async () => {
     const next = await api.snapshot();
     if (isCarrying()) { setTimeout(() => refreshAgain.current(), 300); return; }
-    setSnap(next && { ...next, items: overlayPins(overlayPlaces(next.items, unsavedPlaces.current), unsavedPins.current) });
+    const worn = next ? wearJustMade(next.items, justMade.current, Date.now()) : null;
+    if (worn) justMade.current = worn.held;
+    setSnap(next && { ...next, items: overlayPins(overlayPlaces(worn!.items, unsavedPlaces.current), unsavedPins.current) });
+  }, []);
+  // A new thread in the list the moment the computer says it is written, a
+  // whole fetch sooner than the snapshot would bring it (w-461fbd8d2d).
+  const showJustMade = useCallback((made: WorkItem, name?: string) => {
+    const productName = made.productName ?? name;
+    justMade.current = [...justMade.current, { item: { ...made, ...(productName ? { productName } : {}) }, at: Date.now() }];
+    setSnap((s) => s && { ...s, items: wearJustMade(s.items, justMade.current, Date.now()).items });
   }, []);
   refreshAgain.current = () => { void refresh(); };
   const refreshRef = useRef<() => Promise<void>>();
@@ -1684,6 +1702,8 @@ export default function App() {
   // which projects are shared. Null when nobody is signed in, and then every
   // list below is exactly the single-person app's.
   const team = useMemo(() => teamView(snap?.team, snap?.products ?? []), [snap?.team, snap?.products]);
+  // "Maya", "Maya and Jun": who a message from the new thread card went to.
+  const firstNames = (ids: string[]) => joinNames(ids.map((id) => team?.byId.get(id)?.name?.split(/\s+/)[0]).filter(Boolean) as string[]);
   // A SHARED ROW IS IN ONE INBOX AT A TIME (shared/team-rules.mjs). A row given
   // to a person is theirs while it is open, whatever its kind, because a task a
   // teammate handed you is waiting on you the moment it arrives. Null means
@@ -2842,10 +2862,12 @@ export default function App() {
     prevAskIds.current = askIds;
 
     const arrivals = [
-      ...fresh.map((i) => ({ id: i.id, title: i.title, product: i.product, productName: i.productName, kind: 'item' })),
+      ...fresh.map((i) => ({ id: i.id, title: rowTitle(i), product: i.product, productName: i.productName, kind: 'item' })),
       ...freshAsks.map((a) => ({
         id: a.id,
         title: String((a.input as any)?.description ?? (a.input as any)?.command ?? a.tool ?? 'a command'),
+        // The thread that is asking, which heads the phone's alert.
+        thread: (() => { const of = a.item ? snap.items.find((i) => i.id === a.item) : null; return of ? rowTitle(of) : null; })(),
         product: a.product,
         productName: snap.products.find((p) => p.slug === a.product)?.name ?? a.product,
         kind: 'approval',
@@ -3371,6 +3393,11 @@ export default function App() {
     setFocused(null);
   }, [noteAdvance]);
 
+  // Whether a reply from inside this thread moves her on to the next (./advance).
+  const movesOn = useCallback((item: WorkItem) => replyMovesOn({
+    view, onBoard, index: shownInbox.findIndex((i) => i.id === item.id), inboxSize: shownInbox.length,
+  }), [view, onBoard, shownInbox]);
+
   // Every resolving action goes through here: the UI advances instantly, the
   // write happens after the grace window (unless Z cancels it first).
   const deferCommit = useCallback(async (
@@ -3573,6 +3600,25 @@ export default function App() {
       await markDone(item);
     }
   }, [refresh, showToast, markDone]);
+
+  // DO IT HERE (w-554834e749): the proposal goes back to the thread that filed
+  // it, as a message from her, and its own thread closes. "Have the agent not
+  // make that a different thread and just do it in our thread." `stay`, for
+  // the same reason Approve has it: she is reading the parent.
+  //
+  // Z inside the window takes back both. After it, Z reopens the proposal and
+  // says plainly that the message has already gone, because a message handed to
+  // a running agent cannot be taken back (see answerWith).
+  const doItHere = useCallback(async (child: WorkItem) => {
+    const parent = items.find((i) => i.id === child.parent && i.product === child.product) ?? null;
+    const writes = doItHereWrites(child, parent);
+    if (!writes || !parent) return;
+    const undid = [{ product: child.product, id: child.id, words: 'Undid doing it here' }];
+    await deferCommit(child, async () => {
+      for (const w of writes) await api.answer(w);
+      pushUndo({ label: `Back as its own thread: ${clipToSentence(child.title, TOAST_TITLE)}. The message already went.`, undoes: `reopen “${clipToSentence(child.title, TOAST_TITLE)}”`, brings: child, undid, run: async () => { await api.answer({ product: child.product, id: child.id, status: 'open' }); } });
+    }, `Doing it in this thread: ${clipToSentence(child.title, TOAST_TITLE)}`, undefined, true, { product: parent.product, id: parent.id }, undid);
+  }, [items, deferCommit, pushUndo]);
 
   // THE ANSWER TO WHAT A CLOSE ASKED (w-d2744c6daa, ./close-asks-first.ts).
   // Deciding each one keeps the thread open and brings the list into view;
@@ -3831,20 +3877,6 @@ export default function App() {
     // A message to a person is held in `sending` like one to a running agent;
     // the written copy replaces it (item-thread.ts) and Z takes it off.
     const talking = isDirect(snap?.products.find((p) => p.slug === item.product));
-    const mine = { product: item.product, id: item.id, at: Date.now(), text, held: true };
-    setSending((q) => [...q, mine]);
-    const restore = (failed=false): Restored => {
-      setSending((q) => q.filter((s) => s !== mine));
-      if(failed){restoreFailedDraft(item,sent?.words ?? text,sent?.attachments ?? []);return {item};}
-      return restoreDraft(item, sent?.words ?? text, sent?.attachments ?? []) ? { item } : null;
-    };
-    // A REPLY IS A CLAIM ON NOW, so it cancels a schedule rather than queueing
-    // behind it. The rule and the reason are in list-rules; what is here is the
-    // write and the way back. The old moment rides on the undo, so answering
-    // something and still wanting it to run Monday at 6am costs one Z.
-    const wasScheduled = replyClearsSchedule(item, Date.now());
-    const priorRunAt = item.runAt ?? 0;
-    const priorSnooze = item.snoozedUntil ?? 0;
     // AND A COMMAND KEEPS HER ON THE ROW IT IS ABOUT TO ANSWER.Every other
     // reply hands work to somebody else and takes seconds to hours; this one
     // prints a table in four seconds and the table is the entire reason she
@@ -3857,7 +3889,29 @@ export default function App() {
     // up.
     // A REPLY IN A CONVERSATION STAYS IN THE CONVERSATION (2026-10-01):
     // sending a message to a person must not jump to another page.
-    const stay = staysOnTheTask(item, text, engine) || talking || !!pick;
+    const stay = staysOnTheTask(item, text, engine) || talking || !!pick || !movesOn(item);
+    // Held, and so saying "press Z to undo", only where it really is held: a
+    // phone writes it at once and has no Z (./phone-holds).
+    const mine = { product: item.product, id: item.id, at: Date.now(), text, held: holdsReplies(onPhone()) };
+    // ANY REPLY THAT KEEPS HER ON THE THREAD IS DRAWN AT ONCE (w-461fbd8d2d),
+    // not only one to a person. Since a reply to a finished agent stopped
+    // moving her on, it closed the box and drew nothing until the write landed:
+    // "for a good half second ... I feel like only when the agent starts
+    // thinking does it actually show my message." A reply that moves her on
+    // leaves no thread on the screen to draw it in.
+    if (stay) setSending((q) => [...q, mine]);
+    const restore = (failed=false): Restored => {
+      setSending((q) => q.filter((s) => s !== mine));
+      if(failed){restoreFailedDraft(item,sent?.words ?? text,sent?.attachments ?? []);return {item};}
+      return restoreDraft(item, sent?.words ?? text, sent?.attachments ?? []) ? { item } : null;
+    };
+    // A REPLY IS A CLAIM ON NOW, so it cancels a schedule rather than queueing
+    // behind it. The rule and the reason are in list-rules; what is here is the
+    // write and the way back. The old moment rides on the undo, so answering
+    // something and still wanting it to run Monday at 6am costs one Z.
+    const wasScheduled = replyClearsSchedule(item, Date.now());
+    const priorRunAt = item.runAt ?? 0;
+    const priorSnooze = item.snoozedUntil ?? 0;
     if (stay && !pick?.background) setFollowing({ product: item.product, id: item.id });
     const undid = [{ product: item.product, id: item.id, words: 'Undid your reply' }];
     await deferCommit(item, async () => {
@@ -3893,7 +3947,7 @@ export default function App() {
         putBack(error);
         return;
       }
-      if (talking) setTimeout(() => setSending((q) => q.filter((s) => s !== mine)), LANDED_MS);
+      if (stay) setTimeout(() => setSending((q) => q.filter((s) => s !== mine)), LANDED_MS);
       if (wasScheduled) {
         if (priorRunAt > Date.now()) await api.schedule({ product: item.product, id: item.id, runAt: 0 });
         if (priorSnooze > Date.now()) await api.snooze({ product: item.product, id: item.id, snoozedUntil: 0 });
@@ -3916,7 +3970,7 @@ export default function App() {
         setFollowing(null);
       } });
     }, talking ? 'Sent' : `Sent → ${item.productName}`, restore, stay, { product: item.product, id: item.id }, undid, !!pick?.background, holdsReplies(onPhone()) ? UNDO_GRACE_MS : 0);
-  }, [deferCommit, snap?.supervisor.running, snap?.products, showToast, refresh, markSeen, pushUndo, startChatAgents, fire]);
+  }, [deferCommit, snap?.supervisor.running, snap?.products, showToast, refresh, markSeen, pushUndo, startChatAgents, fire, movesOn]);
 
   /* ------------------------ answering one of her agents -------------------- */
   // THE ONE THING AGENTBOX SAYS OUT LOUD TO THE REST OF HER MACHINE. The reply goes
@@ -4021,8 +4075,8 @@ export default function App() {
         // undone into her inbox instead of back into Done.
         await api.answer({ product: item.product, id: item.id, ...withdrawReply(item.status) });
       } });
-    }, `Option ${option.n} → ${item.productName}`, undefined, undefined, { product: item.product, id: item.id }, undid);
-  }, [deferCommit, pushUndo, markDone]);
+    }, `Option ${option.n} → ${item.productName}`, undefined, !movesOn(item), { product: item.product, id: item.id }, undid);
+  }, [deferCommit, pushUndo, markDone, movesOn]);
 
   /* ------------------------ the task she just wrote ------------------------ */
   // THE TASK SHE JUST MADE IS WHAT Z TAKES BACK.
@@ -5573,6 +5627,8 @@ export default function App() {
               total={(mineShown ? shownBox.length : 0) + theirRows.length}
               tab={view}
               people={peoplePick}
+              cloud={snap.cloud ?? null}
+              onCloudMode={(mode) => { void api.setWorkspaceSetting({ key: 'cloudRuns', value: mode }); }}
             />
           )}
           {!workspaceNavigation && !focused && !settingsOpen && !inPractice && (
@@ -5850,13 +5906,11 @@ export default function App() {
                      from: the complaint was the trip, so a press that moved you
                      somewhere else would be the same trip with fewer steps. */
                   onApproveFiled={(i) => resolve(i, { stay: true })}
-                  /* AND SAYING NO IS THE CLOSE, NOT A SECOND KIND OF WRITE
-                     (w-9cf2b43110). "There is no decline" below still holds:
-                     this is Close This Task, reachable from the row it is
-                     about, so a rejected proposal is closed exactly as it
-                     would be from its own row — and a closed one is no longer
-                     a proposal, so the thread stops coming back. */
-                  onRejectFiled={(i) => markDone(i, { stay: true })}
+                  /* AND DOING IT IN THIS THREAD INSTEAD (w-554834e749). The No
+                     that stood beside these is gone: "ignoring it is
+                     basically rejecting it". A proposal is still closed from
+                     its own row like any thread. */
+                  onHereFiled={(i) => doItHere(i)}
                   // The question a close asks while tasks still wait (w-d2744c6daa).
                   closeAsk={(() => {
                     const asked = closeAskOn === keyOf(focused) ? closeAsk(waitingFiled(focused).length) : null;
@@ -6156,10 +6210,45 @@ export default function App() {
              project just made is the one the thread is addressed to. */
           onNewProject={() => setNewProject(true)}
           onClose={() => { setModal(null); setComposeInitial(null); }}
+          // THE CARD CLOSES ON SEND, NOT ON THE ANSWER (w-461fbd8d2d). On the
+          // web and on a phone the answer is a round trip away, and for that
+          // long the card sat there as if Send had not worked. It goes now, the
+          // toast says where the thread is going, and the tab moves to where
+          // it will land, so the row arrives in front of her. The tutorial
+          // keeps the old order: its beat moves on from the card closing.
+          onSending={walkCard ? undefined : (how) => {
+            setModal(null);
+            setComposeInitial(null);
+            const later = (how.runAt != null && how.runAt > Date.now()) || how.start === 'later';
+            const to = how.kind === 'message'
+              ? firstNames(how.toMany ?? [how.to ?? ''])
+              : snap.products.find((x) => x.slug === how.product)?.name ?? how.product ?? '';
+            showToast(sendingLine({ kind: how.kind, to, held: how.start === 'later', scheduled: !!how.runAt }));
+            // SHOW WHERE IT WENT (2026-10-01: a new thread looked as if it
+            // was never made, since it was not in the inbox). A thread sent to
+            // an agent is not waiting on her, so it never lands in Needs you.
+            // On the Inbox the tab moves to where it did land, Running or
+            // Scheduled, so she sees the row arrive instead of an unchanged page.
+            if (how.kind === 'task' && workspaceNavigation && !teamOpen && !focused && (['inbox', 'progress', 'snoozed'] as View[]).includes(view)) {
+              setView(how.start === 'manual' ? 'inbox' : later ? 'snoozed' : 'progress');
+              setSelected(0);
+              setMultiSel(new Set());
+            }
+          }}
+          // A send that did not stand puts the card back with the words in it,
+          // unless something else has been opened since; then the toast says
+          // where the words are.
+          onFailed={(said, back) => {
+            if (modalNow.current) { showToast(`${said} Your words are in the new thread card.`); return; }
+            setComposeInitial(back.to ? back : null);
+            setModal('compose');
+            showToast(said);
+          }}
           onSent={async (made, how) => {
-            if (!how?.background) setComposeInitial(null);
+            // Everywhere but the tutorial the card closed on Send (onSending),
+            // and closing anything here would close what she opened since.
+            if (!how?.background) { if (walkCard) { setComposeInitial(null); setModal(null); } }
             const sent = how?.draft ?? readComposeDraft();
-            if (!how?.background) setModal(null);
             // THE TUTORIAL'S OWN TASK, AND IT LEAVES NO TOAST AND NO UNDO.
             // The walk goes on from here with the ringed sentence beside the
             // row, and an undo key nobody has been taught yet, over a walk it
@@ -6171,14 +6260,14 @@ export default function App() {
               return;
             }
             if (how?.kind === 'message') {
-              const firsts = (how.toMany ?? [how.to ?? '']).map((id) => team?.byId.get(id)?.name?.split(/\s+/)[0]).filter(Boolean) as string[];
-              const said = firsts.length > 1 ? `${firsts.slice(0, -1).join(', ')} and ${firsts[firsts.length - 1]}` : firsts[0];
+              const said = firstNames(how.toMany ?? [how.to ?? '']);
               showToast(said ? `Sent to ${said}` : 'Message sent');
               await refresh();
               return;
             }
             const slug = how?.product ?? made?.product ?? '';
             const to = snap.products.find((x) => x.slug === slug)?.name;
+            if (made?.id) showJustMade(made, to);
             if (how?.kind === 'repeat') {
               if (how.ruleId) {
                 noteNewTask(`Repeating task canceled: ${clipToSentence(how.title ?? '', TOAST_TITLE)}`, 'cancel that repeating task', sent, async () => {
@@ -6201,16 +6290,6 @@ export default function App() {
               held: how?.start === 'later',
               todo: how?.start === 'manual',
             }), made?.id ? { product: made.product, id: made.id } : undefined);
-            // SHOW WHERE IT WENT (2026-10-01: a new thread looked as if it
-            // was never made, since it was not in the inbox). A thread sent to an agent is not
-            // waiting on her, so it never lands in Needs you. On the Inbox the
-            // tab moves to where it did land, Running or Scheduled, so she
-            // sees the row arrive instead of an unchanged page.
-            if (!how?.background && workspaceNavigation && !teamOpen && !focused && (['inbox', 'progress', 'snoozed'] as View[]).includes(view)) {
-              setView(how?.start === 'manual' ? 'inbox' : (how?.runAt && how.runAt > Date.now()) || how?.start === 'later' ? 'snoozed' : 'progress');
-              setSelected(0);
-              setMultiSel(new Set());
-            }
             await refresh();
           }}
         />

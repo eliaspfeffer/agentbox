@@ -204,8 +204,21 @@
   :root:root:root .th-table .row .has-act .th-when { visibility: visible; }
   :root:root:root .row .subject { text-decoration: none; }
 
-  /* The board has four columns; a phone shows them one under another. */
-  :root:root:root .th-board { grid-template-columns: minmax(0, 1fr); padding: 8px 12px 24px; width: auto; }
+  /* THE BOARD SWIPES SIDEWAYS, A COLUMN AT A TIME. Stacked one under another,
+     a 41-card first column buried the other three ("just shows one row and
+     can't scroll to the side to see more", 2026-10-13). Each column is a bit
+     narrower than the screen so the next one shows at the edge, a swipe snaps
+     to a column, and each column scrolls on its own. Its heading scrolls with
+     it and paints nothing: a sticky heading needed a fill, which drew a dark
+     band over the page's warm background ("this weird black background on
+     Needs You and In Progress"). */
+  :root:root:root .list-pane:has(> .th-board-wrap) { overflow: hidden; }
+  :root:root:root .th-board-wrap { height: 100%; min-height: 0; }
+  :root:root:root .th-board { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 86%; gap: 12px; align-items: stretch; height: 100%; width: auto; min-width: 0; padding: 0 12px; scroll-padding: 0 12px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+  :root:root:root .th-board::-webkit-scrollbar { display: none; }
+  :root:root:root .th-col { overflow-y: auto; min-height: 0; scroll-snap-align: start; overscroll-behavior-y: contain; padding-bottom: calc(88px + var(--phone-foot)); scrollbar-width: none; }
+  :root:root:root .th-col::-webkit-scrollbar { display: none; }
+  :root:root:root .th-col-h { padding-top: 8px; }
 
   /* An open task: the words take the width, the right-hand rail goes. */
   :root:root:root .focus-pane { --ts-rail-w: 0px; --ts-panel-w: 0px; --read-w: 100%; }
@@ -330,8 +343,26 @@
   /* The hint plates teach keys a phone does not have. */
   :root:root:root .hint-plate, :root:root:root .row-keys, :root:root:root .dock-card kbd { display: none !important; }
 
-  /* The toast sits above the bottom bar, across the width. */
-  :root:root:root .toast { left: 12px; right: 12px; width: auto; bottom: calc(var(--phone-tabs, 0px) + var(--phone-foot) + 12px); }
+  /* THE TOAST IS ONE SLIM LINE UNDER THE TOP BAR (2026-10-13). At the foot it
+     sat on the reply box and the tabs, the two things a phone is pressed on
+     most, and at two lines with drawn keys it was "rather large" for a phone
+     with no keyboard. Up here it covers only the first line of what is under
+     the bar. One line: where it went, then Undo as a word. The task's title
+     and the O key go; tapping the line still opens the task. */
+  :root:root:root .toast {
+    left: 12px; right: 12px; width: auto; max-width: none;
+    top: calc(env(safe-area-inset-top, 0px) + var(--phone-top, 56px) + 8px); bottom: auto;
+    display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 6px 0 14px;
+  }
+  :root:root:root .toast .toast-title { display: none; }
+  :root:root:root .toast .toast-line { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text); }
+  :root:root:root .toast .toast-keys { gap: 0; }
+  :root:root:root .toast .toast-key:not(.toast-undo) { display: none; }
+  :root:root:root .toast .toast-key kbd { display: none; }
+  :root:root:root .toast .toast-undo { height: 40px; padding: 0 10px; }
+  :root:root:root .toast .toast-undo .toast-key-word { font-size: 13.5px; color: var(--accent); }
+  :root:root:root .toast .toast-clock { left: 14px; right: 14px; }
+  :root:root:root .app.composing .toast { top: calc(env(safe-area-inset-top, 0px) + var(--phone-top, 56px) + 8px); }
 
   /* The setup bar: its sentence over its buttons, not squeezed beside them. */
   :root:root:root .ps-bar { flex-wrap: wrap; gap: 10px; padding: 12px 16px; }

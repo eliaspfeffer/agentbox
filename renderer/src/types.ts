@@ -253,6 +253,9 @@ export interface RunningSession {
   // (main/supervisor.mjs). Absent whenever there are none, which is every
   // ordinary run, so the mark at the foot of a task keeps its one word.
   helpers?: number;
+  /** 'cloud' while this run is in a cloud sandbox (docs/cloud/PLAN.md);
+   *  absent for a run on this Mac. */
+  where?: 'cloud';
 }
 
 /**
@@ -653,6 +656,9 @@ export interface Snapshot {
   // and is not running. ⌘R will not pick it up, only a restart will, and the
   // renderer says so. Null when the running app IS the app on disk.
   restartNeeded?: { files: string[]; since: number } | null;
+  /** Where threads run and this month's cloud use, for the cloud button
+   *  (renderer/src/cloud-menu.ts). Absent from an older main process. */
+  cloud?: import('./cloud-menu').CloudStatus | null;
   /**
    * What was left of her rate limit at the last reading, or null before the
    * first one lands. It rides the snapshot for the same reason `restartNeeded`
@@ -1217,6 +1223,8 @@ declare global {
         title: string;
         product?: string | null;
         productName?: string | null;
+        // An approval's thread, by its list name, which heads the phone's alert.
+        thread?: string | null;
         kind: string;
       }>): Promise<void>;
       // She clicked the banner: open this row.
@@ -1246,6 +1254,8 @@ export type FolderListing = {
 /** What a person may change on a thread from its summary (main/store.mjs threadEdit). */
 export type ThreadEditPatch = Partial<{
   problem: string; progress: string; solution: string;
+  /** A rename: the name every row shows. The title stays the message. */
+  label: string;
   /** 'now' is how a thread leaves Later and starts (w-afb66e6661). */
   start: 'later' | 'manual' | 'now';
   visibility: 'team' | 'people' | 'private'; visibleTo: string[]; priority: number;

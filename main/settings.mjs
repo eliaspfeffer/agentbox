@@ -1139,6 +1139,18 @@ export function setWorkspaceSetting({ config, supervisor }, { key, value }) {
       break;
     // STOP WHAT FINISHED AGENTS LEAVE RUNNING (main/leftovers.mjs). Turning it
     // on records the moment, which is the earliest the clock may start from.
+    // WHERE THREADS RUN (renderer/src/cloud-menu.ts): 'mac' turns cloud runs
+    // off, 'full' sends what does not fit here, 'all' sends everything first.
+    // Read by the supervisor per call, so it takes effect on the next tick.
+    case 'cloudRuns': {
+      const map = { mac: false, full: null, all: 'all' };
+      if (!(value in map)) throw new Error(`unknown cloud mode: ${value}`);
+      saveConfig(config, { cloudRuns: map[value] });
+      config.cloudRuns = map[value];
+      supervisor.wake?.();
+      supervisor.onChange?.();
+      break;
+    }
     case 'cleanupLeftovers':
       saveConfig(config, value ? { cleanupLeftovers: true, cleanupLeftoversSince: Date.now() } : { cleanupLeftovers: false });
       supervisor.setLeftoverCleanup?.(!!value)?.catch?.((e) => console.warn('zero: leftovers:', e.message));

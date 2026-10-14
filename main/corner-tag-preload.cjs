@@ -16,7 +16,14 @@ contextBridge.exposeInMainWorld('cornerTag', {
   onReset: listen('corner-tag:reset'),
   onDragging: listen('corner-tag:dragging'),
   ready: (part) => ipcRenderer.invoke('corner-tag:ready', { part }),
-  size: (part, width, height) => ipcRenderer.invoke('corner-tag:size', { part, width, height }),
+  // glass: where the glass itself sits inside that window, and how big it is.
+  // The tag's window is the glass plus a clear band, so the resize corners can
+  // hang over its edges; the list is lined up with the glass, never with the
+  // window, which may be roomier than the page drew.
+  size: (part, width, height, glass) => ipcRenderer.invoke('corner-tag:size', { part, width, height, glass }),
+  // Whether what is under the pointer right now belongs to the tag. In the
+  // clear band it does not, and the click must reach the app underneath.
+  clickable: (on) => ipcRenderer.invoke('corner-tag:clickable', { on: !!on }),
   hover: (part, inside) => ipcRenderer.invoke('corner-tag:hover', { part, inside }),
   toggle: () => ipcRenderer.invoke('corner-tag:toggle'),
   // The button went down on the tag, and came up (or was taken away). What
@@ -29,6 +36,9 @@ contextBridge.exposeInMainWorld('cornerTag', {
   release: (cancelled) => ipcRenderer.invoke('corner-tag:release', { cancelled: !!cancelled }),
   go: (id) => ipcRenderer.invoke('corner-tag:go', id),
   hide: (choice) => ipcRenderer.invoke('corner-tag:hide', choice),
+  // One notch bigger or smaller, from the list's own foot, so she can see the
+  // tag change while she decides.
+  resize: (by) => ipcRenderer.invoke('corner-tag:resize', { by }),
   settings: () => ipcRenderer.invoke('corner-tag:settings'),
   menu: () => ipcRenderer.invoke('corner-tag:menu'),
 });
