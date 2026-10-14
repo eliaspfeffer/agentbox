@@ -62,7 +62,7 @@ const REFRESH_MS = 8_000;
 // screen is the kind of drift this row exists to end.
 const THEM = 'The agent';
 
-export function ItemThread({ item, engine, session, opening, sending, filed = [], onOpenFiled, onApproveFiled, onHereFiled,onOpenOrigin, onSendNow, md, clean, onOpenDoc, chat = false, onQuote, onHandToAgent, thread }: {
+export function ItemThread({ item, engine, session, statusText, opening, sending, filed = [], onOpenFiled, onApproveFiled, onHereFiled,onOpenOrigin, onSendNow, md, clean, onOpenDoc, chat = false, onQuote, onHandToAgent, thread }: {
   // A CHAT'S THREAD, IN THE PANEL BESIDE IT (w-920461cbe6). The pane owns which
   // one is open and how wide it is; this draws it, because this is where the
   // replies were read. `host` is the pane the panel is drawn into. Absent
@@ -79,6 +79,7 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
     fresh?: Record<string, number>;
   };
   item: WorkItem;
+  statusText?: string | null;
   // THE THREADS THIS ONE FILED, EACH ON THE TURN THAT FILED IT (w-2e13752a85).
   // They used to be one block under the whole conversation, which left the
   // morning's three threads standing over the composer all evening. The rule
@@ -297,7 +298,7 @@ export function ItemThread({ item, engine, session, opening, sending, filed = []
     <ThreadsMade rows={rows} label="Filed from this thread" onOpen={(id) => onOpenFiled?.(id)} onApprove={onApproveFiled} onHere={onHereFiled} />
   );
 
-  const tldr = !chat ? threadTldr(events, outcome ? { ...outcome, text: clean(outcome.text) } : null, { running: !!session }) : null;
+  const tldr = !chat ? threadTldr(events, outcome ? { ...outcome, text: clean(outcome.text) } : null, { running: !!session, statusText }) : null;
   const answer = <>
     {tldr && <section className="appendix appendix-foot thread-tldr" aria-label="Aktueller Kurzstand" key={`${item.product}:${item.id}`}>
       <div className="appendix-label">TL;DR · aktueller Stand</div>

@@ -88,7 +88,7 @@ import { optionIsClipped, optionPeek } from '../option-peek';
 import { askLine, askFull, askIsClipped } from '../ask-line';
 import { replyIsSwallowed, replyReaches } from '../../../shared/agents.mjs';
 import { recapFor, type Recap as RecapValue } from '../recap';
-import type { LiveFacts } from '../live-line';
+import { liveLine, type LiveFacts } from '../live-line';
 import { offersRunNow } from '../run-now';
 import { AttachRow } from './AttachRow';
 import { BackToWhatSheWasReading } from './UrgentBar';
@@ -1520,6 +1520,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
                  thread-history.ts holds the reasoning. */
               engine={runningEngine}
               session={session}
+              statusText={liveLine(item, { ...live, session, stalled, scheduledUntil })?.line}
               opening={openingSaid}
               /*
                * HER MESSAGE, FROM THE MOMENT SHE PRESSES SEND, rather than from

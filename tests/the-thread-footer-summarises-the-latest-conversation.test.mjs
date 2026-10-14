@@ -17,7 +17,7 @@ describe('current thread TL;DR',()=>{
  it('shows the latest unanswered request rather than a settled answer',()=>{
   const t=threadTldr([agent(2,'Done.'),user(3,'But does it work on mobile?')],null,{running:true});
   expect(t.text).toBe('Agent arbeitet an deiner neuesten Nachricht.');expect(t.context).toBe('But does it work on mobile?');
-  expect(threadTldr([user(3,'Please retry.')],{at:2,text:'Done.'}).text).toBe('Deine neueste Nachricht wartet auf eine Antwort.');
+  expect(threadTldr([user(3,'Please retry.')],{at:2,text:'Done.'}).text).toBe('Noch keine Antwort des Agents auf deine neueste Nachricht.');
  });
  it('keeps at most two sentences, removes formatting and skips options and code',()=>{
   const text='## Gist\n\n**Login fixed.** Browser verified. More detail here.\n\n## Options\n1. Delete everything';

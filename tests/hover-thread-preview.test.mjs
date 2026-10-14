@@ -15,6 +15,6 @@ it('shows the current short result and live options only on the hovered row',()=
 });
 it('hides spent options and describes a newer pending reply',()=>{
  const html=draw({hoveredId:item.id,items:[{...item,answer:'New request',wrote:{...item.wrote,answer:{ts:4}}}]});
- expect(html).toContain('Deine neueste Nachricht wartet auf eine Antwort.');
+ expect(html).toContain('Noch keine Antwort des Agents auf deine neueste Nachricht.');
  expect(html).not.toContain('Option 1:');
 });

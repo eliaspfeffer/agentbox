@@ -10,7 +10,7 @@ import { REST_HEADING, URGENT_HEADING, clickIntent, rowKeys, rowSummary, rowTitl
 import { isUrgentRow } from '../interrupt';
 // THE SAME PREDICATE THE PANE USES, not a second copy of the rule. The row and
 // the pane disagreeing about one fact on one screen is what this import fixes.
-import { cameBackEmpty } from '../live-line';
+import { cameBackEmpty, liveLine } from '../live-line';
 import { agentAtWork, engineWordFor } from '../byline';
 import { DEFAULT_ENGINE } from '../../../shared/engines.mjs';
 import { isTroubleRow, TROUBLE_ID } from '../trouble-row';
@@ -510,7 +510,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                       (['body', 'answer', 'note', 'result'] as const).map((field) => ({
                         who: field === 'answer' || (field === 'body' && item.wrote?.body?.source === 'founder') ? 'you' : 'it',
                         text: item[field], at: item.wrote?.[field]?.ts ?? 0,
-                      })), null, { running: running.some((r) => r.itemId === item.id) },
+                      })), null, { running: running.some((r) => r.itemId === item.id), statusText: liveLine(item, { session: running.find(r => r.itemId === item.id), queued, signInNeeded, atLimit, paused, stalled: stalled?.includes(item.id), silent: silent?.[item.id], shipping: shipping?.includes(item.id), inProgress: view === 'progress', scheduledUntil: snoozes?.[item.id] })?.line },
                     )?.text || rowSummary(item, view) || 'Noch kein Ergebnis.'}</div>
                     <div className="row-hover-actions">
                       <button type="button" className="row-key" onClick={() => {onSelect(index);onOpen(item)}}><kbd>↵</kbd><span>Open task</span></button>

@@ -7,7 +7,7 @@ function brief(text,limit){
  const sentences=[...new Intl.Segmenter('de',{granularity:'sentence'}).segment(prose)].slice(0,2).map(s=>s.segment).join('').trim();
  return sentences.length<=limit?sentences:sentences.slice(0,limit-1).trimEnd()+'…';
 }
-export function threadTldr(events=[],outcome=null,{running=false}={}){
+export function threadTldr(events=[],outcome=null,{running=false,statusText=null}={}){
  const spoken=events.filter(e=>e.kind!=='work'&&e.text?.trim());
  const mirrored=e=>/Read from Codex\. Replies happen there\./.test(e.text||'');
  const hasLocalReply=spoken.some(e=>e.who==='it'&&!mirrored(e));
@@ -16,6 +16,6 @@ export function threadTldr(events=[],outcome=null,{running=false}={}){
  if(!latest)return null;
  const request=[...spoken].filter(e=>e.who==='you').sort((a,b)=>(a.at||0)-(b.at||0)).at(-1);
  return {at:latest.at||0,context:request?brief(request.text,110):'',text:latest.who==='you'
-  ?running?'Agent arbeitet an deiner neuesten Nachricht.':'Deine neueste Nachricht wartet auf eine Antwort.'
+  ?statusText||(running?'Agent arbeitet an deiner neuesten Nachricht.':'Noch keine Antwort des Agents auf deine neueste Nachricht.')
   :brief(latest.text,240)};
 }
