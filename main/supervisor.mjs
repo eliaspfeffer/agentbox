@@ -331,6 +331,8 @@ function engineOf(engine) {
   return isEngine(engine) ? engine : DEFAULT_ENGINE;
 }
 
+const BUSY_CODEX_THREAD = /codex app-server refused thread\/resume: thread \S+ already has an active writer/i;
+
 export class Supervisor {
   constructor(config, store, appDir, dataDir = appDir, userDir = dataDir) {
     this.config = config;
@@ -2656,6 +2658,8 @@ export class Supervisor {
   }
 
   restingUntil(item) {
+    const busyUntil = this._busyThreadUntil?.[`${item.product}:${item.id}`] ?? 0;
+    if (busyUntil > Date.now()) return busyUntil;
     const seen = this._fruitless[`${item.product}:${item.id}`];
     const runs = this._emptyRuns(item);
     if (!runs) return 0;
@@ -2797,6 +2801,7 @@ export class Supervisor {
   }
 
   sayTheRunDied(item, session) {
+    if (session.modelFallback || session.busyThread) return;
     try {
       // THE STDERR LINES, not simply the last thing in the tail. By the time
       // this runs the exit handler has already appended its own lines, so
@@ -3638,6 +3643,9 @@ export class Supervisor {
     let forgot = false;
     const home = this.config.home || os.homedir();
     for (const [key, trouble] of Object.entries(this._profileTrouble ?? {})) {
+      if (key.startsWith('codex:') && trouble?.cause === 'unknown' && BUSY_CODEX_THREAD.test(trouble.raw ?? '')) {
+        this._clearProfileTrouble(key); forgot = true; continue;
+      }
       if (trouble?.cause !== 'subscription-ended') continue;
       if (readPlan(key, { home }).ended) continue;
       this._clearProfileTrouble(key);
@@ -4100,6 +4108,14 @@ export class Supervisor {
     // its three tries. The error result names its cause whatever the length.
     const lastFailure = (session.tail ?? []).filter((l) => l && !l.startsWith('session exited') && !l.startsWith('fast exit')).slice(-1)[0];
     const refusedBy = session.resultIsError ? troubleCause(session.result) : null;
+    // Another writer owns this thread, not the entire subscription.
+    if (engine === 'codex' && BUSY_CODEX_THREAD.test(lastFailure ?? '')) {
+      session.busyThread = true; session.transportFault = true;
+      session.accountFault = { cause: 'interrupted', account: null };
+      this._busyThreadUntil ??= {};
+      this._busyThreadUntil[`${session.product}:${session.itemId}`] = Date.now() + 60_000;
+      return;
+    }
     // A dropped connection is retried with the same conversation, not charged to the task.
     const networkFault = session.transportFault || refusedBy === 'interrupted'
       || (!quickButReal && troubleCause((session.tail ?? []).filter(l => l.startsWith('stderr: ')).join('\n').slice(-1000)) === 'interrupted');
@@ -4122,6 +4138,25 @@ export class Supervisor {
     // and when another login has the model the death is the account's, not the
     // row's: the row wakes at once and the pick takes it there.
     const planRefused = refusedBy === 'model-not-on-plan' || troubleCause(lastFailure) === 'model-not-on-plan';
+    if (planRefused && engine === 'claude' && (session.resultIsError || String(lastFailure ?? '').startsWith('stderr:'))) {
+      const item = this.store.readItem?.(session.product, session.itemId);
+      // An old refusal must not overwrite a newer manual choice or reopen a finished task.
+      if (item && ['open', 'claimed'].includes(item.status) && item.engine === 'claude' && item.model === session.model) {
+        const sonnet = /^(?:sonnet|claude-sonnet(?:-|$))/.test(String(session.model ?? ''));
+        const next = !sonnet ? { engine: 'claude', model: 'sonnet' }
+          : this.config.codexBin && this._codexLoginWithModel('gpt-6.1-sol') ? { engine: 'codex', model: 'gpt-6.1-sol' } : null;
+        if (next) {
+          this.store.answerItem(item.product, item.id, next);
+          const notice = `Model fallback: ${session.model} is unavailable on this account. Continuing with ${next.engine === 'claude' ? 'Claude Code' : 'Codex'} ${next.model}, using this chat's existing context.`;
+          session.modelFallback = { ...next, notice };
+          session.accountFault = { cause: 'model-not-on-plan', account: this._accountKey(engine, session.profile) };
+          this.store.recordSessionResult(item.product, item.id, { result: notice, status: null });
+          onLine(notice);
+          this._saveState();
+        }
+      }
+      return;
+    }
     if (planRefused && engine === 'codex') {
       const account = this._accountKey(engine, session.profile);
       const said = `${session.result ?? ''}\n${lastFailure ?? ''}`;

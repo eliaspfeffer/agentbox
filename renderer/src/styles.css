@@ -8796,3 +8796,7 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
 /* THE PHONE WHOSE KEY WAS RESET (renderer/src/browser-bridge.ts). */
 #phone-locked-out { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 32px; background: var(--surface); color: var(--text); font: 16px/1.45 system-ui, sans-serif; text-align: center; }
 #phone-locked-out p { margin-top: 8px; opacity: .8; }
+
+.dictation-waveform {width:clamp(96px,18vw,240px);height:36px;min-width:0;color:var(--text-dim);flex:1 1 120px;}
+.dictation-buttons:has(.dictation-waveform) {max-width:100%;gap:8px;}
+@media(max-width:600px){.dictation-waveform{width:96px;flex-basis:96px}.dictation-buttons:has(.dictation-waveform){flex-wrap:wrap}}

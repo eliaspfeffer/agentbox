@@ -1,6 +1,6 @@
 import {DictationStatus} from './components/Dictation';
 import {DesktopLive} from './components/DesktopLive';
-import {desktopLiveActions,desktopLiveView} from '../../shared/desktop-live-actions.mjs';
+import {desktopLiveActions,desktopLiveView,desktopLiveRows} from '../../shared/desktop-live-actions.mjs';
 import { previewFocus } from './preview-focus';
 import { usePhoneBack, onPhone } from './phone-screen';
 import { holdsReplies, writeHeldWhenHidden } from './phone-holds';
@@ -23,10 +23,10 @@ import { readySkin, swapLook } from './look-switch';
 import type { AnswerMode, Approval, PermissionMode, Product, RepeatRule, RepeatShape, Snapshot, ThreadCard, ThreadStateWord, View, WorkItem } from './types';
 import { api } from './api';
 import { setClaudeModels } from './models';
-import { advanceAfter, advanceLandsHere, nextAfterAdvance, type Advance } from './advance';
+import { advanceAfter, nextAfterDictation, advanceLandsHere, nextAfterAdvance, type Advance } from './advance';
 import { freshCopy, staysOnTheTask, stillFollowing, wayOut, type Followed } from './stay-with-a-command';
 import { List } from './components/List';
-import { isTroubleRow, troubleRow } from './trouble-row';
+import { isTroubleRow } from './trouble-row';
 import { importAnswer, isImportRow, isNotImportedRow, justImported, type ImportChoice } from './import-row';
 import { Focus } from './components/Focus';
 import { TicketItems } from './components/TicketReference';
@@ -1719,12 +1719,8 @@ export default function App() {
   // the moment the first of them got stuck, so a new failure gives it a new
   // one and the row comes back; closing it and having it reappear on the next
   // tick would be the app arguing with her.
-  const troubleItem = useMemo(() => {
-    const t = snap?.supervisor.spawnTrouble;
-    if (!t) return null;
-    if (troubleClosed === t.since) return null;
-    return troubleRow(t, items);
-  }, [snap?.supervisor.spawnTrouble, items, troubleClosed]);
+  // Global trouble belongs in diagnostics, not among the user's chats.
+  const troubleItem = useMemo<WorkItem | null>(() => null, []);
 
   // A NEWER AGENTBOX IS NOT A ROW. It was one until 2026-10-01; it is a card in
   // the sidebar now (components/SidebarUpdate.tsx, w-7a39dace23).
@@ -5039,7 +5035,7 @@ export default function App() {
     }
   };
 
-  liveState.current = {current: focused ? items.find(i => i.id === focused.id && i.product === focused.product) ?? focused : null, rows: list};
+  liveState.current = {current: focused ? items.find(i => i.id === focused.id && i.product === focused.product) ?? focused : null, rows: desktopLiveRows(inbox,progress)};
   const liveExecute = desktopLiveActions({
     state: () => liveState.current,
     open: (item: WorkItem | null) => { liveState.current.current = item; setFocused(item); if(item)markSeen(item); },
@@ -5308,7 +5304,7 @@ export default function App() {
           the sidebar for the single-player launch (w-1b574413db, 2026-10-04).
           `onInvite` is still handed in, for the account menu. */}
       {workspaceNavigation && <WorkspaceNavigation
-        live={<DesktopLive execute={liveExecute} context={desktopLiveView(liveState.current.current)} onNotice={showToast}/>}
+        live={<DesktopLive execute={liveExecute} context={desktopLiveView(liveState.current.current,liveState.current.rows)} onNotice={showToast}/>}
         update={announcesUpdate(snap?.update, { walking, closed: '' }) ? { installing: !!snap?.update?.installing, version: snap?.update?.newVersion, changes: snap?.update?.changes, behind: snap?.update?.behind, error: snap?.update?.error } : null}
         onUpdate={() => { void api.updateInstall(); }}
         /* AND THE COPY THAT CANNOT UPDATE ITSELF FROM WHERE IT IS
@@ -5925,6 +5921,11 @@ export default function App() {
                     answerWith(focused, text, priority, sent, mode, runningEngine, pick);
                   }}
                   onReplyClose={() => setModal(null)}
+                  onDictationQueued={() => {
+                    const next = nextAfterDictation(shownInbox, focused);
+                    setModal(null); setFocused(next);
+                    if (next) markSeen(next);
+                  }}
                   onStop={() => stopAgent(focused)}
                   onRunNow={() => runNow(focused)}
                   onPin={focused.agent ? undefined : (pin) => pinThread(focused.id, pin, true)}

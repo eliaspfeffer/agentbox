@@ -467,7 +467,7 @@ function ArtifactEmbed({ product, path, fallback, open, onOpen }: {
 // not the user's, and it is the part that was unnecessary. `filesFromRuns` stays,
 // because App.tsx still reads it to choose the design a card opens itself on.
 
-export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlot, inlineArtifacts, headerTarget, cornerHeaderTarget, crumbFrom, item, parent, blockedBy, filed = [], runningMode, engineChoice, runningEngine, engineChoices, codexModels, codexModelDefault, session, live, stoppable: stoppableIn, productDir, repoDir, selectedOption, interruptedFrom, onBackToInterrupted, returnedFromSnooze, scheduledUntil, scheduledByAgent, replyOpen, sending, stalled, openDoc, resumeAt, onScrolled, onOpenDoc, onRedeliver, onUnschedule, onClose, onResolve, onPick, onReply, onReplySend, onReplyClose, onStop, onRunNow, onPin, onReopen, onSnooze, onReveal, onOpenItem, onApproveFiled, onRejectFiled, closeAsk, onNotice, onHandToAgent, onAddPeople, repeat = null }: {
+export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlot, inlineArtifacts, headerTarget, cornerHeaderTarget, crumbFrom, item, parent, blockedBy, filed = [], runningMode, engineChoice, runningEngine, engineChoices, codexModels, codexModelDefault, session, live, stoppable: stoppableIn, productDir, repoDir, selectedOption, interruptedFrom, onBackToInterrupted, returnedFromSnooze, scheduledUntil, scheduledByAgent, replyOpen, sending, stalled, openDoc, resumeAt, onScrolled, onOpenDoc, onRedeliver, onUnschedule, onClose, onResolve, onPick, onReply, onReplySend, onReplyClose, onDictationQueued, onStop, onRunNow, onPin, onReopen, onSnooze, onReveal, onOpenItem, onApproveFiled, onRejectFiled, closeAsk, onNotice, onHandToAgent, onAddPeople, repeat = null }: {
   previewSample?: string;
   /** The repeating task this thread is a run of, drawn in its summary. */
   repeat?: RepeatHandle | null;
@@ -591,6 +591,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   onReply: () => void;
   onReplySend: (text: string, priority?: number, repeat?: RepeatRuleValue | null, sent?: SentDraft, mode?: AnswerMode | null, pick?: { model: string | null; effort: string | null; engine?: string | null; background?: boolean }) => void;
   onReplyClose: () => void;
+  onDictationQueued?: () => void;
   onStop: () => void;
   // Run now, the three-dot menu's row on a waiting task.
   onRunNow?: () => void;
@@ -1839,7 +1840,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
                than beside the box: that row is where this card already keeps
                the things you press. It is handed in whole so there is one stop
                button in the app and this card cannot grow a second. */
-            <DockComposer item={item} runningMode={runningMode} runningEngine={runningEngine} engineChoices={engineChoices} codexModels={codexModels} codexModelDefault={codexModelDefault} onSend={onReplySend} onClose={onReplyClose} onNotice={onNotice} openModel={openModel} talkTo={direct ? talkNames : null} stop={stopButton} />
+            <DockComposer item={item} runningMode={runningMode} runningEngine={runningEngine} engineChoices={engineChoices} codexModels={codexModels} codexModelDefault={codexModelDefault} onSend={onReplySend} onClose={onReplyClose} onDictationQueued={onDictationQueued} onNotice={onNotice} openModel={openModel} talkTo={direct ? talkNames : null} stop={stopButton} />
           ) : (
             /*
              * THE FOLDED BOX SHOWS WHAT IS IN IT. A pill saying "Reply…" over
@@ -2061,7 +2062,7 @@ function ModePicker({ value, options, label, onChange }: {
   );
 }
 
-function DockComposer({ item, runningMode, runningEngine: initialEngine, engineChoices, codexModels = [], codexModelDefault = null, onSend, onClose, onNotice, stop, openModel = false, talkTo = null }: {
+function DockComposer({ item, runningMode, runningEngine: initialEngine, engineChoices, codexModels = [], codexModelDefault = null, onSend, onClose, onDictationQueued, onNotice, stop, openModel = false, talkTo = null }: {
   item: WorkItem;
   /** On a conversation with a person, everyone's first name: the box replies
    *  to them, and nothing about an agent, a priority or a model is offered. */
@@ -2090,6 +2091,7 @@ function DockComposer({ item, runningMode, runningEngine: initialEngine, engineC
   codexModelDefault?: string | null;
   onSend: (text: string, priority?: number, repeat?: RepeatRuleValue | null, sent?: SentDraft, mode?: AnswerMode | null, pick?: { model: string | null; effort: string | null; engine?: string | null; background?: boolean }) => void;
   onClose: () => void;
+  onDictationQueued?: () => void;
   /**
    * HOW A MODE CHANGE IS ANNOUNCED NOW THAT NOTHING SITS IN THE FOOTER.So the
    * chip is gone and this is the indication. */
@@ -2870,7 +2872,7 @@ function DockComposer({ item, runningMode, runningEngine: initialEngine, engineC
             thing that is always the thing she can do. */}
         {!talkTo?.length && <DictationButtons target={item.label || item.title || 'Chat'} onNotice={onNotice}
           onDraft={(spoken)=>{const words=[readDraft(item),spoken].filter(Boolean).join('\n\n');saveDraft(item,words);if(dictationItem.current===`${item.product}:${item.id}`)setText(words);}}
-          onSend={(spoken)=>send([text,spoken].filter(Boolean).join('\n\n'),true)} onQueued={()=>{if(readDraft(item)===text)clearDraft(item);onClose();}} />}
+          onSend={(spoken)=>send([text,spoken].filter(Boolean).join('\n\n'),true)} onQueued={()=>{if(readDraft(item)===text)clearDraft(item);(onDictationQueued??onClose)();}} />}
         {stop && !hasDraft ? stop : (
         <button
           className="dock-send"

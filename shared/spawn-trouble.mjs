@@ -178,6 +178,8 @@ const WORKSPACE = [
 // a ChatGPT account." The second line is ours, thrown before the thread starts
 // by `codexModelRefusal` when the login's own list already says so.
 const MODEL_NOT_ON_PLAN = [
+  /(?:do not|don't|does not) have access to (?:the )?model\b/i,
+  /model[^\n]{0,160}(?:not available (?:for|on|with) (?:your|this) (?:subscription|plan)|does not exist or you do not have access)/i,
   /model is not supported when using codex with a chatgpt account/i,
   /not a model the plan of the codex account/i,
 ];
