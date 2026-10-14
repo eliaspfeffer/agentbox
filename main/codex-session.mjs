@@ -491,6 +491,7 @@ export function createCodexWorker({
   const stderr = new EventEmitter();
   worker.stderr = stderr;
   worker.threadId = resumeThreadId ?? null;
+  let reattached = false;
   worker.turnId = null;
 
   let ended = false;
@@ -713,7 +714,7 @@ export function createCodexWorker({
       // gets her own MCP servers back and no store at all (measured; see
       // `resumeThreadParams`), and a reply is the commonest thing this app does.
       return resumeThreadId
-        ? server.resumeThread(resumeThreadParams(resumeThreadId, params), handlers).then(() => ({ threadId: resumeThreadId }))
+        ? server.resumeThread(resumeThreadParams(resumeThreadId, params), handlers).then(result => ({ threadId: resumeThreadId, activeTurn: result?.thread?.turns?.find(turn => turn.status === 'inProgress') }))
         : server.startThread(params, handlers);
     })
     .then((started) => {
@@ -730,11 +731,18 @@ export function createCodexWorker({
         return null;
       }
       worker.threadId = threadId;
+      // Reconnect to live work without posting another recovery turn.
+      if (turnParams.additionalContext?.agentbox_resume && started.activeTurn) {
+        reattached = true;
+        worker.turnId = started.activeTurn.id;
+        worker.emit('spawn');
+        return null;
+      }
       if (!worker.threadId) throw new Error('codex app-server started a thread with no id');
       return storeReady();
     })
     .then((up) => {
-      if (ended) return null;
+      if (ended || reattached) return null;
       if (!up) {
         // The loudest thing this file can do, on the pipe `troubleCause` reads.
         // A run that stops here has written nothing and spent nothing, which is

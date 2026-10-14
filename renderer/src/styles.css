@@ -8800,3 +8800,10 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
 .dictation-waveform {width:clamp(96px,18vw,240px);height:36px;min-width:0;color:var(--text-dim);flex:1 1 120px;}
 .dictation-buttons:has(.dictation-waveform) {max-width:100%;gap:8px;}
 @media(max-width:600px){.dictation-waveform{width:96px;flex-basis:96px}.dictation-buttons:has(.dictation-waveform){flex-wrap:wrap}}
+
+/* Recording owns the footer; the settings return as soon as it stops. */
+.compose-sentence:has(.dictation-waveform) .compose-clauses,
+.compose-sentence:has(.dictation-waveform) > .dock-send,
+.compose-sentence:has(.dictation-waveform) > .dock-stop { display: none; }
+.dictation-buttons:has(.dictation-waveform) { flex: 1; min-width: 0; flex-wrap: nowrap; }
+.dictation-buttons:has(.dictation-waveform) button { flex: 0 0 36px; height: 36px; padding: 0; white-space: nowrap; }

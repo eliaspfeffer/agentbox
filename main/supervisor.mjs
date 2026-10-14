@@ -5888,7 +5888,7 @@ export class Supervisor {
        never noticed because it reads `item.answerMode` directly, a few hundred
        lines up.
      */
-    return { args, command: !!command, ...(review ? { reviewTarget: reviewTarget(review.args) } : {}), resumeProfile, prompt, system, resumeId, model, effort, product: product?.slug ?? null, answerMode: item?.answerMode ?? null, ...(pictures.length ? { pictures } : {}) };
+    return { args, recovery: !!resumeId && !forkFrom && (!rowChat || (retryInterrupted && !continuation)) && !shipFailure && !command, command: !!command, ...(review ? { reviewTarget: reviewTarget(review.args) } : {}), resumeProfile, prompt, system, resumeId, model, effort, product: product?.slug ?? null, answerMode: item?.answerMode ?? null, ...(pictures.length ? { pictures } : {}) };
   }
 
   async composerCatalog(product, id, engine = null) {
@@ -6916,10 +6916,10 @@ export class Supervisor {
     const pictures = Array.isArray(plan?.pictures) ? plan.pictures : [];
     return {
       input: [
-        { type: 'text', text: plan?.prompt ?? '' },
-        ...composerReferences(plan?.prompt ?? ''),
+        ...(!plan?.recovery ? [{ type: 'text', text: plan?.prompt ?? '' }, ...composerReferences(plan?.prompt ?? '')] : []),
         ...pictures.map((abs) => ({ type: 'localImage', path: abs })),
       ],
+      ...(plan?.recovery ? { additionalContext: { agentbox_resume: { kind: 'application', value: plan.prompt } } } : {}),
       ...(effort ? { effort } : {}),
     };
   }
