@@ -28,6 +28,10 @@ export const REPEAT_LABEL_PREFIX: string;
 export function repeatLabel(ruleId: string): string;
 export function ruleIdOf(item: { labels?: string[] } | null | undefined): string | null;
 export function isCleanRun(item: { labels?: string[] } | null | undefined): boolean;
+export function runToOpen<T extends { id: string; product: string; labels?: string[]; createdAt: number }>(
+  rule: { id: string; product: string; lastOccurrence?: string },
+  items: T[],
+): T | null;
 export const DAY_NAMES: string[];
 export function isRepeatRule(rule: unknown): boolean;
 export function ruleLabel(rule: unknown): string;

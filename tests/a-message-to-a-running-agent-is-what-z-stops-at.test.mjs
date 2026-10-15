@@ -122,7 +122,9 @@ describe('after the window, when Z cannot reach it', () => {
     const branch = liveBranch();
     const failed = branch.slice(branch.indexOf('failed: (error: Error) => {'));
     expect(failed).toMatch(/setUndoStack\(\(u\) => u\.filter\(\(e\) => e !== alreadyGone\)\)/);
-    expect(failed).toMatch(/restoreFailedDraft\(/);
+    // The words go back through `putBack`, shared with the other reply path.
+    expect(failed).toMatch(/putBack\(error\)/);
+    expect(app.slice(app.indexOf('    const putBack = (error: unknown) => {')).slice(0, 300)).toMatch(/restoreFailedDraft\(/);
   });
 });
 

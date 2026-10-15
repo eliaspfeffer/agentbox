@@ -10,6 +10,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { resolveClaudeBin, candidatePaths } from './claude-bin.mjs';
+import { warmShellAnswers } from './engine-bin.mjs';
 import { resolveCodexBin } from './codex-bin.mjs';
 import { defaultStoreRoot } from './store/home.mjs';
 import { readPlans, slotsForPlans } from './claude-plan.mjs';
@@ -63,6 +64,11 @@ const DEFAULTS = {
   // many times "Something felt slow" has been pressed, and only ever subtracts.
   agentsAuto: true,
   agentsNudge: 0,
+  // THE NUMBER PICKED ON THE MENU, FOR THE WHOLE COMPUTER (w-ec27ff1a51). Null
+  // until somebody picks one. It replaced `maxConcurrentSessions` as the thing
+  // the menu writes, because that one was per login: two logins turned a 7 into
+  // 14 agents on a 16 GB Mac, which then ran out of memory.
+  agentsAtOnce: null,
   // HOLD HEAVY WORK WHEN MEMORY IS SHORT (w-3958c3753d). Off until somebody
   // turns it on from the Agents page. With it on, every shell command a worker
   // runs asks main/memory-gate-server.mjs first, and heavy ones wait their turn
@@ -70,6 +76,13 @@ const DEFAULTS = {
   // commands may run at once; null is Auto, one per 8 GB.
   memoryGate: false,
   memoryGateSlots: null,
+  // RUN THE OVERFLOW IN THE CLOUD (docs/cloud/PLAN.md). Null is "when this Mac
+  // has been set up for it": nothing happens anywhere until somebody has run
+  // scripts/cloud-setup.mjs and scripts/cloud-signin.mjs, and before that the
+  // app is exactly the app it was. `false` turns it off even then.
+  // `maxCloudSessions` is the cloud's own cap, apart from this Mac's.
+  cloudRuns: null,
+  maxCloudSessions: 10,
   // STOP WHAT FINISHED AGENTS LEAVE RUNNING (main/leftovers.mjs). Its own
   // switch, off until somebody turns it on; `cleanupLeftoversSince` is the
   // moment they did, so nothing is stopped sooner than the idle time after it.
@@ -123,6 +136,8 @@ const DEFAULTS = {
   // "2026-09-04T09:30:00Z". Anything else -- true, "yes", "1", or a shape
   // `Date.parse` would merely guess at -- is read as off.
   engineChoice: null,
+  // Installed Codex apps/plugins may be enabled explicitly for worker chats.
+  codexPlugins: false,
 };
 
 /**
@@ -205,6 +220,14 @@ export function loadConfig(appDir, { home = os.homedir() } = {}) {
   config.claudeBinConfigured = typeof overrides.claudeBin === 'string' && overrides.claudeBin
     ? overrides.claudeBin
     : null;
+  // ONE LOGIN SHELL FOR BOTH ENGINES, ASKED BEFORE EITHER SEARCH RUNS. This is
+  // on the boot path -- main/main.mjs calls loadConfig inside createWindow and
+  // before the window exists -- and a login shell costs about 0.7 s to start
+  // whether it is asked about one program or six. Measured on this Mac
+  // 2026-10-11, the two searches together took 1.4 s cold and the shell was all
+  // of it. It seeds only what it positively found, so a shell that will not
+  // start leaves both searches exactly as they were (main/engine-bin.mjs).
+  warmShellAnswers();
   const claude = resolveClaudeBin(config.claudeBinConfigured);
   config.claudeBin = claude.path ?? candidatePaths()[0];
   config.claudeFound = claude.found;
@@ -281,10 +304,18 @@ export function loadConfig(appDir, { home = os.homedir() } = {}) {
   // same thing said out loud and kept up to date. An explicit `agentsAuto`
   // outranks the guess, because turning Automatic back on after setting a number
   // has to be possible.
-  if (typeof overrides.agentsAuto !== 'boolean') {
-    config.agentsAuto = typeof overrides.maxConcurrentSessions !== 'number';
-  }
-  if (typeof overrides.maxConcurrentSessions !== 'number') {
+  //
+  // ONLY A NUMBER FOR THE WHOLE COMPUTER IS A CHOICE (w-ec27ff1a51). A
+  // `maxConcurrentSessions` in the file was written per login, by the stepper
+  // that was here before 5 Oct, and reading it as "you set this" is what ran
+  // 14 agents on a Mac Automatic would have run 6 on, with nobody having picked
+  // 14. So that install goes back to Automatic, even with `agentsAuto: false`
+  // written beside it, and a number picked on today's menu (`agentsAtOnce`)
+  // is kept as picked unless Automatic was chosen after it.
+  config.agentsAuto = typeof overrides.agentsAtOnce !== 'number' || overrides.agentsAuto === true;
+  // And the plan is read whenever the number is Automatic's, old per-login
+  // number or not, so a plan that allows one at a time still says so.
+  if (typeof overrides.agentsAtOnce !== 'number') {
     const plans = readPlans(effectiveProfiles(config.authProfiles, { home }), { home });
     const slots = slotsForPlans(plans, config.machineSlots);
     config.maxConcurrentSessions = slots;

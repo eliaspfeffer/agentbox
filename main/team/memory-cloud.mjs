@@ -11,6 +11,10 @@ import crypto from 'node:crypto';
 import { asPulled } from '../../shared/team-rules.mjs';
 import { cleanStatus } from '../../shared/team-status.mjs';
 
+// The database's own checks on a message's file (20261013000000_message_files.sql).
+const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/;
+const MAX_FILE_DATA = 14_000_000;
+
 export function createMemoryCloud() {
   return {
     people: new Map(), // id -> { id, email, name, avatarUrl }
@@ -21,6 +25,7 @@ export function createMemoryCloud() {
     projectPeople: [], // { projectId, personId }
     lines: [], // { seq, projectId, uid, byPerson, body, createdAt }
     cards: new Map(), // `${personId}:${threadId}` -> a thread card, as shared/thread-cards.mjs makes them
+    files: new Map(), // `${projectId}:${name}` -> { projectId, name, byPerson, data (base64) }
     seq: 0,
     teamsMade: 0, // the order teams were made in, which is their age
     now: () => Date.now(), // the server's clock
@@ -234,6 +239,30 @@ export function memoryBackend(cloud, personId) {
         .filter((c) => teams.has(c.teamId))
         .filter((c) => c.people == null || c.personId === personId || c.people.includes(personId))
         .map(({ teamId, ...c }) => structuredClone(c));
+    },
+
+    // THE FILES A CONVERSATION'S MESSAGES LINK TO (w-140ac855b1). Read and
+    // written by whoever may see the project, each name stored once and never
+    // replaced: 20261013000000_message_files.sql.
+    async hasFiles(projectId, names) {
+      if (!canSee(projectId)) return [];
+      return names.filter((n) => cloud.files.has(`${projectId}:${n}`));
+    },
+
+    async getFile(projectId, name) {
+      if (!canSee(projectId)) return null;
+      return cloud.files.get(`${projectId}:${name}`)?.data ?? null;
+    },
+
+    async putFile(projectId, name, data) {
+      if (!canSee(projectId)) refuse('send a file to a project you cannot see');
+      if (!FILE_NAME.test(name)) refuse('a file name that is not a plain name');
+      if (data.length > MAX_FILE_DATA) refuse('a file that big');
+      const key = `${projectId}:${name}`;
+      if (cloud.files.has(key)) return false;
+      cloud.files.set(key, { projectId, name, byPerson: personId, data });
+      cloud.events.emit('files', 1);
+      return true;
     },
 
     subscribe(onChange) {

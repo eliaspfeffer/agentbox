@@ -51,7 +51,7 @@ export { IMG_SCHEME, IMG_SCHEMES };
 // cross-origin to each other.
 export const IMG_HOST = 'file';
 
-const PICTURES = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp', '.ico']);
+const PICTURES = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp', '.ico', '.svg']);
 
 // AND A SOUND OR A FILM, SINCE 2026-09-29, so a voice sample or a render a
 // worker names plays in the message (ArtifactMedia in Focus.tsx) instead of
@@ -156,4 +156,13 @@ export function servable(file, roots) {
   const ext = path.extname(file).toLowerCase();
   if (!PICTURES.has(ext) && !MEDIA.has(ext)) return false;
   return (roots ?? []).some((root) => inside(root, file));
+}
+
+/** SVG remains a picture even if its URL is opened as a document. */
+export function svgHeaders(file) {
+  return path.extname(file).toLowerCase() === '.svg' ? {
+    'content-type': 'image/svg+xml',
+    'content-security-policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:",
+    'x-content-type-options': 'nosniff',
+  } : {};
 }

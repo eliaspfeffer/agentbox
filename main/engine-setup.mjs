@@ -1,3 +1,4 @@
+import { harnessFor } from './harnesses.mjs';
 // SETTING UP SOMEBODY'S PLAN FOR THEM (w-9f6975906c, picked 2026-10-05).
 //
 // A person with a Claude or ChatGPT plan and no Claude Code or Codex used to
@@ -25,28 +26,16 @@ import { spawn as nodeSpawn } from 'node:child_process';
 import { terminalEnv } from './task-terminals.mjs';
 import { codexLaunchEnv } from './codex-launch-env.mjs';
 
-const INSTALLERS = {
-  claude: { shell: '/bin/bash', url: 'https://claude.ai/install.sh', pipe: 'bash' },
-  codex: { shell: '/bin/sh', url: 'https://chatgpt.com/codex/install.sh', pipe: 'sh' },
-};
-
-export function installCommand(engine) {
-  const i = INSTALLERS[engine];
-  return { file: i.shell, args: ['-c', `curl -fsSL ${i.url} | ${i.pipe}`] };
-}
+export function installCommand(engine) { return harnessFor(engine).install(); }
 
 /** The plan, never the API console: `--claudeai` is Claude Code's own name for it. */
 export function signInCommand(engine, bin) {
-  return engine === 'claude'
-    ? { file: bin, args: ['auth', 'login', '--claudeai'] }
-    : { file: bin, args: ['login'] };
+  return harnessFor(engine).signIn(bin);
 }
 
 /** Exit 0 is signed in and 1 is not, for both (measured 2026-10-05). */
 export function statusCommand(engine, bin) {
-  return engine === 'claude'
-    ? { file: bin, args: ['auth', 'status', '--json'] }
-    : { file: bin, args: ['login', 'status'] };
+  return harnessFor(engine).signInStatus(bin);
 }
 
 const LOG_LIMIT = 64 * 1024;
@@ -151,7 +140,15 @@ export function createEngineSetup({ find, spawn = realSpawn, wait = sleep, env =
         ended = false;
         watchLogin(login);
       }
-      if (ended) return fail(j, `The sign-in was closed before it finished.${lastLine(j.log) ? ` ${lastLine(j.log)}` : ''}`);
+      // ASK ONCE MORE BEFORE CALLING IT CLOSED. A sign-in that finishes while
+      // the check above is running exits before that check answers, and the
+      // check, asked a moment too early, says no. Without this, somebody who
+      // had just approved it was told it was closed.
+      if (ended) {
+        if (await signedIn(j, hit.path)) { if (live()) ready(j); return; }
+        if (!live()) return;
+        return fail(j, `The sign-in was closed before it finished.${lastLine(j.log) ? ` ${lastLine(j.log)}` : ''}`);
+      }
     }
   }
 

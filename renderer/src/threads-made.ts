@@ -2,7 +2,7 @@
 // (w-2e8aa16f0f). Drawn by components/ThreadsMade.tsx under an opened task,
 // and meant for the agent that answers in a chat with the tasks it opened.
 import type { ThreadStateWord, WorkItem } from './types';
-import { notStarted } from './list-rules';
+import { notStarted, statusForReply } from './list-rules';
 
 type Row = Pick<WorkItem, 'id' | 'product' | 'createdAt'> & { parent?: string };
 
@@ -18,6 +18,31 @@ export function threadsMade<T extends Row>(items: readonly T[], thread: Pick<Wor
 const WORDS: Record<ThreadStateWord, string> = { waiting: 'Needs you', running: 'In progress', scheduled: 'Later', done: 'Done' };
 
 export const stateWord = (state: ThreadStateWord | null | undefined): string => (state ? WORDS[state] : '');
+
+/**
+ * HOW MANY TASKS EACH THREAD HAS WAITING FOR A YES, by `product/id` of the
+ * thread (w-d2744c6daa). The inbox row says it in faint words after the title,
+ * so a thread with tasks under it no longer looks like every other row; one had
+ * waited 22 hours under a closed thread when this was written.
+ *
+ * Worked out once for the whole list, off the same rule the Approve button
+ * reads, so the row and the button inside it cannot disagree.
+ */
+export function waitingCounts<T extends Pick<WorkItem, 'id' | 'product' | 'status' | 'kind' | 'labels' | 'answer'> & { parent?: string; start?: 'later' | 'manual' | 'now' }>(
+  items: readonly T[],
+  stateOf: (item: T) => ThreadStateWord | null,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const i of items) {
+    if (!i.parent || !approvableFiled(i, stateOf(i))) continue;
+    const key = `${i.product}/${i.parent}`;
+    out.set(key, (out.get(key) ?? 0) + 1);
+  }
+  return out;
+}
+
+/** "2 tasks to approve", or nothing. */
+export const toApproveWords = (n: number | undefined): string => (n ? `${n} task${n === 1 ? '' : 's'} to approve` : '');
 
 /**
  * WHICH OF THEM IS WAITING ON A PRESS FROM YOU (w-9cf2b43110): "when an agent
@@ -58,7 +83,7 @@ export const stateWord = (state: ThreadStateWord | null | undefined): string => 
  * in Needs you is not waiting on a press, whatever its fields say yet.
  */
 export function approvableFiled(
-  i: Pick<WorkItem, 'status' | 'kind' | 'labels' | 'answer'> & { start?: 'later' | 'now' },
+  i: Pick<WorkItem, 'status' | 'kind' | 'labels' | 'answer'> & { start?: 'later' | 'manual' | 'now' },
   state: ThreadStateWord | null,
 ): boolean {
   // WAITING OR LATER, since w-9cf2b43110's second half: a proposal is no
@@ -71,4 +96,46 @@ export function approvableFiled(
   if ((i.labels ?? []).includes('founder')) return false;
   if (notStarted(i)) return false;
   return !(i.answer && i.answer !== '(withdrawn)');
+}
+
+/**
+ * DO IT HERE (w-554834e749): the third answer to a proposal, and the one she
+ * reached for. "What I do really want to do is have the agent not make that a
+ * different thread and just do it in our thread." Approve starts a new session
+ * on a new thread and No drops the work; this hands it back to the agent that
+ * filed it, which already has the context, and closes the proposal.
+ *
+ * The message is sent as hers, through the same reply path as anything typed
+ * in the box, so it lands whether the parent is idle, running or finished.
+ * It carries the proposal's body because the session that reads it may be a
+ * fresh one, and cuts it past DO_IT_HERE_BODY with a pointer to the rest so a
+ * long proposal does not become a wall in her own conversation.
+ */
+export const DO_IT_HERE_BODY = 1500;
+
+export function doItHereWords(child: Pick<WorkItem, 'id' | 'title'> & { body?: string | null }): string {
+  const title = child.title.trim();
+  let body = (child.body ?? '').trim();
+  if (body.startsWith(title)) body = body.slice(title.length).trim();
+  const head = `Do this here, in this thread, not as a thread of its own: “${title}”`;
+  if (!body) return head;
+  if (body.length > DO_IT_HERE_BODY) body = `${body.slice(0, DO_IT_HERE_BODY).trimEnd()}…\n\n(The rest is on ${child.id}, now closed.)`;
+  return `${head}\n\n${body}`;
+}
+
+type Write = { product: string; id: string; answer?: string; status?: 'open' | 'done' };
+
+/** The two writes, PARENT FIRST: if the message does not get through, the
+ *  proposal stays open rather than vanishing with nobody doing the work. Null
+ *  when the parent given is not the thread that filed this one. */
+export function doItHereWrites(
+  child: Pick<WorkItem, 'id' | 'product' | 'title'> & { parent?: string; body?: string | null },
+  parent: Pick<WorkItem, 'id' | 'product' | 'status'> | null | undefined,
+): Write[] | null {
+  if (!parent || !child.parent || child.parent !== parent.id || child.product !== parent.product) return null;
+  const status = statusForReply(parent.status);
+  return [
+    { product: parent.product, id: parent.id, answer: doItHereWords(child), ...(status ? { status } : {}) },
+    { product: child.product, id: child.id, status: 'done' },
+  ];
 }

@@ -15,9 +15,16 @@ export const REQUEST_CHANNELS = {
   terminal: 'zero:terminal',
   agentUpdate: 'zero:agent-update',
   snapshot: 'zero:snapshot',
+  refreshUsage: 'zero:refresh-usage',
+  // Whether a screen reader is running, which is the terminal pane's question
+  // before it builds xterm's accessibility tree.
+  assistiveTech: 'zero:assistiveTech',
   // The next page of old finished threads, at the foot of Done and All.
   olderItems: 'zero:older-items',
   dashboard: 'zero:dashboard',
+  desktopLive: 'zero:desktop-live',
+  transcribeAudio: 'zero:transcribe-audio',
+  composerCatalog: 'zero:composer-catalog',
   commandCatalog: 'zero:command-catalog',
   remoteControl: 'zero:remote-control',
   command: 'zero:command',
@@ -73,9 +80,11 @@ export const REQUEST_CHANNELS = {
   agentThreads: 'zero:agent-threads',
   importThreads: 'zero:import-threads',
   badge: 'zero:badge',
+  cornerTag: 'zero:corner-tag',
   bootInfo: 'zero:boot-info',
   updateCheck: 'zero:update-check',
   updateInstall: 'zero:update-install',
+  updateMove: 'zero:update-move',
   notify: 'zero:notify',
   stopSession: 'zero:stop-session',
   runNow: 'zero:run-now',
@@ -91,6 +100,10 @@ export const REQUEST_CHANNELS = {
   settingsRead: 'zero:settings-read',
   claudeRecheck: 'zero:claude-recheck',
   codexRecheck: 'zero:codex-recheck',
+  // Point at the coding agent yourself, or hand the choice back to the search.
+  // The browser tab has no file panel, so main answers it ok-with-nothing-done
+  // there (main/serve.mjs stubs showOpenDialog) and the row stays honest.
+  engineBin: 'zero:engine-bin',
   engineSetup: 'zero:engine-setup',
   codexAddAccount: 'zero:codex-add-account',
   claudeAddAccount: 'zero:claude-add-account',
@@ -128,8 +141,13 @@ export const REQUEST_CHANNELS = {
   resumeItems: 'zero:resume-items',
   redeliver: 'zero:redeliver',
   setProductOrder: 'zero:set-product-order',
+  setThreadPlaces: 'zero:set-thread-places',
+  setThreadPins: 'zero:set-thread-pins',
   setProductHidden: 'zero:set-product-hidden',
   approve: 'zero:approve',
+  // The phone door's Settings page (main/phone-link.mjs): its state, on, off,
+  // a new key, and which address the QR code carries. The desktop window only.
+  phoneLink: 'zero:phone-link',
 };
 
 /** Told rather than asked: the app talks and the screen listens. */
@@ -140,9 +158,12 @@ export const PUSH_CHANNELS = {
   onZoomPercent: 'zero:zoom-percent',
   onRecovered: 'zero:recovered',
   onOpenItem: 'zero:open-item',
+  onOpenSettings: 'zero:open-settings',
   onScreenDetail: 'zero:screen-detail',
   onEscapeBrowser: 'zero:escape-browser',
   onKeyInTheFile: 'zero:key-in-the-file',
+  // A phone connected, left, or the key changed.
+  onPhoneChanged: 'zero:phone-changed',
 };
 
 // THE FEW THAT ARE NOT A STRAIGHT HANDOVER. Each is called with bare values
@@ -162,4 +183,4 @@ export const WRAPPED_ARGS = {
 // `onWriteHeld` is the desktop's ⌘R asking the page to write what the undo
 // window holds before it reloads (main/write-before-reload.mjs). A browser
 // reload asks nobody; the page writes on `pagehide` there instead.
-export const DESKTOP_ONLY = ['pathForFile', 'onWriteHeld'];
+export const DESKTOP_ONLY = ['pathForFile', 'onWriteHeld', 'transcribeAudio'];

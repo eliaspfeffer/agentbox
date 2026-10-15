@@ -54,7 +54,7 @@ const RESERVE = '.ts-close + .ts-title';
 describe('the close icon beside the name', () => {
   it('sits straight before the name, and the Status row is down at the foot', () => {
     const html = panel();
-    expect(html).toMatch(/<button[^>]*class="ts-close"[\s\S]*?<\/button><h2 class="ts-title">/);
+    expect(html).toMatch(/<button[^>]*class="ts-close"[\s\S]*?<\/button><h2 class="ts-title"[ >]/);
     expect(html.indexOf('>Status<')).toBeGreaterThan(html.indexOf('class="ts-foot"'));
   });
 
@@ -71,6 +71,16 @@ describe('the close icon beside the name', () => {
     const reserve = num(px(rule(RESERVE), 'margin-right'));
     const nameEnd = pad + reserve;                                             // the name's right end, from the panel's edge
     expect(nameEnd).toBeGreaterThan(iconLeft);
+  });
+
+  // The name renames since w-ab3d51dc7d, so it is a button with a wash, and
+  // that wash has to stop short of the icon as well.
+  it('keeps the rename wash clear of the icon too', () => {
+    const close = rule('.ts-close');
+    const iconLeft = num(px(close, 'right')) + num(px(close, 'width'));
+    const pad = num(px(rule('.ts-panel'), 'padding').split(/\s+/)[1]);
+    const washEnd = pad + num(px(rule('.ts-close + .ts-title[role="button"]'), 'margin-right'));
+    expect(washEnd).toBeGreaterThan(iconLeft);
   });
 
   it('does not take the room from the rows at the foot, which the icon does not reach', () => {

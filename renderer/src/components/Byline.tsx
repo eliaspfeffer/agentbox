@@ -104,7 +104,7 @@ export function Byline({ item, facts, returned, lead, stateShown, onAddPeople }:
           waiting for her, which is the one fact "last moved" would get wrong. */}
       {lead || stateShown
         ? <Said parts={stateLedParts(f, f.age ? `last moved ${f.age} ago` : null)} />
-        : <Said parts={[f.project, f.whereWord, f.engineWord, f.age
+        : <Said parts={[f.project, f.whereWord, f.placeWord, f.engineWord, f.age
           ? (isTroubleRow(item) ? `nothing has started for ${f.age}`
             : isUpdateRow(item) ? `downloaded ${f.age} ago`
               : `last moved ${f.age} ago`)
@@ -115,7 +115,7 @@ export function Byline({ item, facts, returned, lead, stateShown, onAddPeople }:
           progress" and "In your inbox", which is where she looks for it. Drawing
           both would be the same word twice on a line that is already too
           crowded. The snooze chip stays: nothing on the line says that. */}
-      {returned && <span className="chip chip-returned">back from snooze</span>}
+      {returned && <span className="chip chip-returned">back from Later</span>}
       {addPeople}
     </div>
   );

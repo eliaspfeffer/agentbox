@@ -31,6 +31,15 @@ export function atTheApp({ focused = false, idleMs = 0 } = {}) {
   return !!focused && idleMs < AWAY_AFTER_MS;
 }
 
+// THE PHONE'S RULE IS WIDER: she is at the computer, in any app, so the phone
+// says nothing. Someone in a browser on the laptop is not at the app, and the
+// desktop banner above is how she hears; buzzing the phone in her bag as well
+// is the "tons and tons of notifications" she reported (2026-10-13). The
+// phone is for when she has left the machine, which only the idle clock knows.
+export function atTheComputer({ idleMs = 0 } = {}) {
+  return idleMs < AWAY_AFTER_MS;
+}
+
 // WHAT COUNTS AS NEWS, which is the question before "is she away".
 //
 // renderer/src/App.tsx owns the definition of the inbox and asks this of every
@@ -136,4 +145,22 @@ export function banner(waiting) {
     // window comes forward, so that one only needs the window.
     open: lead.kind === 'approval' ? null : (lead.id ?? null),
   };
+}
+
+// THE PHONE'S ALERT IS HEADED BY THE THREAD (2026-10-13). On a phone the
+// banner is read in a stack of others, and she asked for the bold line to be
+// "the specific chat title so I know which thread we're talking about". iOS
+// wraps the body and gives the title a line of its own, so the macOS reason
+// above for keeping a name out of the title does not hold there. The sentence
+// moves under it. An approval names the thread that is asking (`thread`) and
+// what it wants to run; with no thread to name, it is the desktop's words.
+export function phoneBanner(waiting) {
+  const say = banner(waiting);
+  if (!say) return null;
+  const items = waiting.filter(Boolean);
+  const asks = items.filter((i) => i.kind === 'approval');
+  const lead = asks.length ? asks[0] : items[items.length - 1];
+  const name = clip(asks.length ? lead.thread : lead.title, 80);
+  if (!name) return say;
+  return { title: name, body: asks.length ? `Waiting on you: ${say.body}` : say.title, open: say.open };
 }

@@ -88,7 +88,7 @@ describe('changing the agent limit starts waiting work', () => {
     await vi.advanceTimersByTimeAsync(2_000);
     expect(started).toEqual(['queued-0']);
     expect(supervisor._loadFor('codex')).toBe(4);
-    expect(JSON.parse(fs.readFileSync(path.join(dir, 'zero.config.json'))).maxConcurrentSessions).toBe(4);
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'zero.config.json'))).agentsAtOnce).toBe(4);
   });
 
   it('lowering an inherited limit takes effect without cancelling running work', async () => {

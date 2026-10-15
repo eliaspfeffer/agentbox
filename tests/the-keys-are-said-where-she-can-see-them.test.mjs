@@ -83,7 +83,7 @@ describe('the row prints the keys it really has', () => {
     expect(listSwitch).toMatch(/case 'e': case 'E':[\s\S]{0,400}view === 'snoozed'\) unsnooze/);
     expect(rowKeys('snoozed')).toEqual([
       { key: 'E', word: 'Back to inbox' },
-      { key: 'L', word: 'Remind me' },
+      { key: 'L', word: 'Later' },
     ]);
   });
 
@@ -361,12 +361,8 @@ describe('the hints have a way out, in both places she named', () => {
     }
   });
 
-  it('takes the pointer’s hold on the keys with it when it goes off', () => {
-    // The keys reach the POINTED row because the pointed row is drawing a
-    // promise about them. With the hints off there is no promise and no hover
-    // is ever recorded, so `pointed` falls back to `current` and the keyboard
-    // owns the list again, which is what the app did before the hints.
-    expect(app).toContain('onHover={keyHints ? setHoveredId : undefined}');
+  it('keeps the interactive row preview available with cosmetic hints off', () => {
+    expect(app).toContain('onHover={setHoveredId}');
     expect(app).toMatch(/if \(!v\) \{ setHoveredId\(null\); setPointedHint\(null\); hints\.current\?\.stop\(\); \}/);
   });
 });

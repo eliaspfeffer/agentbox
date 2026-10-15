@@ -31,7 +31,18 @@ export function isCleanRun(item) {
   return !!ruleIdOf(item) && (item?.labels ?? []).includes(CLEAN_LABEL);
 }
 
-export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+// THE THREAD AN OPENED REPEATING TASK LANDS ON: its latest run, an ordinary
+// work item, so the Reply box under it messages that run's agent like any
+// other thread (w-5e3f2e047f). The run it last served first; when that one has
+// left the store's window, the newest of its runs still on file. Null before
+// the first run, and never a run of another rule or another project.
+export function runToOpen(rule, items) {
+  const mine = (items ?? []).filter((i) => i.product === rule.product && ruleIdOf(i) === rule.id);
+  return mine.find((i) => i.id === rule.lastOccurrence)
+    ?? mine.reduce((newest, i) => (!newest || i.createdAt > newest.createdAt ? i : newest), null);
+}
+
+export const DAY_NAMES = ['Sunday','Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // Three shapes, because they are the three a founder actually asks for:
 //   { every: 'day',     at }        every morning

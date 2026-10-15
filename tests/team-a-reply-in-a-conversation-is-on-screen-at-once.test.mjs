@@ -19,13 +19,15 @@ const quiet = app.slice(app.indexOf('// A REPLY IN A CONVERSATION IS ON THE SCRE
 
 describe('a reply in a conversation', () => {
   it('goes into the sending queue, held, before the three second wait', () => {
-    expect(quiet).toMatch(/if \(talking\) setSending\(\(q\) => \[\.\.\.q, mine\]\)/);
+    expect(quiet).toMatch(/if \(stay\) setSending\(\(q\) => \[\.\.\.q, mine\]\)/);
     expect(quiet.indexOf('setSending((q) => [...q, mine])')).toBeLessThan(quiet.indexOf('await deferCommit('));
-    expect(quiet).toMatch(/const mine = \{ product: item\.product, id: item\.id, at: Date\.now\(\), text, held: true \}/);
+    // HELD ONLY WHERE IT IS HELD (w-461fbd8d2d). A phone writes a reply at
+    // once and has no Z, and its message said "Sending… press Z to undo".
+    expect(quiet).toMatch(/const mine = \{ product: item\.product, id: item\.id, at: Date\.now\(\), text, held: holdsReplies\(onPhone\(\)\) \}/);
   });
 
   it('comes off the screen again when Z takes it back', () => {
-    expect(quiet).toMatch(/const restore = \(\): Restored => \{\s*setSending\(\(q\) => q\.filter\(\(s\) => s !== mine\)\)/);
+    expect(quiet).toMatch(/const restore = \(failed=false\): Restored => \{\s*setSending\(\(q\) => q\.filter\(\(s\) => s !== mine\)\)/);
   });
 
   it('is cleared once the written copy has landed', () => {
@@ -45,8 +47,8 @@ describe('a reply in a conversation', () => {
     expect(landed.events.find((e) => e.text === 'Hey!').pending).toBeFalsy();
   });
 
-  it('leaves a reply to an ordinary thread as it was', () => {
-    // Only a conversation is drawn early; a task row still leaves the inbox.
-    expect(quiet).not.toMatch(/^\s*setSending\(\(q\) => \[\.\.\.q, mine\]\);/m);
+  it('also draws a reply to an ordinary thread immediately', () => {
+    // The pending bubble now covers task replies as well as conversations.
+    expect(quiet).toMatch(/^\s*if \(stay\) setSending\(\(q\) => \[\.\.\.q, mine\]\);/m);
   });
 });

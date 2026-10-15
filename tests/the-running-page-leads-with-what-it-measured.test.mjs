@@ -94,14 +94,15 @@ describe('the menu behind how many run at once', () => {
 
   it('counts every number for the machine, not for one account', () => {
     // THE BUG THIS EXISTS FOR: a per-account menu on a two-account Mac offers
-    // 3 and silently means 6.
+    // 3 and silently means 6. Since w-ec27ff1a51 the number stored is the
+    // machine's too, so each option stores exactly what it says.
     const two = opts({ agentsTotal: 6, accounts: [{}, {}] });
-    expect(two[1].label).toBe('2 agents');
-    expect(two[3].label).toBe('6 agents');
-    expect(two[3].value).toBe('3');
+    expect(two[1].label).toBe('1 agent');
+    expect(two[6].label).toBe('6 agents');
+    expect(two[6].value).toBe('6');
   });
 
-  it('stores the per-account number, which is the write the stepper made', () => {
+  it('stores the number it says, on one login as on two', () => {
     const one = opts({ agentsTotal: 6, accounts: [{}] });
     expect(one[6]).toEqual({ value: '6', label: '6 agents' });
   });
@@ -155,7 +156,7 @@ describe('who decides the number', () => {
     const { config, supervisor } = bed({ agentsAuto: true, maxConcurrentSessions: 3 });
     setWorkspaceSetting({ config, supervisor }, { key: 'sessionsAtOnce', value: 9 });
     expect(config.agentsAuto).toBe(false);
-    expect(config.maxConcurrentSessions).toBe(9);
+    expect(config.agentsAtOnce).toBe(9);
   });
 
   it('turning Automatic on keeps the number you had, so turning it off gives it back', () => {

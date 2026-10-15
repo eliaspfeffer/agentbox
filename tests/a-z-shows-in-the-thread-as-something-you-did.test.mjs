@@ -166,7 +166,7 @@ describe('the wiring in App.tsx', () => {
   });
 
   it('every undo on a task says what it undid', () => {
-    for (const words of ['Undid closing it', 'Undid your approval', 'Undid your reply', 'Undid picking', 'Undid sending it', 'Undid the snooze']) {
+    for (const words of ['Undid closing it', 'Undid your approval', 'Undid your reply', 'Undid picking', 'Undid sending it', 'Undid moving it to Later']) {
       expect(app).toContain(`'${words}'`);
     }
   });

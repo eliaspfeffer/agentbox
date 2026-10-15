@@ -198,6 +198,10 @@ export interface BylineFacts {
   /** Null on any Mac with one coding agent; see `engineWordFor` above. */
   engineWord: string | null;
   /**
+   * "In the cloud" while this run is in a cloud sandbox (docs/cloud/PLAN.md),
+   *  and null everywhere else, so a run on this Mac reads exactly as before. */
+  placeWord: string | null;
+  /**
    * "3m", "Aug 13" — when the row last really changed. NULL while a run is
    *  up, because the span above is the reading then and two clocks on one line
    *  is the thing she could not read. */
@@ -229,6 +233,7 @@ export function bylineFacts(
   const stateWord = live ? shortWord(live.state, facts.session?.helpers ?? 0) : null;
 
   const project = item.productName?.trim() || null;
+  const inTheCloud = facts.session?.where === 'cloud';
 
   return {
     project,
@@ -238,8 +243,10 @@ export function bylineFacts(
     stateWord,
     span,
     engineWord,
+    placeWord: inTheCloud ? 'In the cloud' : null,
     age: span ? null : ago(lastChange(item), now),
-    line: (project ? `${project}. ` : '') + spokenLine({ where, live: live?.line ?? null, engineWord, span }),
+    line: (project ? `${project}. ` : '') + spokenLine({ where, live: live?.line ?? null, engineWord, span })
+      + (inTheCloud ? ' It is running in the cloud.' : ''),
   };
 }
 
@@ -269,7 +276,7 @@ function besideTheState(f: BylineFacts): string | null {
  * `age` is the clock already put into words by the caller.
  */
 export function stateLedParts(f: BylineFacts, age: string | null): (string | null)[] {
-  return [f.project, f.where === 'blocked' ? f.whereWord : null, besideTheState(f), f.engineWord, age];
+  return [f.project, f.where === 'blocked' ? f.whereWord : null, besideTheState(f), f.placeWord, f.engineWord, age];
 }
 
 /**

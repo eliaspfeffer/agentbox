@@ -146,6 +146,9 @@ const ANSWERS = {
   // third card is what this table exists to stop. Their own checks are at the
   // foot of this file.
   '.modal': 'opaque',
+  // A PHONE WHOSE KEY WAS RESET (renderer/src/browser-bridge.ts). It covers an
+  // inbox that can no longer answer, so nothing of it may show through.
+  '#phone-locked-out': 'opaque',
   // THE APP DRAWN BEHIND THE WALK'S THEME STEP. Shot that way once, on the
   // day it was built: the tab strip printed twice on one line.
   '.fr-look-app': 'photograph',
@@ -355,10 +358,10 @@ describe('the new-task card, which is the one she came back about twice', () => 
   // a project is now the Mac's own folder window and draws nothing. What is
   // left to guard is that it does not come back as a surface with its own
   // look: no card in that component, and no skin rule naming its old class.
-  it('has no new-project card to keep on the same rule', () => {
+  it('keeps the quick project card on the compose surface', () => {
     const np = fs.readFileSync(path.join(root, 'renderer/src/components/NewProject.tsx'), 'utf8');
     expect(np, 'a card is back in NewProject; if it stays it belongs on .modal.compose')
-      .not.toMatch(/className="modal/);
+      .toContain('className="modal compose quick-project"');
     expect(
       skinRules.some((r) => r.sel.includes('np-card')),
       'np-card has a skin rule again, which is a ground of its own for a card that no longer exists',

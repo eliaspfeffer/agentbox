@@ -1,3 +1,5 @@
+import {desktopLiveSession,desktopTranscribe} from './desktop-live.mjs';
+import {openWebsite} from './open-website.mjs';
 import { openSourceFile } from './open-source-file.mjs';
 import {submitReply} from './live-replies.mjs';
 import { createEngineSetup } from './engine-setup.mjs';
@@ -40,15 +42,16 @@ import { readDoc, writeDoc } from './doc-file.mjs';
 import { readChange } from './code-change.mjs';
 import { findFile, readCodeFile, writeCodeFile } from './code-file.mjs';
 import { readNote, writeNote } from './rail-note.mjs';
-import { addClaudeAccount, addCodexAccount, outsideAgentsMode, permissionMode, readSettings, recheckClaude, recheckCodex, setProjectSetting, setWorkspaceSetting } from './settings.mjs';
+import { addClaudeAccount, addCodexAccount, outsideAgentsMode, permissionMode, pointAtEngineBin, readSettings, recheckClaude, recheckCodex, searchForEngineBin, setProjectSetting, setWorkspaceSetting } from './settings.mjs';
 import { ICON_KINDS, clearProjectIcon, setProjectIcon, setProjectName } from './project-identity.mjs';
 import { ClaudeUsage } from './claude-usage.mjs';
 import { usageEngine } from '../shared/usage.mjs';
-import { DEFAULT_ENGINE } from '../shared/engines.mjs';
+import { DEFAULT_ENGINE, isEngine } from '../shared/engines.mjs';
 import * as agents from './agents.mjs';
 import { findAgentFolders, readAgentFiles, readFolderAgents } from './agent-files.mjs';
-import { readSessionThreads } from './agent-sessions.mjs';
 import { readCodexThreads } from './codex-threads.mjs';
+import { appSessionFolders } from './agent-homes.mjs';
+import { readImportableThreads } from './importable-threads.mjs';
 import { markImported } from '../shared/agent-import.mjs';
 import { codexIdOf, importChoice, isCodexImportRow, isNotImportedRow } from '../shared/codex-import.mjs';
 import { checkProjectFolder } from '../shared/project-folder-check.mjs';
@@ -60,6 +63,7 @@ import { machineryPath } from './store/home.mjs';
 import { EVENT_NAMES } from '../shared/analytics-events.mjs';
 import { Name } from '../shared/product-name.mjs';
 import { handedOnByReply } from '../shared/team-rules.mjs';
+import { saveAttachments } from './save-attachments.mjs';
 
 // WHAT A WORKER IS TOLD WHEN HER DECISION COULD NOT BE RECORDED.
 const SPOOL_REFUSED = `${Name} could not record the founder's decision, so nothing was allowed. Finish what your grants cover and file the rest as a review.`;
@@ -91,6 +95,9 @@ const NO_UPDATER = {
   }),
   check: async () => NO_UPDATER.state(),
   install: () => false,
+  // Nowhere to move to and nothing to move: a copy with no updater behind it
+  // is a copy run from source (shared/where-it-runs-from.mjs).
+  move: () => ({ moved: false, error: null }),
 };
 
 export function registerIpc({ store, supervisor, config, window, analytics = NO_ANALYTICS, docGrants = null, updater = NO_UPDATER, host, team = null }) {
@@ -259,7 +266,15 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     // while the app is running and the settings screen already promises that
     // works without a restart.
     bin: () => config.claudeBin,
+    // The account marked In use, asked each time so a switch is read at once.
+    account: () => supervisor.usageAccount(),
     onChange: push,
+  });
+
+  ipcMain.handle('zero:refresh-usage', async event => {
+    if (event.senderFrame?.parent || (event.sender && event.sender !== window.webContents)) throw Error('Usage refresh is only available in the main app window.');
+    const result = await usage.refreshNow();
+    return result.reading ? { ...result, reading: { engine: DEFAULT_ENGINE, ...result.reading } } : result;
   });
 
   // Agents this run has already counted. In memory on purpose: a fresh launch
@@ -279,11 +294,17 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
       // send one event per agent per tick, all day. The keys are only ever
       // compared in this process; nothing about an agent is sent with the
       // count, which carries no name, no path and no title.
+      //
+      // AND WHICH ENGINE IT WAS (w-1116fbb68a, 2026-10-08). This list is Claude
+      // Code processes and only ever has been; a Codex conversation has no
+      // process to find and is counted from main/codex-watch.mjs instead. The
+      // engine is what lets the two be read apart, and without it on this side
+      // the Codex count would look like a drop in the Claude one.
       for (const agent of live) {
         const key = agentKey(agent);
         if (!key || seenAgents.has(key)) continue;
         seenAgents.add(key);
-        analytics.track('agent_seen');
+        analytics.track('agent_seen', { engine: 'claude' });
       }
       return live;
     } catch {
@@ -341,13 +362,13 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   });
   ipcMain.handle('zero:terminal',(_event,payload={})=>{
     if(_event.senderFrame?.parent || (_event.sender && _event.sender!==window.webContents)) throw Error('Terminal is only available in the main app window.');
-    const {product,id,action,data,cols,rows,offset}=payload;
+    const {product,id,action,data,cols,rows,offset,wait}=payload;
     if(typeof product!=='string'||typeof id!=='string'||!id||id.length>300)throw Error('Invalid task.');
     const key=JSON.stringify({product,id});
     if(product==='@agent-update')return agentUpdates.terminal(id,payload);
     switch(action){
       case 'open':return terminals.open(key);
-      case 'read':return terminals.read(key,offset);
+      case 'read':return terminals.read(key,offset,wait);
       case 'write':terminals.write(key,data);return true;
       case 'resize':terminals.resize(key,cols,rows);return true;
       case 'close':terminals.close(key);return true;
@@ -359,6 +380,21 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // read left out, asked for as she scrolls to their foot (main/store.mjs).
   ipcMain.handle('zero:older-items', (_e, { offset = 0, limit = 50 } = {}) =>
     store.listOlderItems({ offset: Number(offset) || 0, limit: Math.min(Number(limit) || 50, 200) }));
+
+  // IS ANYBODY ACTUALLY USING A SCREEN READER. Asked by the terminal pane
+  // before it builds an xterm, because xterm's accessibility tree is what
+  // `screenReaderMode` turns on and we used to turn it on for everybody.
+  // Electron's own words beside this property: "Rendering accessibility tree
+  // can significantly affect the performance of your app. It should not be
+  // enabled by default." It also carried xterm's 'invalid range' bug to an
+  // install that had no use for it (one crash report, 2026-10-08).
+  //
+  // Absent on Linux and before `ready`, where absent means no, and reading it
+  // may not throw: this is on the path that opens a terminal, and a terminal
+  // that cannot ask the question still has to open.
+  ipcMain.handle('zero:assistiveTech', () => {
+    try { return !!host.app?.accessibilitySupportEnabled; } catch { return false; }
+  });
 
   ipcMain.handle('zero:snapshot', () => {
     const now = Date.now();
@@ -379,7 +415,8 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     const reading = usageFor === DEFAULT_ENGINE ? usage.read() : supervisor.codexUsage();
     return {
       products: store.listProducts(),
-      items,
+      // Each with the place she dragged it to, if she did (w-6e5b532a95).
+      items: supervisor.withPlaces(items),
       // THE TEAM: who is signed in, their team and its people, and the
       // title-free activity of their private work. Null on a build with no
       // team cloud, which is the single-person app.
@@ -417,6 +454,9 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
       // while fixes landed underneath it, and a boot-time check cannot see
       // that. See main/staleness.mjs.
       restartNeeded: restartNeeded(supervisor.appDir),
+      // WHERE THREADS RUN, for the cloud button beside the filters
+      // (renderer/src/cloud-menu.ts). `setUp` false draws no button at all.
+      cloud: supervisor.cloudStatus(),
       // HER RATE LIMIT, WHICH IS WHAT ACTUALLY CAPS THE FLEET. Null until the
       // first reading lands, and the corner draws nothing at all until then
       // rather than a pill full of dashes.
@@ -480,7 +520,19 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
       // it and the user's own sentence never reached the card: the row went on
       // saying only what the session was started with days before. This is the
       // only process that knows the user said it, so this is where it is written.
-      if (out?.ok && out.key) agentSchedule.replied(out.key, out.at ?? Date.now(), Date.now(), String(text ?? ''));
+      //
+      // AND IT IS A REPLY, SO IT IS COUNTED (w-1116fbb68a, 2026-10-08). A reply
+      // on a task has always sent `reply_sent`; one typed into a live session
+      // sent nothing at all, and activation is read as three real replies to
+      // agents in the first day, so the people who talk to their own sessions
+      // rather than through a row were missing from it. `kind` says which of
+      // the two this was. It waits on the same delivery the mark does, and for
+      // the same reason: a count for words that never arrived would read as
+      // activation nobody had.
+      if (out?.ok) {
+        if (out.key) agentSchedule.replied(out.key, out.at ?? Date.now(), Date.now(), String(text ?? ''));
+        analytics.track('reply_sent', { kind: 'agent' });
+      }
       push();
       return out;
     } catch {
@@ -534,6 +586,9 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     }
   });
 
+  ipcMain.handle('zero:transcribe-audio', (_e, {audio,mime}) => desktopTranscribe(config.desktopLive,audio,mime));
+  ipcMain.handle('zero:desktop-live', (_e, {sdp}) => desktopLiveSession(config.desktopLive, sdp));
+  ipcMain.handle('zero:composer-catalog', (_e, { product, id, engine }) => supervisor.composerCatalog(product, id, engine));
   ipcMain.handle('zero:command-catalog', (_e, { product, id }) => supervisor.commandCatalog(product, id));
   ipcMain.handle('zero:remote-control', (_e, {product,id,action}) => supervisor.remoteControl(product,id,action));
   ipcMain.handle('zero:command', (_e, { product, id, text }) => supervisor.commandItem(product, id, text));
@@ -544,8 +599,14 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // answered at once (supervisor.sendNow).
   ipcMain.handle('zero:send-now', (_e, { product, id }) => supervisor.sendNow(product, id));
 
-  ipcMain.handle('zero:answer', async (_e, { product, id, answer, status, priority, permissionMode, model, effort, now, inReplyTo }) => {
+  ipcMain.handle('zero:answer', async (_e, { product, id, answer, status, priority, permissionMode, model, effort, engine, now, inReplyTo }) => {
     if (isAgentRow(id)) return { ok: false };
+    // A level picked from ⌘K arrives here with no words, and gives way the
+    // same as one picked on the summary (zero:thread-edit). A reply that
+    // happens to carry its row's level does not.
+    if (priority != null && !answer && id) supervisor.setThreadPlaces({ [id]: null });
+    // CLOSING A THREAD IS THE END OF WHAT IT WAS PINNED FOR (w-20323283e6).
+    if (id && status === 'done') supervisor.setThreadPins({ [id]: null });
     // A REPLY IN A THREAD (w-920461cbe6) only means something in a conversation
     // between people, which is the only place a thread is drawn and the only
     // record the mark crosses to a teammate in (shared/team-rules.mjs). Anywhere
@@ -564,7 +625,10 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
         if (choice) {
           let thread = null;
           if (choice === 'yes') {
-            try { thread = readCodexThreads({}).threads.find((t) => t.id === codexIdOf(row)) ?? null; } catch { thread = null; }
+            try {
+              const { codexDirs } = appSessionFolders({ config, supervisor });
+              thread = readCodexThreads({ codexDirs }).threads.find((t) => t.id === codexIdOf(row)) ?? null;
+            } catch { thread = null; }
           }
           const out = store.answerCodexImport(product, id, choice, { thread });
           push();
@@ -582,7 +646,8 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     // handing them over in one call and writing the model afterwards would be a
     // race the run usually wins, so she would pick a model and watch the old one
     // take the task. `answerItem` writes both, and it writes the model first.
-    const out = await submitReply(supervisor,{product,id,answer,status,permissionMode,now:!!now},()=>store.answerItem(product, id, { answer, status, priority, permissionMode, model, effort, inReplyTo: thread }));
+    if (engine !== undefined && !supervisor.engineChoices().some((choice) => choice.id === engine)) throw Error('This agent is not available.');
+    const out = await submitReply(supervisor,{product,id,answer,status,permissionMode,engine,model,now:!!now},()=>store.answerItem(product, id, { answer, status, priority, permissionMode, model, effort, engine, inReplyTo: thread }));
     // A REPLY ON A ROW A TEAMMATE GAVE YOU HANDS IT BACK TO THEM, so the
     // conversation moves to their inbox instead of sitting in both
     // (shared/team-rules.mjs handedOnByReply). Archiving hands nothing on.
@@ -608,6 +673,21 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   ipcMain.handle('zero:set-product-order', (_e, { order }) => {
     supervisor.setProductOrder(order);
     return supervisor.status();
+  });
+
+  // A THREAD DRAGGED TO A PLACE OF ITS OWN in the list (w-6e5b532a95): the
+  // places the drop worked out (`dropPlaces`, shared/rank.mjs), id to number.
+  ipcMain.handle('zero:set-thread-places', (_e, { places }) => {
+    supervisor.setThreadPlaces(places);
+    push();
+    return { ok: true };
+  });
+
+  // PINNED THREADS (w-20323283e6): id to true, or null to unpin.
+  ipcMain.handle('zero:set-thread-pins', (_e, { pins }) => {
+    supervisor.setThreadPins(pins);
+    push();
+    return { ok: true };
   });
 
   // Hidden from the composer's picker and nothing else: a hidden product still
@@ -689,13 +769,16 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   ipcMain.handle('zero:team-sync', teamCall(() => team.syncNow()));
   // A MESSAGE TO A PERSON (approved 2026-10-01: people get messages, never
   // tasks). main/team/index.mjs keeps it between the two of them.
-  ipcMain.handle('zero:team-message', teamCall(({ to, body, priority }) => team.message(to, body, priority)));
+  ipcMain.handle('zero:team-message', teamCall(({ to, body, priority, files }) => team.message(to, body, priority, files)));
   // AN EDIT TO A THREAD, MADE IN PLACE from its summary: the summary's lines,
   // who sees it, its priority and what it is linked to. Works with or without a
   // team, since every thread has a summary.
   ipcMain.handle('zero:thread-edit', (_e, { product, id, patch }) => {
     try {
       store.threadEdit(product, id, patch);
+      // PICKING A LEVEL IS THE NEWER WORD on where a thread goes, so a place
+      // it was dragged to gives way and it sorts by its level again.
+      if (patch?.priority != null) supervisor.setThreadPlaces({ [id]: null });
       push();
       return { ok: true };
     } catch (err) {
@@ -776,7 +859,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     // attempted. A row scheduled for later is not woken for, because it is not
     // due; the timer is what serves those.
     // Nothing to wake for a thread added to Later: it starts when she says.
-    if (start !== 'later' && (!runAt || runAt <= Date.now())) supervisor.wake();
+    if (start !== 'manual' && start !== 'later' && (!runAt || runAt <= Date.now())) supervisor.wake();
     return out;
   });
 
@@ -938,11 +1021,18 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // an archive, so it does not collide with what done means on a work item.
   ipcMain.handle('zero:end-repeat', (_e, { product, id }) => store.endRepeat(product, id));
 
-  ipcMain.handle('zero:create-product', (_e, { name, repoPath }) => {
-    const out = store.createProduct({ name, repoPath });
+  ipcMain.handle('zero:create-product', (_e, { name, repoPath, codexFolder, ofMany }) => {
+    const out = store.createProduct({ name, repoPath, codexFolder, ofMany });
     // (privacy page 5.1). The count is the whole payload; the path it was
     // connected to never leaves.
-    if (typeof repoPath === 'string' && repoPath.trim()) analytics.track('repo_connected');
+    //
+    // AND A PRESS THAT CONNECTS NINE FOLDERS IS ONE THING SOMEBODY DID, NOT
+    // NINE (w-1116fbb68a, 2026-10-08). The import makes a project per folder,
+    // so this handler fired nine times for one press and nine events read as
+    // nine separate connections to anybody looking at them as activity rather
+    // than as a funnel step. `ofMany` is the caller saying it will count the
+    // press itself, once, with how many folders it connected.
+    if (!ofMany && typeof repoPath === 'string' && repoPath.trim()) analytics.track('repo_connected');
     return out;
   });
 
@@ -1082,15 +1172,10 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // 'codex'`, land under the project whose folder they ran in exactly as the
   // Claude Code ones do, and the ones the user said not now to are here too, so
   // there is a way back to them.
-  const readAllThreads = () => {
-    let claude = [];
-    let codex = [];
-    try { ({ threads: claude } = readSessionThreads({})); } catch { claude = []; }
-    try { ({ threads: codex } = readCodexThreads({})); } catch { codex = []; }
-    return [...claude, ...codex].sort((a, b) => (b.when ?? 0) - (a.when ?? 0));
-  };
-  ipcMain.handle('zero:agent-threads', () => {
-    const threads = readAllThreads();
+  const readAllThreads = (query = '') => readImportableThreads({ config, supervisor, query });
+  ipcMain.handle('zero:agent-threads', (_e, {query} = {}) => {
+    const search=typeof query==='string' ? query.trim().slice(0,160) : '';
+    const threads = readAllThreads(search.length>=2?search:'');
     lastThreads = threads;
     // Each one already in the inbox says so, and the card leaves it out
     // (w-db6f5e331e). The walk's folder suggestions still read all of them.
@@ -1315,15 +1400,64 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     }
   });
 
+  /*
+   * AND WHEN NEITHER BUTTON CAN FIND IT: POINT AT THE FILE YOURSELF
+   * (w-ce8c1a9275). The search asks the login shell first now, which covers
+   * every installer a person's own PATH knows about -- but a wrapper script
+   * somewhere nobody would guess, a tool on a volume, or a machine whose login
+   * shell will not start at all still used to mean a path WE ship and a release
+   * THEY wait for. This is the half that ends that.
+   *
+   * ONE ROUND TRIP, like `zero:project-icon` below and for the same reason: the
+   * panel opens in this process and the choice is applied in the same call, so
+   * the only path that ever reaches `pointAtEngineBin` is one the open panel
+   * itself produced. The window says WHICH coding agent it is asking about and
+   * nothing else, which is the whole of what it is trusted with -- `codexBin`
+   * is a path that gets spawned, and every worker on this machine has a broad
+   * Bash allow (tests/where-codex-runs-from-is-not-a-file-a-worker-can-write).
+   *
+   * THE REFUSAL IS A SENTENCE AND NOT AN ERROR. Picking a folder, or a file
+   * that cannot be run, is an ordinary mistake at a file panel; it comes back
+   * as words the row prints, the way `zero:choose-folder` already does.
+   */
+  ipcMain.handle('zero:engine-bin', async (_e, { engine, action } = {}) => {
+    if (engine !== 'claude' && engine !== 'codex') return { ok: false, error: 'Unknown coding agent.' };
+    try {
+      // Handing the choice back needs no panel: it is the row saying "look for
+      // it again", and the search takes over from there.
+      if (action === 'search') {
+        const gave = searchForEngineBin(config, engine);
+        if (!gave.ok) return { ok: false, refused: gave.say };
+        return { ok: true, ...readSettings({ config, supervisor, store }) };
+      }
+      const { dialog } = await import('electron');
+      const r = await dialog.showOpenDialog(window, {
+        title: engine === 'codex' ? 'Where is Codex?' : 'Where is Claude Code?',
+        buttonLabel: 'Use this one',
+        properties: ['openFile', 'showHiddenFiles', 'treatPackageAsDirectory'],
+      });
+      // Cancelling is not a failure and must not draw one. `ok` with nothing
+      // changed is the honest answer: they opened the panel and closed it again.
+      if (r.canceled || !r.filePaths?.length) return { ok: true, canceled: true };
+      const took = pointAtEngineBin(config, engine, r.filePaths[0]);
+      if (!took.ok) return { ok: false, refused: took.say };
+      return { ok: true, ...readSettings({ config, supervisor, store }) };
+    } catch (err) {
+      return { ok: false, error: String(err.message) };
+    }
+  });
+
   // SETTING UP THEIR PLAN FOR THEM (w-9f6975906c). The walk asks which plan
   // they pay for and this installs the tool and starts its own sign-in. The
   // finder is the recheck, so what gets installed lands on the config and the
   // rest of the app runs on it without a restart.
   const engineSetup = createEngineSetup({
     find: (engine) => {
-      if (engine === 'claude') { const s = recheckClaude(config); return { found: s.claudeFound, path: s.claudeBin }; }
-      const s = recheckCodex(config);
-      return { found: s.found, path: s.bin };
+      const finders = {
+        claude: () => { const s = recheckClaude(config); return { found: s.claudeFound, path: s.claudeBin }; },
+        codex: () => { const s = recheckCodex(config); return { found: s.found, path: s.bin }; },
+      };
+      return finders[engine]?.() ?? { found: false, path: null };
     },
     // WHICH ONE IS SIGNED IN, kept on the config for the run that reads it
     // (`Supervisor#_enginesFound`) and never saved: it changes outside the app.
@@ -1342,7 +1476,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // A sign-in left waiting on the browser is not left running after the app.
   app.on('will-quit', () => { engineSetup.cancel('claude'); engineSetup.cancel('codex'); });
   ipcMain.handle('zero:engine-setup', async (_e, { action, engine } = {}) => {
-    if (engine !== 'claude' && engine !== 'codex') return { ok: false, error: 'Unknown coding agent.' };
+    if (!isEngine(engine)) return { ok: false, error: 'Unknown coding agent.' };
     try {
       if (action === 'ready') return { ok: true, ...(await engineSetup.readiness(engine)) };
       if (action === 'start') return { ok: true, ...engineSetup.start(engine) };
@@ -1523,29 +1657,9 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // in the product's attachments/ dir and come back as relative paths the
   // caller embeds in the body as markdown. Relative paths keep them readable
   // by workers through the MCP and renderable in the message view.
-  ipcMain.handle('zero:save-attachments', async (_e, { product, files }) => {
-    const fs = await import('node:fs');
-    const dir = store.productDir(product);
-    const outDir = path.join(dir, 'attachments');
-    fs.mkdirSync(outDir, { recursive: true });
-    const saved = [];
-    for (const file of files ?? []) {
-      const safe = String(file.name ?? 'file').replace(/[^\w.-]+/g, '-').slice(0, 80);
-      // A RANDOM SUFFIX, THE SAME ONE THE STAGING PATH ALREADY USES. The name
-      // was the millisecond plus the filename, so two files saved in the same
-      // millisecond with the same name overwrote each other and the message
-      // ended up with two links to one picture. Screenshots are often sent in
-      // pairs, which is exactly the shape that collides. It has never been observed
-      // happening; it is one line to make impossible.
-      const rel = `attachments/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
-      const abs = path.join(dir, rel);
-      if (file.dataBase64) fs.writeFileSync(abs, Buffer.from(file.dataBase64, 'base64'));
-      else if (file.srcPath) fs.copyFileSync(file.srcPath, abs);
-      else continue;
-      saved.push({ rel, name: safe, image: /\.(png|jpe?g|gif|webp)$/i.test(safe) });
-    }
-    return saved;
-  });
+  // The saving itself is main/save-attachments.mjs, shared with a message to a
+  // person, which saves its own once it knows which conversation it is in.
+  ipcMain.handle('zero:save-attachments', async (_e, { product, files }) => saveAttachments(store.productDir(product), files));
 
   // A PASTED SCREENSHOT GOES TO DISK THE MOMENT IT IS PASTED.
   //
@@ -1660,7 +1774,12 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   ipcMain.handle('zero:open-artifact', async (_e, { product, src, mode }) => {
     const { shell } = await import('electron');
     if (typeof src !== 'string' || !src) return { ok: false, error: 'no path' };
-    if (/^https?:/.test(src)) { if (mode !== 'resolve') shell.openExternal(src); return { ok: true, opened: src } }
+    if (/^https?:/.test(src)) {
+      try {
+        if (mode !== 'resolve') await openWebsite(src, {external: (url) => shell.openExternal(url)});
+        return { ok: true, opened: src, url: src };
+      } catch (error) { return {ok:false,error:error.message}; }
+    }
     const found = resolveArtifact({
       src,
       product,
@@ -1842,6 +1961,14 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // to decide is when the app is allowed to disappear and come back.
   ipcMain.handle('zero:update-check', async () => updater.check({ manual: true }));
   ipcMain.handle('zero:update-install', () => ({ started: updater.install() }));
+  // AND A THIRD, for the copy that cannot update itself from where it is: move
+  // the app into Applications (shared/where-it-runs-from.mjs). It is a door of
+  // its own rather than part of the install, because it is the opposite
+  // decision — nothing has been downloaded and nothing will be until the app
+  // is somewhere macOS lets it write.
+  // A copy run from source answers no to it rather than throwing: there is no
+  // bundle to move (main/source-updater.mjs).
+  ipcMain.handle('zero:update-move', () => updater.move?.() ?? { moved: false, error: null });
 
   // Handed back so the Cmd+Y/Cmd+N chord answers through the same door the
   // buttons do, rather than reaching past it into approvals.answer.

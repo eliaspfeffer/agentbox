@@ -193,7 +193,7 @@ export interface Destination {
  *  everything on this card is ticked by path. */
 export interface SessionThread {
   id: string;
-  source: 'terminal' | 'desktop' | 'codex';
+  source: 'terminal' | 'editor' | 'desktop' | 'codex';
   folder: string;
   folderName: string;
   short: string;
@@ -664,9 +664,23 @@ export function pressLine(dests: Destination[], picked: string[]): string {
 export const LIST = {
   head: 'Bring in your recent agents',
   line: 'From the last 10 days. Untick any you want to leave out.',
+  // When the ten days held nothing and the card reached back for the newest
+  // older ones (main/importable-threads.mjs, w-e46f2e9cea). "From the last 10
+  // days" over a list of October's sessions would be untrue.
+  lineOlder: 'Nothing from the last 10 days, so here are your most recent. Untick any you want to leave out.',
   add: (n: number) => (n > 0 ? `Add ${n} to your inbox` : 'Nothing ticked'),
   notNow: 'Not now',
 };
+
+/**
+ * WHICH LINE GOES OVER THE LIST. The older one only when there are dated
+ *  conversations and none of them is from the last ten days, which is exactly
+ *  when the reader reached back. Agent files carry no date and change nothing. */
+export function listLine(threads: Array<{ when?: number }> = [], now = Date.now()): string {
+  const dated = threads.filter((t) => Number(t?.when) > 0);
+  const recent = now - 10 * 86400000;
+  return dated.length && dated.every((t) => Number(t.when) < recent) ? LIST.lineOlder : LIST.line;
+}
 
 export interface ImportLine { path: string; title: string; meta: string; when: number }
 

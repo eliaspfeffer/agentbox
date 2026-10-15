@@ -1,0 +1,57 @@
+/* A quiet mention: what a message names, drawn as an icon and a name with a
+   soft underline (Mention.tsx, w-a3a7d1a1ec). Inline rather than a box, so a
+   long name wraps like the words around it.
+
+   Hover lightens what is behind it by one step, firms the underline and wakes
+   the icon from grey; nothing changes size, so the line never moves. In over
+   120ms, out over 200ms, so a pointer crossing a paragraph does not flicker.
+   Every colour here is one every theme defines: the tag this replaces asked
+   for a --hover colour none did, and its hover dropped the fill to nothing. */
+:is(.markdown, .ts-panel) a.mention,
+.mention {
+  display: inline;
+  padding: 1px 3px;
+  margin: 0 -3px;
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition: background-color 200ms cubic-bezier(.2, 0, 0, 1), text-decoration-color 200ms cubic-bezier(.2, 0, 0, 1);
+}
+.mention-icon {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  color: var(--text-faint);
+  transition: color 200ms cubic-bezier(.2, 0, 0, 1);
+}
+/* A link, or the button a player's name is drawn as (ArtifactMedia). */
+:is(.markdown, .ts-panel) a.mention:hover,
+a.mention:hover,
+button.mention:hover {
+  background: var(--wash-strong);
+  color: var(--text);
+  text-decoration-color: var(--text-faint);
+  transition-duration: 120ms;
+}
+:is(a, button).mention:hover .mention-icon { color: var(--text); transition-duration: 120ms; }
+:is(a, button).mention:active { background: var(--wash-strong); text-decoration-color: var(--text-dim); transition-duration: 60ms; }
+:is(a, button).mention:focus-visible { box-shadow: 0 0 0 1px var(--text-faint); }
+.mention-unavailable,
+:is(.markdown, .ts-panel) .mention-unavailable {
+  color: var(--text-dim);
+  text-decoration: none;
+  cursor: default;
+}

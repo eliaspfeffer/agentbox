@@ -6,8 +6,8 @@ import { Name } from '../../../shared/product-name.mjs';
 import { SidebarIcon } from './SidebarIcon';
 import { SidebarToggleIcon } from './SidebarToggleIcon';
 import { AppMark } from './AppMark';
-import { SidebarUpdate } from './SidebarUpdate';
-import { changeLines, closedHere, readUpdateClosed, writeUpdateClosed } from '../update-row';
+import { SidebarMove, SidebarUpdate } from './SidebarUpdate';
+import { changeLines, closedHere, readMoveClosed, readUpdateClosed, writeMoveClosed, writeUpdateClosed } from '../update-row';
 import { AccountMenu } from '../team/account-menu';
 /** ONE NUMBER IN THE SIDEBAR, ON INBOX, AND IT IS DRAWN IN THE TAB'S OWN TYPE.
  *
@@ -40,10 +40,15 @@ import { AccountMenu } from '../team/account-menu';
  *  deselected tab that is --text-faint at 400, exactly the word Inbox beside it;
  *  on the active one it is --text at 500. There is one rule rather than two.
  */
-export function WorkspaceNavigation({ view, collapsed, onToggle, onView, onSearch: _onSearch, onCompose: _onCompose, inboxCount = 0, scheduledCount: _scheduledCount = 0, usage, onSettings, onInstructions, page: pageIn, hasTeam = false, onTeam, teamPage = false, team = null, onInvite, onAccount, onFeedback, onSignOut, update = null, onUpdate }: {
+export function WorkspaceNavigation({ live, view, collapsed, onToggle, onView, onSearch: _onSearch, onCompose: _onCompose, inboxCount = 0, scheduledCount: _scheduledCount = 0, usage, onSettings, onInstructions, page: pageIn, hasTeam = false, onTeam, teamPage = false, team = null, onInvite, onAccount, onFeedback, onSignOut, update = null, onUpdate, move = null, onMove }: {
+  live?: ReactNode;
   // A NEW VERSION WAITING (SidebarUpdate.tsx). Null when there is none.
   // `version` is what its × closes, until a newer one arrives.
   update?: { installing: boolean; version?: string | null; changes?: string[]; behind?: number | null; error?: string | null } | null; onUpdate?: () => void;
+  // OR A COPY THAT CANNOT UPDATE ITSELF FROM WHERE IT IS (SidebarMove, and
+  // shared/where-it-runs-from.mjs). Null on every copy that can, which is
+  // nearly all of them. `place` is what its × closes.
+  move?: { place: string | null; error?: string | null } | null; onMove?: () => void;
   page?: string | null; inboxCount?: number; scheduledCount?: number; usage?: ReactNode; onSettings?: () => void; onInstructions?: () => void;
   // THE TEAM TAB. No people and no counts here: approved 2026-09-30, a list of
   // who is busy is not worth seeing all the time, and the Team page is where
@@ -73,6 +78,15 @@ export function WorkspaceNavigation({ view, collapsed, onToggle, onView, onSearc
   const updateCard = showUpdate && !collapsed;
   const updateView = showUpdate && update && onUpdate && <SidebarUpdate installing={update.installing} changes={changeLines(update)} error={update.error ?? null}
     collapsed={collapsed} onRestart={onUpdate} onClose={closeUpdate} />;
+  // THE MOVE CARD STANDS WHERE THE UPDATE CARD WOULD, and never both: a
+  // version on the disk is the news, and a copy that cannot update itself
+  // never has one. The place whose card was closed is kept under its own key.
+  const [moveClosed, setMoveClosed] = useState(() => readMoveClosed());
+  const closeMove = () => { const place = move?.place ?? ''; setMoveClosed(place); writeMoveClosed(globalThis.localStorage, place); };
+  const showMove = !showUpdate && !!move && !!onMove && moveClosed !== (move.place ?? '');
+  const moveCard = showMove && !collapsed;
+  const moveView = showMove && move && onMove && <SidebarMove place={move.place} error={move.error ?? null}
+    collapsed={collapsed} onMove={onMove} onClose={closeMove} />;
   const waiting = Number.isFinite(inboxCount) ? Math.max(0, Math.floor(inboxCount)) : 0;
   const waitingDescription = `${waiting} ${waiting === 1 ? 'thread' : 'threads'} waiting`;
   // ONE PAGE OF YOUR THREADS (approved 2026-10-01). In progress, Scheduled and
@@ -127,6 +141,7 @@ export function WorkspaceNavigation({ view, collapsed, onToggle, onView, onSearc
       </>}
     </div>
     <nav className="workspace-tabs" aria-label="Threads">
+      {live}
       <button data-tab="inbox" className={`workspace-tab${inboxLit ? ' active' : ''}${waiting > 0 ? ' has-count' : ''}`} aria-label="Threads" aria-current={inboxLit ? 'page' : undefined} title={waiting > 0 ? `Threads · ${waitingDescription}` : collapsed ? 'Threads' : undefined} onClick={() => onView('inbox')}><SidebarIcon view="inbox" /><span>Threads</span>{waiting > 0 && <small className="workspace-running" aria-label={waitingDescription}>{waiting}</small>}</button>
       {/* THERE IS NO TEAM TAB (w-05ff3d1438, 2026-10-01). The Team page and
           the Inbox were one question on two pages, so they are one page: the
@@ -137,8 +152,10 @@ export function WorkspaceNavigation({ view, collapsed, onToggle, onView, onSearc
       {/* The card sits above the foot list; with the sidebar shut it is a
           row inside it (SidebarUpdate.tsx). */}
       {updateCard && updateView}
+      {moveCard && moveView}
       <div className="workspace-utilities th-side-foot">
         {!updateCard && updateView}
+        {!moveCard && moveView}
         {/* THE SIDEBAR NEVER SAYS WHICH PLAN YOU ARE ON (w-e217e577e5,
             2026-10-07, and this is a standing rule rather than one round's
             taste). A row reading "Claude · Max 20x" shipped here for a few

@@ -17,7 +17,7 @@ import { emptyLine, lookRows, matchesQuery, rankMatches } from '../palette-rows'
 import { type Look } from '../skins';
 import { type ThemeChoice } from '../theme';
 import { NAME } from '../../../shared/product-name.mjs';
-import { CHECK_SAY } from '../update-row';
+import { CHECK_SAY, MOVE_SAY } from '../update-row';
 
 interface Command {
   id: string;
@@ -30,7 +30,7 @@ interface Command {
   run: () => void;
 }
 
-export function Palette({ products, supervisorPaused, itemCommands = [], batch = false, order = [], look, machine = 'dark', onSetLook, staleFiles = [], updateReady = null, onInstallUpdate, onCheckUpdate, filtering = false, onOpenFilter, onClearFilter, onView, onPause, onResume, onRankFirst, onOpenProjects, onNewProject, onStanding, onSettings, onShortcuts, panelUp, onTogglePanel, boardUp = false, onFlipView, keyHints, onSetKeyHints, onSearch, onFirstRun, onTutorial, onImportAgents, onFreshUser, onDemo, onClose }: {
+export function Palette({ products, supervisorPaused, itemCommands = [], batch = false, order = [], look, machine = 'dark', onSetLook, staleFiles = [], updateReady = null, onInstallUpdate, onCheckUpdate, moveToApplications = false, onMoveToApplications, filtering = false, onOpenFilter, onClearFilter, onView, onPause, onResume, onRankFirst, onOpenProjects, onNewProject, onStanding, onSettings, onShortcuts, panelUp, onTogglePanel, boardUp = false, onFlipView, keyHints, onSetKeyHints, onSearch, onFirstRun, onTutorial, onImportAgents, onFreshUser, onDemo, onClose }: {
   products: Product[];
   supervisorPaused: boolean;
   itemCommands?: Command[];
@@ -57,6 +57,10 @@ export function Palette({ products, supervisorPaused, itemCommands = [], batch =
    * and that is a standing rule, not an oversight. */
   updateReady?: string | null;
   onInstallUpdate?: () => void;
+  /** Whether this copy is somewhere it cannot update itself from, which is
+   *  what the move row answers (shared/where-it-runs-from.mjs). */
+  moveToApplications?: boolean;
+  onMoveToApplications?: () => void;
   /** Look for a new version now. Answers in a toast. */
   onCheckUpdate?: () => void;
   /** Whether the box filter has anything on, which is when "Clear filter" is offered. */
@@ -203,6 +207,19 @@ export function Palette({ products, supervisorPaused, itemCommands = [], batch =
       hint: `version ${updateReady} has downloaded · restarting puts you back where you were`,
       keywords: 'update upgrade new version restart',
       run: () => onInstallUpdate?.(),
+    }] : []),
+    // THE COPY THAT CANNOT UPDATE ITSELF AT ALL (w-ca1fc3ac58). Run out of the
+    // disk image or out of a copy macOS made, it will never have a version on
+    // the disk to restart onto, so this row is the only one of the three that
+    // can get it one. It is here as well as in the sidebar because the card
+    // there has an × on it, and closing a card may not cost somebody updates
+    // for good (shared/where-it-runs-from.mjs).
+    ...(moveToApplications ? [{
+      id: 'update-move',
+      label: MOVE_SAY.button,
+      hint: `${NAME} cannot update itself from where it is now`,
+      keywords: 'update upgrade move applications folder disk image read-only stuck',
+      run: () => onMoveToApplications?.(),
     }] : []),
     // AND LOOKING NOW, WHEN NOTHING IS WAITING (w-39d6c237f7). The same button
     // Settings grew, here because wanting the newest version usually occurs to
@@ -490,7 +507,7 @@ export function Palette({ products, supervisorPaused, itemCommands = [], batch =
       run: () => onSetKeyHints(!keyHints),
     },
 
-  ], [itemCommands, batch, products, supervisorPaused, order, onNewProject, filtering, onOpenFilter, onClearFilter, onView, onPause, onResume, onRankFirst, onOpenProjects, onStanding, onSettings, onShortcuts, look, machine, onSetLook, staleFiles, updateReady, onInstallUpdate, panelUp, onTogglePanel, boardUp, onFlipView, keyHints, onSetKeyHints, onSearch, onFirstRun, onTutorial, onImportAgents, onFreshUser, onDemo]);
+  ], [itemCommands, batch, products, supervisorPaused, order, onNewProject, filtering, onOpenFilter, onClearFilter, onView, onPause, onResume, onRankFirst, onOpenProjects, onStanding, onSettings, onShortcuts, look, machine, onSetLook, staleFiles, updateReady, onInstallUpdate, moveToApplications, onMoveToApplications, panelUp, onTogglePanel, boardUp, onFlipView, keyHints, onSetKeyHints, onSearch, onFirstRun, onTutorial, onImportAgents, onFreshUser, onDemo]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

@@ -16,12 +16,18 @@ function turnClosed(message) {
 // before the session is closed anyway. Measured wakes arrive in about a second.
 const WAKE_GRACE_MS = 2 * 60 * 1000;
 
-export function claudeStreamArgs(args) {
+// THE PROMPT LEAVES THE LINE WHEN REPLIES ARRIVE ON STDIN. Both the print flag
+// and the input-format flags are read off the engine's `run` definition, so an
+// engine of this family that spells either of them differently is a definition
+// and not a change here. An engine with no `input` cannot take corrections on
+// stdin, and gets its line back as it was.
+export function streamInputArgs(run, args) {
+  if (!run?.input) return [...args];
   const copy = [...args];
-  const index = copy.indexOf('-p');
+  const index = copy.indexOf(run.print);
   if (index < 0) throw Error('Missing print prompt');
   copy.splice(index + 1, 1);
-  return [...copy, '--input-format', 'stream-json', '--replay-user-messages'];
+  return [...copy, ...run.input];
 }
 
 // Replay-user-messages acknowledges the exact UUID when Claude consumes it.
@@ -44,6 +50,12 @@ export function attachClaudeInput(child) {
   // still open was stopped part-way, whatever its last turn said
   // (tests/a-worker-whose-helpers-are-still-working-does-not-come-back-to-you).
   let ended = false;
+  // A TURN IS RUNNING between its `system/init` and its result. A message
+  // written while none is starts the next one, and a turn that starts while
+  // one waits takes it with it, so either way it is being answered, though
+  // Claude replays it only when that turn first speaks. Send now must not cut
+  // that turn: it was the answer (w-0202576e73).
+  let inTurn = false;
   const closeInput = () => { closed = true; ended = true; clearTimeout(wakeTimer); child.stdin.end(); };
   const mayClose = () => !held && atResult && !pending.size && !waiting.length;
   const fail = reason => {
@@ -75,7 +87,11 @@ export function attachClaudeInput(child) {
         }
       }
       if (event.type === 'system' && event.subtype === 'bridge_state') child.emit('bridge-state', event);
-      if (event.type === 'assistant') atResult = false;
+      if (event.type === 'system' && event.subtype === 'init') {
+        inTurn = true;
+        for (const request of pending.values()) request.taken = true;
+      }
+      if (event.type === 'assistant') { atResult = false; inTurn = true; }
       if (event.type === 'user' && !event.parent_tool_use_id && typeof event.uuid === 'string' && !seenUsers.has(event.uuid)) {
         seenUsers.add(event.uuid);
         const content = event.message?.content;
@@ -103,6 +119,7 @@ export function attachClaudeInput(child) {
       }
       if (event.type === 'result') {
         atResult = true;
+        inTurn = false;
         if (mayClose()) closeInput();
       }
     }
@@ -130,7 +147,7 @@ export function attachClaudeInput(child) {
   // ONLY WHILE A MESSAGE OF HERS IS WAITING. The cut turn ends in a result,
   // and with nothing pending that result closes the input and ends the run.
   child.interrupt = () => {
-    if (closed || !pending.size) return Promise.resolve({ interrupted: false });
+    if (closed || ![...pending.values()].some(request => !request.taken)) return Promise.resolve({ interrupted: false });
     child.lastInterruptAt = Date.now();
     return child.control({ subtype: 'interrupt' }).then(() => ({ interrupted: true }));
   };
@@ -147,7 +164,7 @@ export function attachClaudeInput(child) {
   child.steer = text => new Promise((resolve, reject) => {
     if (closed || !child.stdin.writable) return reject(turnClosed('The turn has ended. Send the message again to continue it.'));
     const uuid = randomUUID();
-    pending.set(uuid, { resolve, reject });
+    pending.set(uuid, { resolve, reject, taken: !inTurn });
     try {
       child.stdin.write(JSON.stringify({ type: 'user', uuid, message: { role: 'user', content: text }, parent_tool_use_id: null, session_id: '' }) + '\n');
     } catch (error) {

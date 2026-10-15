@@ -314,9 +314,15 @@ describe('check again really looks again', () => {
     expect(read('main/ipc.mjs')).toMatch(/ipcMain\.handle\('zero:claude-recheck'/);
   });
 
+  // THE GATE IS A QUESTION SCREEN SINCE 2026-10-09 (w-ce8c1a9275), wearing
+  // `fr-stack-folders` like the walk's other full-stop screens instead of the
+  // ending's card, so the line under the rows is the plan question's `fr-note`
+  // rather than a `fr-gate-still` of its own. What it SAYS is unchanged, and
+  // that is what this case was always about: after a search that turned
+  // nothing up, the screen says something it had not said before.
   it('and the card asks it, then says something different when it is still nothing', () => {
     expect(walkSource()).toMatch(/setTried\(await onRecheck\(\)\)/);
-    expect(walkSource()).toMatch(/\{tried && !checking && <p className="fr-gate-still">/);
+    expect(walkSource()).toMatch(/tried && !checking \? COPY\.gateStill/);
   });
 });
 

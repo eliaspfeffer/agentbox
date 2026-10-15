@@ -1,5 +1,7 @@
 import {useEffect,useState} from 'react';
 import {api} from '../api';
+import {onPhone} from '../phone-screen';
+import {pollEvery} from '../phone-polls';
 import {Name} from '../../../shared/product-name.mjs';
 import './remote-control.css';
 type State={state:string;at:number;text?:string;url?:string;mayBeActive?:boolean};
@@ -7,7 +9,7 @@ export function RemoteControl({product,id}:{product:string;id:string}) {
  const [value,setValue]=useState<State|null>(null);
  const [busy,setBusy]=useState(false);
  const task={product,id};
- useEffect(()=>{let gone=false;const refresh=()=>api.remoteControl({product,id,action:'status'}).then(v=>{if(!gone)setValue(v);}).catch(()=>{});void refresh();const timer=setInterval(refresh,1000);const open=()=>{api.remoteControl({product,id,action:'toggle'}).then(v=>{if(!gone)setValue(v);}).catch(e=>{if(!gone)setValue({state:'failed',at:Date.now(),text:e.message});});};window.addEventListener('task-remote-control-open',open);return()=>{gone=true;clearInterval(timer);window.removeEventListener('task-remote-control-open',open);};},[product,id]);
+ useEffect(()=>{let gone=false;const refresh=()=>api.remoteControl({product,id,action:'status'}).then(v=>{if(!gone)setValue(v);}).catch(()=>{});void refresh();const timer=setInterval(refresh,pollEvery(1000,onPhone()));const open=()=>{api.remoteControl({product,id,action:'toggle'}).then(v=>{if(!gone)setValue(v);}).catch(e=>{if(!gone)setValue({state:'failed',at:Date.now(),text:e.message});});};window.addEventListener('task-remote-control-open',open);return()=>{gone=true;clearInterval(timer);window.removeEventListener('task-remote-control-open',open);};},[product,id]);
  const act=async(action:string)=>{setBusy(true);try{setValue(await api.remoteControl({...task,action}));}catch(e){setValue({state:'failed',at:Date.now(),text:e instanceof Error?e.message:'The operation failed.'});}finally{setBusy(false);}};
  if(!value||value.state==='off')return null;
  const enabled=['ready','connected'].includes(value.state),waiting=['connecting','disconnecting','reconnecting'].includes(value.state);

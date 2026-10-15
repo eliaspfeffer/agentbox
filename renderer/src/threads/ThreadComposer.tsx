@@ -1,3 +1,5 @@
+import {DictationButtons} from '../components/Dictation';
+import {IntegrationPicker} from '../components/IntegrationPicker';
 // THE NEW THREAD CARD, drawn as an email (w-e731ca9376, approved 2026-10-01).
 //
 // To, then Model, then the message, then a bar of three square chips (project,
@@ -12,8 +14,7 @@
 // read it instead, because "who sees this" is the one thing a message to one
 // person has to be clear about.
 //
-// THE MODEL IS THE HARNESS. There is no Engine field: an Anthropic model runs in
-// Claude Code and a GPT model in Codex, so the two can never disagree. The rules
+// To names the harness; Model lists only that harness's models. The rules
 // for that, for the Recent list, for Send later and for the title are pure and
 // tested in ./composer-rules.ts; this file only draws them and sends.
 //
@@ -42,7 +43,7 @@ import { conversationWith } from './page-rules';
 import { collectFiles, fromPaste, persistAttachments, type PendingAttachment } from '../attachments';
 import { AttachRow } from '../components/AttachRow';
 import { PRIORITIES, priorityLabelOf, priorityValueOf, startingPriority, type PriorityId } from '../priority';
-import { readComposeDraft, saveComposeDraft, clearComposeDraft } from '../drafts';
+import { readComposeDraft, clearComposeDraft, saveComposeDraft, takeComposeDraft, type ComposeDraft } from '../drafts';
 import { LAST_PRODUCT_KEY } from '../compose-project';
 import { practiceRefusal, noProjectYet } from '../compose-says';
 import { defaultModelFor, engineModelLabel, readLastModel, writeLastModel, type ModelChoice } from '../models';
@@ -62,24 +63,27 @@ import './thread-composer.css';
 /** What went out, so the caller can say so and offer the way back. */
 export interface ThreadSent {
   kind: 'task' | 'repeat' | 'message';
+  background?: boolean;
   product?: string;
   title?: string;
   /** A Send later moment, when there was one. */
   runAt?: number;
   /** 'later' when it went to Later rather than to a moment (w-afb66e6661). */
-  start?: 'later';
+  start?: 'later' | 'manual';
   /** The repeating rule's id, so ending it can be the undo. */
   ruleId?: string;
   /** Everyone a message went to, when it went to more than one person. */
   toMany?: string[];
   /** The person a message went to. */
   to?: string;
+  /** What the card held when Send was pressed, for Z to put back. */
+  draft?: ComposeDraft;
 }
 
 type MenuKey = 'to' | 'model' | 'project' | 'priority' | 'visibility' | 'later';
 
 export function ThreadComposer({
-  products, items, engines, codexModels, codexModelDefault, defaultProduct, initial, scripted, onOpenMenu, onClose, onSent, onOpenConversation, onReorderProjects, onNewProject,
+  products, items, engines, codexModels, codexModelDefault, defaultProduct, initial, scripted, onOpenMenu, onClose, onSent, onSending, onFailed, onOpenConversation, onReorderProjects, onNewProject,
 }: {
   products: Product[];
   items: WorkItem[];
@@ -123,8 +127,17 @@ export function ThreadComposer({
    *  from the menu you are already in, whether you have none or ten. */
   onNewProject?: () => void;
   onClose: () => void;
-  /** Called once the send stands, BEFORE the draft is cleared, so the caller can still read it for an undo. */
+  /** Called once the send stands, with the words it took off the card (`sent.draft`) for an undo. */
   onSent: (item: WorkItem | null, sent?: ThreadSent) => void;
+  /**
+   * THE MOMENT SEND IS PRESSED, before anything is asked of the computer
+   * (w-461fbd8d2d). Given, the caller closes the card here and says it is on
+   * its way, and `onFailed` is how a send that then does not stand comes back.
+   * Not given (the tutorial), the card stays up until the answer as it did.
+   */
+  onSending?: (p: { kind: ThreadSent['kind']; product?: string; to?: string; toMany?: string[]; runAt?: number; start?: 'later' | 'manual' }) => void;
+  /** A send handed over with `onSending` that did not stand. The words are back in the draft. */
+  onFailed?: (reason: string, p: { to?: string; also?: string[] }) => void;
 }) {
   const team = useContext(TeamContext);
   const others = useMemo(() => (team ? teammates(team.state.people, team.me) : []), [team]);
@@ -231,10 +244,10 @@ export function ThreadComposer({
   };
   const labelOf = (p: ModelPick) => engineModelLabel(p.engine, p.model, modelOpts);
   const recent = useMemo(
-    () => recentModels(items, { codexModels, codexDefault, codexOffered, claudeOffered }),
-    [items, codexModels, codexDefault, codexOffered, claudeOffered],
+    () => recentModels(items, { codexModels, codexDefault, codexOffered: codexOffered && pick.engine === 'codex', claudeOffered: claudeOffered && pick.engine === 'claude' }),
+    [items, codexModels, codexDefault, codexOffered, claudeOffered, pick.engine],
   );
-  const every = useMemo(() => allModels({ codexModels, codexOffered, claudeOffered }), [codexModels, codexOffered, claudeOffered]);
+  const every = useMemo(() => allModels({ codexModels, codexOffered: codexOffered && pick.engine === 'codex', claudeOffered: claudeOffered && pick.engine === 'claude' }), [codexModels, codexOffered, claudeOffered, pick.engine]);
   const more = moreCount(recent, every);
 
   /* ------------------------------ menus --------------------------------- */
@@ -343,6 +356,7 @@ export function ThreadComposer({
 
   /* ------------------------------- send --------------------------------- */
   const [sending, setSending] = useState(false);
+  const dictationMounted=useRef(true);useEffect(()=>{dictationMounted.current=true;return()=>{dictationMounted.current=false;};},[]);
   const [error, setError] = useState<string | null>(null);
   // THE TUTORIAL'S SEND CAN NEVER BE A DEAD END (w-9f6975906c, 2026-10-05).
   // Her screenshot: the tutorial's card open with an empty box, so Send stayed
@@ -355,17 +369,26 @@ export function ThreadComposer({
   // (w-f8d123be62). It gets a line in the bar rather than a tooltip, because
   // the whole fault was that nothing on screen said anything.
   const stopper = noProjectYet(product, { person: !!person });
-  const canSend = !sending && (person ? !!text.trim() : !!message && !!product && !refusal);
+  const canSend = !sending && (person ? !!text.trim() || attachments.length > 0 : !!message && !!product && !refusal);
 
-  const sendTask = async (when: { runAt?: number; start?: 'later'; repeat?: { every: 'day' | 'weekday' | 'week'; on?: number; at: string } } = {}) => {
-    if (!canSend || !product || !message) return;
+  const sendTask = async (when: { runAt?: number; start?: 'later' | 'manual'; repeat?: { every: 'day' | 'weekday' | 'week'; on?: number; at: string } } = {}, spoken?:string, background=false) => {
+    const spokenMessage=spoken===undefined?threadMessage(typed,attachments):threadMessage([text,spoken].filter(Boolean).join('\n\n'),attachments);
+    if (sending || !product || !spokenMessage || refusal) {if(background)throw Error(refusal || 'Bitte ein gültiges Projekt wählen.');return;}
+    const message=spokenMessage;
     setSending(true);
     setError(null);
     setOpen(null);
+    // HANDED OVER BEFORE ANYTHING IS ASKED OF THE COMPUTER (w-461fbd8d2d). The
+    // card used to sit here, words and all, until the answer came back: a few
+    // milliseconds on the desktop and a relay round trip on a phone, which read
+    // as Send not having worked. The words come off the card now and go with
+    // the send, for Z, and back onto it if the send does not stand.
+    const taken = background ? {text:[text,spoken].filter(Boolean).join("\n\n"),attachments,priority:prio,when:{runAt:0,repeat:null},dropped:0} : takeComposeDraft();
+    try { localStorage.setItem(LAST_PRODUCT_KEY, product.slug); } catch { /* the send still stands */ }
+    if (!background) onSending?.({ kind: when.repeat ? 'repeat' : 'task', product: product.slug, ...(when.runAt ? { runAt: when.runAt } : {}), ...(when.start ? { start: when.start } : {}) });
     try {
       const attached = await persistAttachments(product.slug, attachments);
       const body = [message.body, attached].filter(Boolean).join('\n\n');
-      try { localStorage.setItem(LAST_PRODUCT_KEY, product.slug); } catch { /* the send still stands */ }
       const harness = harnessFields({
         engine: pick.engine, model: pick.model,
         effort: effortPicked(effort, effortRows) ? effort : null,
@@ -379,7 +402,7 @@ export function ThreadComposer({
           product: product.slug, title: message.title, body: body || undefined, priority, rule: when.repeat,
           ...(harness.engine ? { engine: harness.engine } : {}), ...(harness.model ? { model: harness.model } : {}),
         });
-        onSent(null, { kind: 'repeat', product: product.slug, title: message.title, ruleId: rule?.id });
+        onSent(null, { kind: 'repeat', product: product.slug, title: message.title, ruleId: rule?.id, draft: taken });
       } else {
         const made = await api.compose({
           product: product.slug, title: message.title, body: body || undefined, kind: 'directive', priority,
@@ -393,14 +416,18 @@ export function ThreadComposer({
           // The tutorial's own task, and only ever that one. See `scripted`.
           ...(scripted ? { labels: scripted.labels } : {}),
         });
-        onSent(made, { kind: 'task', product: product.slug, title: message.title, ...(when.runAt ? { runAt: when.runAt } : {}), ...(when.start ? { start: when.start } : {}) });
+        onSent(made, { background, kind: 'task', product: product.slug, title: message.title, draft: taken, ...(when.runAt ? { runAt: when.runAt } : {}), ...(when.start ? { start: when.start } : {}) });
       }
-      clearComposeDraft();
     } catch (err) {
-      // The card stays open with every word in it: a send that failed and also
-      // ate what she wrote is two failures, and the second is the expensive one.
-      setError(`Not sent: ${String((err as Error)?.message ?? err)}`);
+      // Every word goes back: a send that failed and also ate what she wrote
+      // is two failures, and the second is the expensive one. With the card
+      // already closed, the caller reopens it on them.
+      if (!background) saveComposeDraft(taken);
+      const said = `Not sent: ${String((err as Error)?.message ?? err)}`;
+      if (!background && onFailed) { onFailed(said, {}); return; }
+      setError(said);
       setSending(false);
+      if(background)throw err;
     }
   };
 
@@ -408,6 +435,16 @@ export function ThreadComposer({
     if (!canSend || !person) return;
     setSending(true);
     setError(null);
+    // Handed over at once, as a task is (sendTask above).
+    const taken = takeComposeDraft();
+    const toMany = extra.length ? [person.id, ...also] : undefined;
+    onSending?.({ kind: 'message', to: person.id, ...(toMany ? { toMany } : {}) });
+    const failed = (said: string) => {
+      saveComposeDraft(taken);
+      if (onFailed) { onFailed(said, { to: person.id, ...(also.length ? { also } : {}) }); return; }
+      setError(said);
+      setSending(false);
+    };
     // THE LEVEL GOES WITH THE WORDS (w-7ba439c883): it decides where the
     // message sits in the inbox it lands in. Only on the first message of a
     // conversation, which is the main process's rule, not this card's.
@@ -418,18 +455,23 @@ export function ThreadComposer({
     // reading of the message (main/message-priority.mjs): a level the sender
     // chose is theirs and is left alone, and a message nobody ranked is still
     // sorted there rather than arriving flat.
-    const res = await api.teamMessage(
-      extra.length ? [person.id, ...also] : person.id,
-      text.trim(),
-      prio ? priorityValueOf(prio) : undefined,
-    );
-    if (!res.ok) {
-      setError(`Not sent: ${res.error ?? 'the team cloud did not answer.'}`);
-      setSending(false);
+    let res: Awaited<ReturnType<typeof api.teamMessage>>;
+    try {
+      res = await api.teamMessage(
+        toMany ?? person.id,
+        text.trim(),
+        prio ? priorityValueOf(prio) : undefined,
+        attachments.map(({ name, dataBase64, srcPath }) => ({ name, dataBase64, srcPath })),
+      );
+    } catch (err) {
+      failed(`Not sent: ${String((err as Error)?.message ?? err)}`);
       return;
     }
-    onSent(null, { kind: 'message', to: person.id, ...(extra.length ? { toMany: [person.id, ...also] } : {}) });
-    clearComposeDraft();
+    if (!res.ok) {
+      failed(`Not sent: ${res.error ?? 'the team cloud did not answer.'}`);
+      return;
+    }
+    onSent(null, { kind: 'message', to: person.id, draft: taken, ...(toMany ? { toMany } : {}) });
   };
 
   const send = () => (person ? sendMessage() : sendTask());
@@ -473,11 +515,14 @@ export function ThreadComposer({
 
   const toMenu = (
     <div className="tc-menu tc-drop tc-to-menu" role="listbox" aria-label="To" onKeyDown={menuKeys}>
-      {!adding && (
-        <button type="button" data-item className={`tc-row ${person ? '' : 'on'}`} onPointerEnter={hover} onClick={() => chooseTo('agent')}>
-          <AgentFace /><span className="tc-row-label">Agent</span>
+      {!adding && engineRows.map((engine) => (
+        <button key={engine.id} type="button" data-item className={`tc-row ${!person && pick.engine === engine.id ? 'on' : ''}`} onPointerEnter={hover} onClick={() => {
+          pickModel({ engine: engine.id as Harness, model: readLastModel(undefined, engine.id, codexDefault) ?? defaultModelFor(engine.id, codexDefault) });
+          chooseTo('agent');
+        }}>
+          <AgentFace /><span className="tc-row-label">{engine.label}</span>
         </button>
-      )}
+      ))}
       {team && others.length > 0 && (<>
         {!adding && <span className="tc-sep" />}
         <span className="tc-menu-head">People</span>
@@ -583,7 +628,7 @@ export function ThreadComposer({
       {offered.map((p) => (
         <button key={p.slug} type="button" data-item className={`tc-row ${p.slug === product?.slug ? 'on' : ''}`} onPointerEnter={hover}
           onClick={() => { pickProject(p.slug); close('text'); }}>
-          <Swatch slug={p.slug} /><span className="tc-row-label">{p.name}</span>
+          <Swatch slug={p.slug} /><span className="tc-row-label">{p.personal ? 'Ohne Projekt' : p.name}</span>
         </button>
       ))}
       {/* MAKING A PROJECT IS A THING YOU CAN DO FROM HERE, ALWAYS (approved
@@ -777,7 +822,7 @@ export function ThreadComposer({
               <button type="button" data-trigger className={`tc-word ${open === 'to' ? 'open' : ''}`} aria-haspopup="listbox" aria-expanded={open === 'to'}
                 onClick={() => toggle('to')} onKeyDown={triggerKeys('to')}>
                 {person ? <Face person={person} /> : <AgentFace />}
-                <span className="tc-word-text">{person ? person.name : 'Agent'}</span>
+                <span className="tc-word-text">{person ? person.name : engineLabel(pick.engine)}</span>
               </button>
               {extra.map((p) => (
                 <span key={p.id} className="tc-also">
@@ -812,6 +857,11 @@ export function ThreadComposer({
           </div>
         )}
 
+        {!person && <DictationButtons target={`Neuer Chat · ${product?.name ?? 'Ohne Projekt'}`} onNotice={setError}
+          onDraft={spoken=>{if(!dictationMounted.current)return false;const current=readComposeDraft();const words=[current.text,spoken].filter(Boolean).join('\n\n');setText(words);saveComposeDraft({...current,text:words});}}
+          onSend={spoken=>sendTask({}, spoken, true)} onQueued={()=>{if(readComposeDraft().text===text)clearComposeDraft();onClose();}} />}
+        <div className="tc-reference-anchor">
+        {!person && <IntegrationPicker product={product?.slug ?? ''} engine={pick.engine} text={text} setText={setText} input={textRef} />}
         <textarea
           ref={textRef}
           className="tc-text"
@@ -819,34 +869,30 @@ export function ThreadComposer({
           onChange={(e) => setText(e.target.value)}
           placeholder={person ? `Message ${names}` : placeholderFor(null)}
           onPaste={async (e) => {
-            if (person) return;
             const pasted = await fromPaste(e);
             if (pasted.length) { e.preventDefault(); setAttachments((a) => [...a, ...pasted]); }
           }}
-          onDragOver={(e) => { if (!person) e.preventDefault(); }}
+          onDragOver={(e) => e.preventDefault()}
           onDrop={async (e) => {
-            if (person) return;
             e.preventDefault();
             await addFiles(e.dataTransfer.files);
           }}
         />
-        {!person && <AttachRow attachments={attachments} onRemove={(i) => setAttachments((x) => x.filter((_, j) => j !== i))} />}
+        </div>
+        <AttachRow attachments={attachments} onRemove={(i) => setAttachments((x) => x.filter((_, j) => j !== i))} />
 
         {refusal && <div className="tc-note">{refusal}</div>}
-        {!person && dropped > 0 && (
+        {dropped > 0 && (
           <div className="tc-note">
             {dropped === 1
               ? 'One pasted image is too big to save. Closing the card loses it.'
               : `${dropped} pasted images are too big to save. Closing the card loses them.`}
           </div>
         )}
-        {/* A message to a person carries words only for now, so files she
-            attached for an agent are said out loud rather than dropped. */}
-        {person && attachments.length > 0 && (
-          <div className="tc-note">
-            {attachments.length === 1 ? 'The attached file stays here' : `The ${attachments.length} attached files stay here`}: a message to a person carries words only.
-          </div>
-        )}
+        {/* A MESSAGE TO A PERSON CARRIES ITS FILES (w-140ac855b1). It used to
+            say they stayed here, because the conversation they are saved in
+            may not exist until the message makes it; the send hands them over
+            and main/team/index.mjs saves them once it knows where. */}
         {error && <div className="tc-note tc-error" role="alert">{error}</div>}
 
         {person ? (
@@ -859,6 +905,10 @@ export function ThreadComposer({
                 already says. The chip is the task card's own, because a message
                 lands in a list sorted by the same four words. */}
             {priorityChip}
+            <button type="button" className="tc-icon" title="Attach files" aria-label="Attach files" onClick={() => fileRef.current?.click()}>
+              <ClipIcon />
+            </button>
+            <input ref={fileRef} type="file" multiple hidden onChange={async (e) => { await addFiles(e.target.files); e.target.value = ''; }} />
             <span className="tc-send solo">
               <button type="button" className="tc-send-main" disabled={!canSend} onClick={() => void send()} title="Send · ⌘↵">
                 Send <kbd>⌘↵</kbd>
@@ -871,7 +921,7 @@ export function ThreadComposer({
               <button type="button" data-trigger className={`tc-chip ${open === 'project' ? 'open' : ''}`} title={product?.name ?? 'Which project'}
                 aria-haspopup="listbox" aria-expanded={open === 'project'} onClick={() => toggle('project')} onKeyDown={triggerKeys('project')}>
                 {product && <Swatch slug={product.slug} />}
-                <span ref={projName} className={`tc-chip-name ${projCut ? 'cut' : ''}`}>{product?.name ?? 'No project'}</span>
+                <span ref={projName} className={`tc-chip-name ${projCut ? 'cut' : ''}`}>{product?.personal ? 'Ohne Projekt' : product?.name ?? 'Ohne Projekt'}</span>
               </button>
               {open === 'project' && projectMenu}
             </span>
@@ -903,6 +953,7 @@ export function ThreadComposer({
               </span>
             )}
             <span className="tc-send" ref={anchor('later')}>
+              <button type="button" className="tc-save-todo" disabled={!canSend} onClick={() => void sendTask({start: 'manual'})}>Als To-do speichern</button>
               <button type="button" className="tc-send-main" disabled={!canSend} onClick={() => void send()} title={refusal ?? stopper?.reason ?? 'Send · ⌘↵'}>
                 Send <kbd>⌘↵</kbd>
               </button>

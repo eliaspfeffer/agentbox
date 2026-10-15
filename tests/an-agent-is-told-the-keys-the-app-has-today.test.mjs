@@ -61,7 +61,7 @@ const lineFor = (text, cap) => text.split('\n').find((l) => l.startsWith(`- ${ca
 
 describe('the keys block', () => {
   it('says L puts a task off until later', () => {
-    expect(lineFor(keysForAgents(), 'L')).toMatch(/Put the task off until a time you pick/);
+    expect(lineFor(keysForAgents(), 'L')).toMatch(/Later: put the task off until a time you pick/);
   });
 
   it('says S is the summary, and nothing about S schedules', () => {

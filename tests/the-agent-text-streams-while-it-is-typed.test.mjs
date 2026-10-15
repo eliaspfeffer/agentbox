@@ -25,6 +25,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { streamingText } from '../main/supervisor.mjs';
+import { workerArgsFrom } from '../main/harnesses/common.mjs';
+import { harnessDefinition } from '../shared/harness-definitions.mjs';
 import { itemThread } from '../renderer/src/item-thread.ts';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -105,8 +107,11 @@ describe('the sentence being typed, held on the live session', () => {
 /* ---------------- and the flag that makes those frames exist -------------- */
 describe('the sessions are spawned asking for it', () => {
   it('passes --include-partial-messages', () => {
-    const src = read('main/supervisor.mjs');
-    expect(src).toContain("'--output-format', 'stream-json', '--verbose', '--include-partial-messages'");
+    // 2026-10-08: the flag left main/supervisor.mjs for the engine's own `run`
+    // definition (w-380b06bf53), so this asks for the line the app would
+    // actually start rather than reading the source that used to spell it.
+    expect(workerArgsFrom(harnessDefinition('claude').run, { prompt: 'anything', grants: [] }).join(' '))
+      .toContain('--output-format stream-json --verbose --include-partial-messages');
   });
 
   it('writes only finished lines to the trace', () => {
@@ -224,7 +229,8 @@ describe('the thread reads on the push, not only on the timer', () => {
 
   it('still keeps the timer, for the traces no push covers', () => {
     const src = read('renderer/src/components/ItemThread.tsx');
-    expect(src).toMatch(/setInterval\(read, REFRESH_MS\)/);
+    // At the phone's slower pace on a phone (renderer/src/phone-polls.ts).
+    expect(src).toMatch(/setInterval\(read, pollEvery\(REFRESH_MS, onPhone\(\)\)\)/);
   });
 
   it('hands the live block to the thread builder', () => {

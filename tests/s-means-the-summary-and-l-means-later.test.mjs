@@ -98,7 +98,7 @@ describe('every surface that says a key says the same one', () => {
   });
 
   it('the ⌘K rows, both the single one and the one over a ticked selection', () => {
-    expect(app).toContain("{ id: 'snooze', label: 'Remind Me (Snooze)', keyHint: 'L', run: () => openSnooze(target) },");
+    expect(app).toContain("{ id: 'snooze', label: 'Later', keywords: LATER_KEYWORDS, keyHint: 'L', run: () => openSnooze(target) },");
     expect(app).toContain("keyHint: 'L', run: () => openSnooze(sel) },");
     expect(app).not.toMatch(/keyHint: 'S'/);
   });
@@ -106,7 +106,7 @@ describe('every surface that says a key says the same one', () => {
   it('the shortcuts page, which is the one page that promises to answer this', () => {
     // One row per letter, and each says the one thing its letter does.
     expect(rowsFor('L')).toHaveLength(1);
-    expect(rowsFor('L')[0].what).toBe('Put the task off until a time you pick.');
+    expect(rowsFor('L')[0].what).toBe('Later: put the task off until a time you pick.');
     expect(rowsFor('S')).toHaveLength(1);
     expect(rowsFor('S')[0].what).toBe('Show or hide the summary.');
     // S is listed under the heading for an open thread, because that is the one

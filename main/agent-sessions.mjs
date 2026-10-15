@@ -12,7 +12,9 @@
 //
 // WHERE A THREAD LIVES. Two places, because she named two:
 //
-//   ~/.claude/projects/<folder>/<id>.jsonl     every terminal session
+//   ~/.claude/projects/<folder>/<id>.jsonl     every terminal session (and the
+//                                              same under every other Claude
+//                                              data folder: main/agent-homes.mjs)
 //   ~/Library/Application Support/Claude/
 //     claude-code-sessions/**/local_<id>.json  the desktop app
 //
@@ -49,6 +51,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { claudeDataDirs } from './agent-homes.mjs';
 
 /**
  * "Recent = last few days", in days.
@@ -149,9 +152,22 @@ export function isScratchProjectDir(name, home = os.homedir()) {
  *
  *  An entrypoint we have never seen is treated as not hers. The cost of being
  *  wrong that way is one missing row on a card; the other way is the hundreds
- *  she is complaining about. */
+ *  she is complaining about.
+ *
+ *  `claude-vscode` IS A PERSON TOO (w-e46f2e9cea, 2026-10-11). It is what the
+ *  Claude Code extension writes in VS Code, Cursor and Windsurf, and leaving it
+ *  out threw away every session of everybody who runs Claude Code in an editor.
+ *  Read out of the 2.1.293 binary, which maps it to `claude_code_vscode`. The
+ *  `remote*` family stays out: those run in the cloud, not on this disk. */
+const BY_HAND = new Set(['cli', 'claude-desktop', 'claude-vscode']);
 export function startedByHand(entrypoint) {
-  return entrypoint === 'cli' || entrypoint === 'claude-desktop';
+  return BY_HAND.has(entrypoint);
+}
+
+/** Which of the three places a person starts Claude Code a session came from. */
+export function sourceOf(entrypoint) {
+  if (entrypoint === 'claude-desktop') return 'desktop';
+  return entrypoint === 'claude-vscode' ? 'editor' : 'terminal';
 }
 
 /**
@@ -251,9 +267,11 @@ export function readTranscriptHead(file, bytes = HEAD_BYTES, most = FIRST_TURN_B
     const n = fs.readSync(fd, buf, 0, bytes, 0);
     const text = buf.slice(0, n).toString('utf8');
     // The last line of a fixed read is usually cut in half. Dropping it costs
-    // nothing, because what is wanted is at the top.
+    // nothing, because what is wanted is at the top. UNLESS THE WHOLE FILE FIT:
+    // then the last line is complete, and a file whose one row has no newline
+    // after it lost that row (found by Codex's review, 2026-10-11).
     const lines = text.split('\n');
-    const cut = lines.pop();
+    const cut = n < bytes ? null : lines.pop();
     let cwd = null;
     let entrypoint = null;
     const said = [];
@@ -278,7 +296,7 @@ export function readTranscriptHead(file, bytes = HEAD_BYTES, most = FIRST_TURN_B
     // only when nothing she said was found and the session is not already
     // known to be the app's own, so the thousands of worker transcripts are
     // never read past their head.
-    if (!said.length && n === bytes && cut && /"type":"user"/.test(cut.slice(0, 2048))
+    if (!said.length && n === bytes && cut && /"type"\s*:\s*"user"/.test(cut.slice(0, 2048))
       && (!entrypoint || startedByHand(entrypoint))) {
       const rest = restOfLine(fd, n, most - n);
       if (rest) take(Buffer.concat([buf.subarray(buf.lastIndexOf(0x0a, n - 1) + 1, n), rest]).toString('utf8'));
@@ -331,25 +349,35 @@ function messageText(row) {
  *  `skipped` comes back with it because the counts are the argument for the
  *  filters, and a session that changes one of them should be able to see what
  *  it changed rather than take this comment's word for it. */
-function readTerminalThreads({ home, cutoff, max, skipIds = new Set() }) {
-  const root = path.join(home, '.claude', 'projects');
-  const skipped = { old: 0, scratch: 0, started: 0, subagent: 0, empty: 0, unread: 0, desktopDupe: 0 };
+function readTerminalThreads({ home, dirs, cutoff, max, skipIds = new Set() }) {
+  const skipped = { old: 0, scratch: 0, started: 0, subagent: 0, empty: 0, unread: 0, desktopDupe: 0, copy: 0 };
   const out = [];
-  const all = [];
-  walkTranscripts(root, all);
   // Stat everything, keep the recent, newest first, and only then start opening
   // files. This is the order that makes `max` safe: whatever it cuts off is
   // older than everything it kept.
+  //
+  // EVERY DATA FOLDER, NOT ONLY ~/.claude (main/agent-homes.mjs). They are
+  // pooled before the sort, so the cap and the time budget are spent on the
+  // newest sessions on the machine, whichever folder they are in.
   const recent = [];
-  for (const file of all) {
-    let when = 0;
-    try { when = fs.statSync(file).mtimeMs; } catch { continue; }
-    if (when < cutoff) { skipped.old += 1; continue; }
-    if (isSubagentPath(file.slice(root.length))) { skipped.subagent += 1; continue; }
-    if (isScratchProjectDir(path.relative(root, file).split(path.sep)[0], home)) { skipped.scratch += 1; continue; }
-    recent.push({ file, when });
+  for (const dir of dirs) {
+    const root = path.join(dir, 'projects');
+    const all = [];
+    walkTranscripts(root, all);
+    for (const file of all) {
+      let when = 0;
+      try { when = fs.statSync(file).mtimeMs; } catch { continue; }
+      if (when < cutoff) { skipped.old += 1; continue; }
+      if (isSubagentPath(file.slice(root.length))) { skipped.subagent += 1; continue; }
+      if (isScratchProjectDir(path.relative(root, file).split(path.sep)[0], home)) { skipped.scratch += 1; continue; }
+      recent.push({ file, when });
+    }
   }
   recent.sort((a, b) => b.when - a.when);
+  // ONE SESSION IS ONE ROW, even when two folders hold it: a backup folder with
+  // a copy of a conversation is ordinary. Newest first, so the copy kept is the
+  // one still being written to.
+  const seenIds = new Set();
   // THE CAP COUNTS WHAT IS KEPT, NOT WHAT IS OPENED (w-ec62ab6b38, 2026-09-28).
   // On a busy machine the last seven days held 9,073 transcripts, the newest
   // 1,200 were opened, and every one of those was started by agentbox itself,
@@ -373,14 +401,18 @@ function readTerminalThreads({ home, cutoff, max, skipIds = new Set() }) {
     // one desktop thread in her store. Its own record wins, because the app
     // wrote a real title into it and this side would have to guess one.
     if (skipIds.has(id)) { skipped.desktopDupe += 1; continue; }
+    if (seenIds.has(id)) { skipped.copy += 1; continue; }
     const { cwd, entrypoint, said } = readTranscriptHead(file);
+    // A copy is only the copy once it could be read. A damaged newer one, cut
+    // off mid-write, would otherwise hide the good older one in another folder.
+    if (cwd || entrypoint) seenIds.add(id);
     if (!startedByHand(entrypoint)) { skipped.started += 1; continue; }
     if (isScratchFolder(cwd, home)) { skipped.scratch += 1; continue; }
     const title = threadTitle(said);
     if (!title) { skipped.empty += 1; continue; }
     out.push({
       id,
-      source: entrypoint === 'claude-desktop' ? 'desktop' : 'terminal',
+      source: sourceOf(entrypoint),
       folder: cwd,
       folderName: path.basename(cwd),
       short: shortFolder(cwd, home),
@@ -484,6 +516,11 @@ function walkDesktop(dir, into, max, depth = 3) {
  *  the card groups by it, the same way it already groups agent files. */
 export function readSessionThreads({
   home = os.homedir(),
+  // Every Claude Code data folder to read (main/agent-homes.mjs). The app hands
+  // in the list it made with its own environment and settings; left out, it is
+  // the folders under `home`, and nothing from whatever CLAUDE_CONFIG_DIR the
+  // caller's process happens to carry.
+  dirs = claudeDataDirs({ home }),
   days = RECENT_DAYS,
   now = Date.now(),
   max = MAX_READS,
@@ -492,7 +529,7 @@ export function readSessionThreads({
   // The desktop side goes first so its ids are known before the transcripts are
   // walked, which is what stops one thread appearing twice.
   const desk = readDesktopThreads({ home, cutoff, max });
-  const term = readTerminalThreads({ home, cutoff, max, skipIds: desk.owned });
+  const term = readTerminalThreads({ home, dirs, cutoff, max, skipIds: desk.owned });
   const threads = [...term.threads, ...desk.threads].sort((a, b) => b.when - a.when);
   return {
     threads,

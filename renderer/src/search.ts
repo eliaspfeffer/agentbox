@@ -73,6 +73,7 @@
 
 import { searchText } from './format';
 import { rowSummary, SUMMARY_BUDGET } from './list-rules';
+import { ticketQuery } from './ticket-references';
 
 export interface Searchable {
   id: string;
@@ -144,7 +145,7 @@ export function parseQuery(query: string): Query {
   // "in quotes" means she wants that group of characters and nothing looser.
   const quoted = folded.length > 2 && folded.startsWith('"') && folded.endsWith('"');
   const inner = (quoted ? folded.slice(1, -1) : folded).trim();
-  const terms = normalize(inner.replace(/"/g, ' ').split(/\s+/));
+  const terms = normalize((ticketQuery(inner) ?? inner).replace(/"/g, ' ').split(/\s+/));
   const phrase = terms.length > 1 ? terms.join(' ') : '';
   return { terms, phrase, quoted: quoted && terms.length > 0 };
 }
@@ -218,7 +219,7 @@ function haystack(i: Searchable): Hay {
   // straddling the seam between two fields: "the page" ending one and "is done"
   // opening the next is not a row that says "the page is done".
   const prose = [body, result, note, answer].filter(Boolean).join(' . ');
-  const all = `${title} . ${squash(fold(prose))}`;
+  const all = `${fold(i.id)} . ${title} . ${squash(fold(prose))}`;
   const hay: Hay = {
     title,
     all,
@@ -286,6 +287,8 @@ export function matches(i: Searchable, terms: string[]): boolean {
 //   0  not a match
 function score(i: Searchable, q: Query): number {
   if (q.terms.length === 0) return 0;
+  const idQuery = q.terms.length === 1 ? ticketQuery(q.terms[0]) : null;
+  if (idQuery && fold(i.id).startsWith(idQuery)) return fold(i.id) === idQuery ? 6 : 5;
   const hay = haystack(i);
   if (q.phrase) {
     if (wordStart(hay.title, q.phrase) >= 0) return 4;
@@ -349,6 +352,8 @@ export function searchItems<T extends Searchable>(items: T[], query: string): Ar
 // file has always said that is the rule; until 2026-08-28 it was applied inside
 // a field and not across them, so one word early beat the whole phrase late.
 export function hitSummary(i: Searchable, terms: string[], phrase = ''): string {
+  const idQuery = terms.length === 1 ? ticketQuery(terms[0]) : null;
+  if (idQuery && fold(i.id).startsWith(idQuery)) return i.id;
   const finished = i.status === 'done';
   const { body, result, note, answer } = haystack(i);
   const ordered = finished ? [result, body, note] : [body, result, note];

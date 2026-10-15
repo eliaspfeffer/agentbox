@@ -171,6 +171,7 @@ describe('a run that is happening right now', () => {
   it('keeps reading the trace while a session is up', () => {
     const src = read('renderer/src/components/ItemThread.tsx');
     expect(src).toMatch(/if \(!session\) return \(\) => \{ live = false; \};/);
-    expect(src).toMatch(/setInterval\(read, REFRESH_MS\)/);
+    // At the phone's slower pace on a phone (renderer/src/phone-polls.ts).
+    expect(src).toMatch(/setInterval\(read, pollEvery\(REFRESH_MS, onPhone\(\)\)\)/);
   });
 });

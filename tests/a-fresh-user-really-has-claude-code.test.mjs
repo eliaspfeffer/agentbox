@@ -120,11 +120,16 @@ describe('a throwaway home is where the line can appear at all', () => {
   // earned. This is the state the machine that wrote this comment is really in,
   // and it is why the three cases either side of it hand the disk in: without
   // this one, "answer false to everything" would pass the whole file.
-  it('still finds a system-wide install from inside a throwaway home', () => {
+  //
+  // THE SHELL IS ASKED FIRST SINCE 2026-10-08 (w-ce8c1a9275), so the lookup
+  // handed in here is reached and throws, and the disk still settles it. That is
+  // deliberate: the app will not open an inbox without Claude Code, so a probe
+  // that blows up may not take it away from somebody who has it.
+  it('still finds a system-wide install from inside a throwaway home, whatever the shell does', () => {
     const home = tmp('brewed');
     const found = findClaudeBin({
       home,
-      shellLookup: () => { throw new Error('the shell must not be needed'); },
+      shellLookup: () => { throw new Error('a shell that cannot answer is not an absence'); },
       ...diskWithOnly(home, ['/opt/homebrew/bin/claude']),
     });
     expect(found.found).toBe(true);
@@ -150,10 +155,11 @@ describe('the one symlink the whole thing rests on', () => {
 
     expect(prepared.claudeBin).toBe(true);
     expect(fs.existsSync(path.join(fresh, '.local/bin/claude'))).toBe(true);
-    // Which is what the app will conclude, with no shell involved.
+    // Which is what the app will conclude off the disk alone, with a shell that
+    // cannot answer at all.
     const found = findClaudeBin({
       home: fresh,
-      shellLookup: () => { throw new Error('the shell must not be needed'); },
+      shellLookup: () => { throw new Error('a shell that cannot answer is not an absence'); },
       ...diskWithOnly(fresh),
     });
     expect(found.found).toBe(true);

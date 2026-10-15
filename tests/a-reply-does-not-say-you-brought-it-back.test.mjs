@@ -29,7 +29,7 @@ const said = (lines) => threadEvents(lines).map((e) => e.said);
 
 describe('a snooze lifted by your own reply', () => {
   it('says nothing beside the reply', () => {
-    expect(said([...opened, reply, lift(40)])).toEqual(['You opened this', 'You snoozed it', 'You replied']);
+    expect(said([...opened, reply, lift(40)])).toEqual(['You opened this', 'You moved it to Later', 'You replied']);
   });
 
   it('still says nothing when the write lands a few seconds late', () => {

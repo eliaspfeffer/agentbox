@@ -62,7 +62,15 @@ describe('the welcome screen', () => {
     // scan as well as on the file read. The word is still the only thing that
     // decides `blocked`.
     expect(walk).toMatch(/const card = finishCard\(claude, \{ read: found !== null && folders !== null, some \}, threads\);/);
-    expect(walk).toMatch(/\{card\.blocked && \(/);
+    // AN EARLY RETURN SINCE 2026-10-09 (w-ce8c1a9275) rather than a branch
+    // inside the ending's card. The gate is its own question screen now and the
+    // two have nothing left in common but the veil, so `blocked` picks a screen
+    // instead of threading a flag through one tree. Still the one reader, which
+    // is the whole of what this case asks.
+    expect(walk).toMatch(/if \(card\.blocked\) \{/);
+    // And `finishCard` is still the only thing that decides it: the component
+    // asks that one answer which screen to be and derives nothing of its own.
+    expect(walk).not.toMatch(/claude\.missing/);
     // The old test of the old bug. `found` is gone from the prop entirely, so
     // there is no boolean left that a failed read can flip.
     expect(walk).not.toMatch(/claude\.found/);

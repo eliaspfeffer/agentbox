@@ -7,6 +7,8 @@ export const AWAY_AFTER_MS: number;
 
 export function atTheApp(state?: { focused?: boolean; idleMs?: number }): boolean;
 
+export function atTheComputer(state?: { idleMs?: number }): boolean;
+
 // `known` is the ids on the snapshot before this one, and null means there has
 // not been one. Empty and never-looked are different facts, and the module
 // says what reading one as the other cost.
@@ -22,4 +24,8 @@ export function shouldSpeak(state?: {
 
 export function banner(
   waiting: ReadonlyArray<{ id?: string; title?: unknown; kind?: string } | null | undefined> | null | undefined,
+): { title: string; body: string; open: string | null } | null;
+
+export function phoneBanner(
+  waiting: ReadonlyArray<{ id?: string; title?: unknown; thread?: unknown; kind?: string } | null | undefined> | null | undefined,
 ): { title: string; body: string; open: string | null } | null;

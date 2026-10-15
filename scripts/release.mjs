@@ -63,6 +63,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { envName, readEnv } from '../shared/product-name.mjs';
 import { liveDownload, RELEASE_REPO, DOWNLOAD_ASSET } from './lib/live-download.mjs';
+import { whyNotToRelease } from './lib/ship-rules.mjs';
 
 const repo = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const noSign = process.argv.includes('--no-sign');
@@ -70,6 +71,33 @@ const noSign = process.argv.includes('--no-sign');
 function die(lines) {
   console.error(`\n${lines.join('\n')}\n`);
   process.exit(1);
+}
+
+// IS THIS THE COMMIT THAT SHIPPED, AND IS THIS VERSION STILL FREE (2026-10-13).
+// Half a day went on two releases built in a folder nine commits behind main:
+// each took a quarter of an hour to sign and notarise, and each came out as the
+// version already on the website carrying that morning's code. The build said
+// nothing, because it notarises a stale commit as happily as a fresh one. Both
+// questions below are asked before anything is built, and a question that
+// cannot be answered — no network, no tags — is not an answer of no.
+function commitsBehindMain() {
+  try {
+    execFileSync('git', ['fetch', 'origin', '--quiet'], { cwd: repo, stdio: 'ignore', timeout: 20_000 });
+    const out = execFileSync('git', ['rev-list', '--count', 'HEAD..refs/remotes/origin/main'], { cwd: repo, encoding: 'utf8' });
+    const n = Number(out.trim());
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function releasedTags() {
+  try {
+    const out = execFileSync('git', ['ls-remote', '--tags', `https://github.com/${RELEASE_REPO}.git`], { cwd: repo, encoding: 'utf8', timeout: 20_000 });
+    return out.split('\n').flatMap((line) => line.match(/refs\/tags\/(v[\d.]+)$/)?.[1] ?? []);
+  } catch {
+    return null;
+  }
 }
 
 // The one Developer ID certificate on this machine, and the team it belongs to.
@@ -166,6 +194,22 @@ if (!noSign) {
       'To build without signing or notarising, run: npm run pack',
     ]);
   }
+  // Before a minute of signing is spent: the right commit, and a free version.
+  const refusals = whyNotToRelease({
+    behind: commitsBehindMain(),
+    version: JSON.parse(fs.readFileSync(path.join(repo, 'package.json'), 'utf8')).version,
+    released: releasedTags(),
+  });
+  if (refusals.length) {
+    die([
+      refusals.length === 1 ? 'This build would be thrown away.' : 'This build would be thrown away, twice over.',
+      '',
+      ...refusals.flatMap((line) => [line, '']),
+      `The folder this ran in is ${repo}.`,
+      'To build it anyway, run: npm run pack',
+    ]);
+  }
+
   if (!identity) {
     die([
       'No Developer ID Application certificate in this Mac’s keychain, so nothing can be signed.',
@@ -212,13 +256,13 @@ if (analyticsKey) {
 } else {
   console.log('→ no analytics key, so this build will send nothing');
 }
-// Not a stop like the analytics key: a build without it still works, and its
-// Feedback card says in words that feedback is not set up.
+// Not a stop like the analytics key: a build without it sends to the address
+// that ships in the code (FEEDBACK_ADDRESS in main/feedback.mjs).
 if (feedbackUrl) {
   args.push(`-c.extraMetadata.bakedFeedbackUrl=${feedbackUrl}`);
   console.log('→ baking the feedback address into the build');
 } else {
-  console.log(`→ no feedback address (${envName('FEEDBACK_URL')} or "feedbackUrl" in zero.config.json), so the Feedback card will say it is not set up`);
+  console.log(`→ no feedback address (${envName('FEEDBACK_URL')} or "feedbackUrl" in zero.config.json), so the Feedback card sends to the one in main/feedback.mjs`);
 }
 if (noSign) {
   console.log('→ packaging, unsigned');

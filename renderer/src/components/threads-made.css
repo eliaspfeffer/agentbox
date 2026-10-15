@@ -8,6 +8,12 @@
 .thread-block .made { margin: 12px 0 0; }
 .made-label { margin-bottom: 8px; font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); }
 .made-list { border: 1px solid var(--line); border-radius: var(--radius); }
+/* WHILE A TASK IN IT WAITS FOR A YES (./ThreadsMade.tsx, w-d2744c6daa): the
+   outer border in the accent and the label in white. Only the border: the
+   label went orange in one drawing and read as "a bit too much", and white is
+   what was kept. The rows' own lines stay grey. */
+.made-waiting .made-list { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.made-waiting .made-label { color: var(--text); }
 /* The row holds the two presses. Its right-hand padding is all that stands
    between the state word (or the press that replaces it) and the list's edge,
    so every row ends in the same place whichever of the two it carries. 10px
@@ -43,28 +49,25 @@
    lines up exactly with a column of text reads as standing further out than
    the text does. Its letters stay inside that column; only its edge hangs. */
 .made-approve {
-  flex: none; margin-left: auto; margin-right: -2px; padding: 3px 7px;
+  flex: none; margin-right: -2px; padding: 4px 9px;
   appearance: none; cursor: pointer; border-radius: 0;
-  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   background: none; color: var(--accent);
   font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase;
 }
-.made-approve:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.made-approve:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .made-approve:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 
-/* AND THE NO (w-9cf2b43110), which settles a proposal rather than starting it:
-   the word alone, no box, in the quietest ink the list has. It appears under
-   the cursor and when it is tabbed to, because a list of three proposals
-   should read as three offers rather than six buttons, and rejecting is the
-   rarer press of the two. It is what stops the thread coming back. */
-.made-reject {
-  flex: none; margin-left: auto; margin-right: 10px; padding: 0;
-  appearance: none; cursor: pointer; border: 0; border-radius: 0; background: none;
-  color: var(--text-faint); font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase;
-  opacity: 0; transition: opacity .12s;
+/* AND DO IN THIS THREAD (w-554834e749), the grey press beside it: the same
+   size and the same capitals, so the two read as a pair of answers, with the
+   accent left to the one that starts something new. Picked from eight
+   drawings over three rounds. There is no No any more ("ignoring it is
+   basically rejecting it"). */
+.made-here {
+  flex: none; margin-right: 8px; padding: 4px 9px;
+  appearance: none; cursor: pointer; border-radius: 0;
+  border: 1px solid var(--line); background: none; color: var(--text-dim);
+  font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase;
 }
-.made-row:hover .made-reject, .made-reject:focus-visible { opacity: 1; }
-.made-reject:hover { color: var(--text); }
-.made-reject:focus-visible { outline: 1px solid var(--text-faint); outline-offset: 2px; }
-/* With a No in the row, IT holds the auto margin and the chip follows it. */
-.made-reject + .made-approve { margin-left: 0; }
+.made-here:hover { border-color: var(--text-faint); color: var(--text); }
+.made-here:focus-visible { outline: 1px solid var(--text-faint); outline-offset: 2px; }

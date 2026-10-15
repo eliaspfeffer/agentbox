@@ -14,7 +14,7 @@
 // may be linked) are in ./summary-rules.ts, and the bar's crumb in
 // ./crumb-rules.ts, where the tests read them.
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { Person, ThreadCard, ThreadEditPatch, WorkItem } from '../types';
+import type { Person, RepeatRule, ThreadCard, ThreadEditPatch, WorkItem } from '../types';
 import { api } from '../api';
 import { doneSteps, summaryOf, threadState } from '../../../shared/thread-cards.mjs';
 import { PriorityIcon } from '../components/Priority';
@@ -24,13 +24,16 @@ import {
   STATE_WORD, stateWordOf, SUMMARY_FIELDS, SUMMARY_OPEN_KEY, UNSEEN_THREAD, agoWords, updatedWord, ownerName,
   readSummaryOpen, stateGlyph, statusChoices, type StateGlyph, type SummaryField,
 } from './summary-rules';
-import { crumbName } from './crumb-rules';
+import { crumbName, renameTo } from './crumb-rules';
 import { summaryFits, useRoomyToggle } from '../room';
 import { VISIBILITY_WORD, chosenNames, whoSees, type Seen } from './summary-rules';
 import { findPeople, teammates } from './composer-rules';
 import { shownToPeople } from '../../../shared/thread-cards.mjs';
 import { rowTitle } from '../list-rules';
 import { SharedMark } from './Pages';
+import { TicketText } from '../components/TicketReference';
+import { repeatTag } from '../components/List';
+import { joinMessage } from '../message-split';
 import './summary.css';
 
 /* ------------------------------------------------------------------ pieces */
@@ -172,9 +175,10 @@ export function SummaryRail({ item, team, onOpen }: { item: WorkItem; team: Team
 
 type Field = SummaryField | 'priority' | 'visibility' | 'visibleTo';
 type Pending = Partial<Record<Field, { value: unknown; ts: number }>>;
-type Menu = null | 'status' | 'priority' | 'visibility';
+type Menu = null | 'status' | 'priority' | 'visibility' | 'repeat';
 
 const NOT_WRITTEN = 'Not written yet';
+const sentence = (words: string) => words.charAt(0).toUpperCase() + words.slice(1);
 // The two parts the panel draws; `solution` is still stored but not shown.
 const SHOWN_FIELDS: SummaryField[] = ['problem', 'progress'];
 
@@ -185,7 +189,7 @@ const SHOWN_FIELDS: SummaryField[] = ['problem', 'progress'];
 function DoneTrail({ steps }: { steps: string[] }) {
   return (
     <ol className="ts-trail">
-      {steps.map((s, i) => <li key={i} className={`ts-step${i === steps.length - 1 ? ' ts-step-last' : ''}`}>{s}</li>)}
+      {steps.map((s, i) => <li key={i} className={`ts-step${i === steps.length - 1 ? ' ts-step-last' : ''}`}><TicketText text={s} /></li>)}
     </ol>
   );
 }
@@ -199,9 +203,24 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stri
  *
  * `team` is null on a Mac nobody has signed into, where every thread is yours.
  */
-export function SummaryPanel({ item, team, onFinish, onClose }: {
+/**
+ * THE RULE BEHIND A RUN OF A REPEATING TASK, when the thread is one
+ * (w-5e3f2e047f). A repeating task opens as its latest run, so this panel is
+ * where its instruction and schedule live: one more line and one more
+ * property, drawn the way the others are.
+ */
+export interface RepeatHandle {
+  rule: RepeatRule;
+  /** Replace what every later run is told, as one message (message-split.ts).
+   *  False when the write was refused, and the box opens again with her words. */
+  onSave: (message: string) => Promise<boolean>;
+  onEnd: () => void;
+}
+
+export function SummaryPanel({ item, team, onFinish, onClose, repeat = null }: {
   item: WorkItem;
   team: TeamView | null;
+  repeat?: RepeatHandle | null;
   /** FOLD IT BACK TO THE RAIL, from the icon at the top of the summary (w-a3482b8c2c). */
   onClose?: () => void;
   /**
@@ -244,6 +263,24 @@ export function SummaryPanel({ item, team, onFinish, onClose }: {
       setError('That change did not save.');
     }
   }, [item.product, item.id]);
+
+  // ITS NAME, which a click renames (useRename, below). Written as `label`,
+  // the name every row shows; the title stays the message it began with.
+  const rename = useRename(rowTitle(item), async (label) => {
+    setError(null);
+    const out = await api.threadEdit(item.product, item.id, { label });
+    if (!out.ok) setError('That name did not save.');
+    return out.ok;
+  }, `${item.product}/${item.id}`);
+  const nameBox = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = nameBox.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    // Its border too, so the lines under it do not move when it opens.
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [rename.draft]);
+  useEffect(() => { if (rename.editing) nameBox.current?.select(); }, [rename.editing]);
 
   // One small menu at a time, closed by a press anywhere outside it.
   const [menu, setMenu] = useState<Menu>(null);
@@ -348,10 +385,43 @@ export function SummaryPanel({ item, team, onFinish, onClose }: {
     el.setSelectionRange(el.value.length, el.value.length);
   }, [editing]);
 
+  /* --- what every run is told ------------------------------------------ */
+  // THE SAME LINE THAT TURNS INTO A BOX, but it saves once, when she clicks
+  // away or presses Escape, and not as she types: this text briefs every run
+  // after it, and a rule rewritten forty times on the way to one sentence is
+  // forty instructions a run could have read. Enter is a new line here, since
+  // an instruction is often a list.
+  const instruction = repeat ? joinMessage(repeat.rule) : '';
+  const [ruleDraft, setRuleDraft] = useState<string | null>(null);
+  const ruleBox = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { setRuleDraft(null); }, [item.product, item.id]);
+  const finishRule = () => {
+    if (ruleDraft === null || !repeat) return;
+    const text = ruleDraft.trim();
+    setRuleDraft(null);
+    if (text && text !== instruction.trim()) void repeat.onSave(text).then((ok) => { if (!ok) setRuleDraft(text); });
+  };
+  useLayoutEffect(() => {
+    const el = ruleBox.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [ruleDraft]);
+  const editingRule = ruleDraft !== null;
+  useEffect(() => {
+    const el = ruleBox.current;
+    if (!el || !editingRule) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [editingRule]);
+
   // What is happening to the words right now, said under them only while it
   // is true: an edit in progress, or one that did not save. When they were
   // last written is the Updated row at the foot (w-922f66bb06).
-  const note = editing ? 'You are editing · saves as you type' : error;
+  // The name has no label to light up, so renaming says so here instead.
+  const note = editingRule ? 'Every run after this one reads this · saves when you click away'
+    : rename.editing ? 'Renaming · Enter saves, Esc keeps the old name'
+    : editing ? 'You are editing · saves as you type' : error;
   const updated = updatedWord(item, {
     me,
     pending: Object.fromEntries(SUMMARY_FIELDS.filter((f) => pending[f]).map((f) => [f, pending[f]!.ts])),
@@ -374,8 +444,29 @@ export function SummaryPanel({ item, team, onFinish, onClose }: {
           this the name sat under five rows of properties (w-b38e975e2c had
           already put the name directly over its three lines). */}
       {/* WHICH THREAD THIS IS, by the name its row shows (list-rules.ts
-          rowTitle). */}
-      <h2 className="ts-title">{rowTitle(item)}</h2>
+          rowTitle). A click renames it (w-ab3d51dc7d). */}
+      {rename.editing ? (
+        <textarea
+          ref={nameBox}
+          className="ts-edit ts-title-edit"
+          rows={1}
+          aria-label="Thread name"
+          value={rename.draft ?? ''}
+          onChange={(e) => rename.setDraft(e.target.value)}
+          onBlur={rename.finish}
+          onKeyDown={rename.onKey}
+        />
+      ) : (
+        <h2
+          className="ts-title"
+          role="button"
+          tabIndex={0}
+          aria-label="Rename this thread"
+          title="Click to rename"
+          onClick={rename.begin}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); rename.begin(); } }}
+        >{rename.shown}<Pen /></h2>
+      )}
       {/* A LINE WITH NO WORDS IS NOT DRAWN AT ALL (w-54e9c7243f): no heading
           over a dim "Not written yet". The one being typed in stays, so
           clearing it does not pull the box out from under the cursor. */}
@@ -406,10 +497,36 @@ export function SummaryPanel({ item, team, onFinish, onClose }: {
               title="Click to edit"
               onClick={() => begin(f)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); begin(f); } }}
-            >{f === 'progress' ? <DoneTrail steps={doneSteps(stood[f])} /> : stood[f]}<Pen /></div>
+            >{f === 'progress' ? <DoneTrail steps={doneSteps(stood[f])} /> : <TicketText text={stood[f]} />}<Pen /></div>
           )}
         </div>
       ))}
+      {repeat && (
+        <div className="ts-sec ts-sec-rule">
+          <div className="ts-h">Every run is told</div>
+          {ruleDraft !== null ? (
+            <textarea
+              ref={ruleBox}
+              className="ts-edit"
+              rows={1}
+              value={ruleDraft}
+              aria-label="What every run is told"
+              onChange={(e) => setRuleDraft(e.target.value)}
+              onBlur={finishRule}
+              onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finishRule(); } }}
+            />
+          ) : (
+            <div
+              className="ts-line ts-line-rule"
+              role="button"
+              tabIndex={0}
+              title="Click to change what every run is told"
+              onClick={() => setRuleDraft(instruction)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); setRuleDraft(instruction); } }}
+            >{instruction}<Pen /></div>
+          )}
+        </div>
+      )}
       {note && <div className={`ts-by${error && !editing ? ' ts-by-error' : ''}`}>{note}</div>}
 
       <div className="ts-foot">
@@ -491,6 +608,23 @@ export function SummaryPanel({ item, team, onFinish, onClose }: {
         <span className="ts-value">{ownerPerson && <Face person={ownerPerson} />}{owner}</span>
         <span className="ts-label">Project</span>
         <span className="ts-value">{item.productName}</span>
+        {/* HOW IT REPEATS, with the one change it offers in the same kind of
+            menu Status and Priority open. */}
+        {repeat && <>
+        <span className="ts-label">Repeats</span>
+        <span className="ts-value ts-menu-anchor" ref={holdMenu('repeat')}>
+          <button type="button" className="ts-prop-btn" aria-haspopup="listbox" aria-expanded={menu === 'repeat'} title="Stop it repeating" onClick={() => setMenu(menu === 'repeat' ? null : 'repeat')}>
+            {sentence(repeatTag(repeat.rule))}<Caret />
+          </button>
+          {menu === 'repeat' && (
+            <span className="prio-menu ts-menu" role="listbox" aria-label="Repeats">
+              <button type="button" role="option" aria-selected={false} className="prio-menu-row" onClick={() => { setMenu(null); repeat.onEnd(); }}>
+                <span className="prio-menu-label">Stop repeating</span>
+              </button>
+            </span>
+          )}
+        </span>
+        </>}
         {/* ONLY ON A TEAM (w-db6f5e331e). With nobody else on the Mac the row
             read "Visible to: Team" over a menu of people who do not exist,
             and the public app is not to mention a team at all. */}
@@ -570,27 +704,87 @@ export function SummaryPanel({ item, team, onFinish, onClose }: {
   );
 }
 
+/* ------------------------------------------------------------- renaming */
+
+/**
+ * A THREAD'S NAME, WHICH A CLICK TURNS INTO A BOX (w-ab3d51dc7d): "there's no
+ * way for us to update the title of a task". The summary's heading and the
+ * bar's crumb both use it. Enter or clicking away saves, once, rather than as
+ * she types, because every keystroke would rename the row in the list beside
+ * it. Escape puts the old name back and goes no further, so it never closes
+ * the thread. What she saved shows at once and until the row catches up.
+ */
+export function useRename(name: string, onRename: ((name: string) => Promise<boolean>) | undefined, threadKey: string) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  useEffect(() => { setDraft(null); setSaved(null); }, [threadKey]);
+  useEffect(() => { if (saved !== null && name === saved) setSaved(null); }, [name, saved]);
+  const shown = saved ?? name;
+  const begin = () => { if (onRename) setDraft(shown); };
+  const finish = () => {
+    if (draft === null) return;
+    const next = renameTo(draft, shown);
+    setDraft(null);
+    if (next === null || !onRename) return;
+    setSaved(next);
+    void onRename(next).then((ok) => { if (!ok) setSaved(null); }, () => setSaved(null));
+  };
+  const cancel = () => setDraft(null);
+  const onKey = (e: ReactKeyboardEvent<HTMLElement>) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); }
+    else if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); e.stopPropagation(); finish(); }
+    else e.stopPropagation();
+  };
+  return { shown, draft, editing: draft !== null, begin, finish, setDraft, onKey };
+}
+
 /* ------------------------------------------------------------- the crumb */
 
 /**
- * THE THREAD'S BAR WHILE THE SUMMARY IS OPEN (w-922f66bb06): one line in the
- * app's mono capitals, the tab the thread was opened from, a slash, and the
- * thread's name, "NEEDS YOU / FIRST FRAME WHITE BACKGROUND FIX". The whole
- * line is the way back, so it is one button carrying the back hint and Esc.
- * The full bar (title, project, engine, last moved) said again what the
- * summary beside it says; folded, the summary gives that bar back (Focus.tsx).
+ * THE THREAD'S BAR (w-922f66bb06): one line in the app's mono capitals, the
+ * tab the thread was opened from, a slash, and the thread's name, "NEEDS YOU /
+ * FIRST FRAME WHITE BACKGROUND FIX".
+ *
+ * ONLY "‹ NEEDS YOU" IS THE WAY BACK (w-ab3d51dc7d). The whole line was one
+ * back button, and "the fact that selecting the whole breadcrumb brings me
+ * back doesn't really make sense". The back half keeps the back hint and Esc;
+ * the name is its own control, and pressing it renames the thread. Where a
+ * thread cannot be renamed (a conversation is named for its person) the name
+ * is plain words.
  *
  * The name keeps whole words up to 59 letters (crumb-rules.ts) and the whole
  * of it is one hover away.
  */
-export function ThreadCrumb({ from, name, onBack }: { from: string; name: string; onBack: () => void }) {
+export function ThreadCrumb({ from, name, onBack, onRename, threadKey = '' }: {
+  from: string; name: string; onBack: () => void;
+  onRename?: (name: string) => Promise<boolean>; threadKey?: string;
+}) {
+  const r = useRename(name, onRename, threadKey);
+  const box = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (r.editing) box.current?.select(); }, [r.editing]);
   return (
-    <button type="button" className="back-esc thread-crumb" data-hint="back" onClick={onBack} aria-label={`Back to ${from} (esc)`} title={name}>
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" /></svg>
-      <span className="thread-crumb-from">{from}</span>
+    <div className="thread-crumb">
+      <button type="button" className="back-esc thread-crumb-back" data-hint="back" onClick={onBack} aria-label={`Back to ${from} (esc)`}>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" /></svg>
+        <span className="thread-crumb-from">{from}</span>
+      </button>
       <span className="thread-crumb-sep" aria-hidden="true">/</span>
-      <span className="thread-crumb-name">{crumbName(name)}</span>
-    </button>
+      {r.editing ? (
+        <input
+          ref={box}
+          className="thread-crumb-edit"
+          aria-label="Thread name"
+          value={r.draft ?? ''}
+          onChange={(e) => r.setDraft(e.target.value)}
+          onBlur={r.finish}
+          onKeyDown={r.onKey}
+        />
+      ) : onRename ? (
+        <button type="button" className="thread-crumb-name" aria-label="Rename this thread" title={r.shown} onClick={r.begin}>{crumbName(r.shown)}</button>
+      ) : (
+        <span className="thread-crumb-name" title={r.shown}>{crumbName(r.shown)}</span>
+      )}
+    </div>
   );
 }
 

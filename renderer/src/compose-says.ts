@@ -123,12 +123,29 @@ export function noProjectYet(
  * THE UNDO IS SAID OUT LOUD, unchanged, because a way back she cannot see is
  * one she will not take.
  */
-export function sentLine(p: { to: string; when?: string | null; held?: boolean }): string {
+export function sentLine(p: { to: string; when?: string | null; held?: boolean; todo?: boolean }): string {
   // "Started in", because "Sent to Office admin" read as a message to a person.
   // And "Added to Later" for the one answer on the Send later menu with no
   // moment in it (w-afb66e6661): it did not start, so saying it did is a lie,
   // and it is not scheduled either.
+  if (p.todo) return `Als To-do gespeichert in ${p.to} · Z zum Rückgängigmachen`;
   if (p.held) return `Added to Later in ${p.to} · Z to undo`;
   const where = p.when ? `Scheduled in ${p.to}` : `Started in ${p.to}`;
   return `${p.when ? `${where} · ${p.when}` : where} · Z to undo`;
+}
+
+/**
+ * What the toast says between Send and the computer's answer (w-461fbd8d2d).
+ *
+ * The card closes the moment Send is pressed, so for one round trip, which on
+ * a phone's relay is about half a second, this is the only sign the press
+ * landed. It names the same place `sentLine` will, in the same verb, so the
+ * toast that replaces it reads as the same sentence finishing. No Z yet:
+ * nothing has been written for Z to take back.
+ */
+export function sendingLine(p: { kind: 'task' | 'repeat' | 'message'; to: string; held?: boolean; scheduled?: boolean }): string {
+  if (p.kind === 'message') return p.to ? `Sending to ${p.to}…` : 'Sending…';
+  if (p.held) return `Adding to Later in ${p.to}…`;
+  if (p.scheduled || p.kind === 'repeat') return `Scheduling in ${p.to}…`;
+  return `Starting in ${p.to}…`;
 }

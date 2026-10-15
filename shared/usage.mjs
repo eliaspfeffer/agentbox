@@ -33,6 +33,13 @@ import { DEFAULT_ENGINE } from './engines.mjs';
 
 /* ------------------ WHICH CODING AGENT THE CORNER IS ABOUT ---------------- */
 
+// WHAT A USAGE CHECK THAT GOT NOTHING READABLE SAYS, for every reason we have
+// not named. It used to be "Could not refresh usage. Try again.", which reads
+// as the app having broken; the measured case (2026-10-11) was an account whose
+// subscription had ended, and Claude Code simply printed no limits for it. So
+// it points at the account, which is where an unnamed cause almost always is.
+export const USAGE_UNREADABLE = "Claude Code didn't report usage for this account. Check that its plan is active at claude.ai.";
+
 /**
  * THE AGENT MOST OF HER LIVE WORK IS ON, or the workspace's own when nothing is
  * running and when the fleet is level.

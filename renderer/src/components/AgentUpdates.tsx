@@ -1,5 +1,7 @@
 import {createContext,useContext,useEffect,useRef,useState,type ReactNode} from 'react';
 import {api} from '../api';
+import {onPhone} from '../phone-screen';
+import {pollEvery} from '../phone-polls';
 import {TaskTerminal} from './TaskTerminal';
 type Update={engine:string;state:string;message?:string;installed?:string;latest?:string};
 const Context=createContext<{updates:Record<string,Update>;start:(engine:string)=>void}>({updates:{},start:()=>{}});
@@ -32,7 +34,8 @@ export function AgentUpdates({children}:{children:ReactNode}){
     lastState.current[engine]=u.state;save(u);
    }catch{}
   };
-  const timer=setInterval(poll,1000);return()=>{live=false;clearInterval(timer);};
+  // Every second on a desktop; a phone pays per question (../phone-polls).
+  const timer=setInterval(poll,pollEvery(1000,onPhone()));return()=>{live=false;clearInterval(timer);};
  },[]);
  const start=async(engine:string)=>{
   setPanel(engine);

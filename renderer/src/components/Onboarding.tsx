@@ -18,7 +18,7 @@ import { TeamContext } from '../team/people';
 import {
   ALSO, ANCHOR, BOUNDS, BREATHE_AFTER_MS, COACHED, COPY, FLOOR, FLOOR_OF, TEAM_TAB_NAMES, TEXT_MAX, TEXT_MIN, teamTab,
   HELD_EVENTS, LINE_H, NOT_THE_APP, SLAB_OF, TEXT_GAP, UNDER,
-  anyAgents, clearOf, finishCard, forgetAgentsWhileLookingAgain,
+  anyAgents, clearOf, finishCard, forgetAgentsWhileLookingAgain, gateRows,
   forgetFoldersWhileLookingAgain, keepSecondRead, keyName, keyToken, padFor,
   practising, pressAtWrongRow, pressCounts, readAgentsAgain, roomFor, strayClick,
   swallowPress, wrongPress,
@@ -31,7 +31,7 @@ import FolderPicker from './FolderPicker';
 import { PRACTICE_NAME, PRACTICE_ROWS, PRACTICE_TASK } from '../../../shared/first-run-practice.mjs';
 import { AppMark } from './AppMark';
 import { SidebarIcon } from './SidebarIcon';
-import { PlanQuestion, PlanSetupCard } from './PlanSetup';
+import { AskList, PlanQuestion, PlanSetupCard } from './PlanSetup';
 import { needsPlan, type Plan } from '../plan-setup';
 import { NAME, Name } from '../../../shared/product-name.mjs';
 import { foundOnThisMac, type RunsOn } from '../../../shared/runs-on.mjs';
@@ -1242,8 +1242,38 @@ function Finished({
   const recheck = async () => {
     if (checking) return;
     setChecking(true);
+    setRefused(null); // whatever the panel said is about a press before this one
     try { setTried(await onRecheck()); }
     finally { setChecking(false); }
+  };
+  // AND THE THIRD MOVE: SHOW IT WHERE THE FILE IS (w-ce8c1a9275). This card is
+  // the one screen in the app that will not let anybody past it, so it is the
+  // worst place to have no answer except "wait for a release". The panel opens
+  // in the main process and the choice is applied there in the same call, so no
+  // path off anybody's disk crosses the bridge (main/ipc.mjs, `zero:engine-bin`).
+  //
+  // A REFUSAL IS WORDS. Picking a folder by mistake at a file panel is ordinary,
+  // and it replaces the "still nothing here" line rather than adding a row to a
+  // card that is already the only thing standing in somebody's way.
+  const [pointing, setPointing] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
+  const point = async () => {
+    if (pointing) return;
+    setPointing(true);
+    setRefused(null);
+    try {
+      const { api } = await import('../api');
+      const r = await api.engineBin('claude');
+      // ONE LINE UNDER THE BUTTONS, NEVER TWO. "Still nothing here" is about the
+      // last search and the refusal is about the panel just now, so the newest
+      // one replaces the other rather than stacking under it on a card that is
+      // already the only thing standing in somebody's way.
+      if (r?.refused) { setRefused(r.refused); setTried(false); }
+      // Cancelling changed nothing, so there is nothing to look at again.
+      if (!r?.canceled && !r?.refused) setTried(await onRecheck());
+    } finally {
+      setPointing(false);
+    }
   };
   // THE STRAIGHT-IN IS GONE. A Mac with no agent files used to end the walk
   // here with no card at all, and MEASURED on that Mac it meant the person with
@@ -1263,10 +1293,11 @@ function Finished({
   // Everything below it is the import, empty or full, and the import card owns
   // the keyboard while it is up — ⌘↵ is its first door, or the way on when there
   // is no door, and Escape steps back off its second screen.
+  // NO VEIL UNDER IT. The card's own backdrop dims the app, as it does from ⌘K;
+  // a veil as well dimmed it twice, and at 299 it was drawn over the card.
   if (!card.blocked) {
     return (
       <>
-        <Veil box={null} />
         <ImportAgents
           products={products}
           filter={project}
@@ -1288,55 +1319,59 @@ function Finished({
       </>
     );
   }
-  return (
-    <>
-      <Veil box={null} />
-      <div className={card.blocked ? 'fr-finish gate' : 'fr-finish'} role="status">
-        <h1 className="fr-finish-head">{card.head}</h1>
-        {/* ONE LINE, AND IT IS THE ONE `finishCard` PICKED. The card used to fork here
-           between two lessons about inbox zero; both of them are on the landing now, where
-           they are true of what is behind them, and what is left is the sentence that says
-           where these names came from.
-         */}
-        <p className="fr-finish-line">{card.line}</p>
-        {/* HER AGENTS USED TO BE DRAWN HERE, under a two-sided switch, and they
-            are on <ImportAgents> above now. See the note on this component. What
-            is left below is the gate, which is the one state of this card that
-            is about Claude Code rather than about agents. */}
-        {/* THE WAY INTO THE INBOX IS NOT DRAWN HERE AT ALL, because this card is now only
-           ever the gate.
-         */}
-        {/* AND WHEN IT IS BLOCKED, THE TWO REAL MOVES. Get it, which opens the
-            install page, and check again, which really searches again: the
-            remembered shell answer is thrown away first, so somebody who
-            installs Claude Code and presses this straight away is answered by a
-            search and not by a thirty second old memory (main/settings.mjs,
-            `recheckClaude`).
+  /*
+   * THE GATE IS A QUESTION SCREEN, NOT A CARD (w-ce8c1a9275, 2026-10-09).
+   *
+   * It used to be the ending's own 520px panel with three buttons crammed in a
+   * row. The founder, on a photograph of that: "UI wise this is very rough. In
+   * onboarding we already have a component for geting setup/selecting your
+   * harness I feel like that's a better design an dpossibly placement."
+   *
+   * So it wears what the walk's other full-stop screens wear -- `fr-stack
+   * fr-stack-folders`, a title, a line, one card of rows, one quiet note -- and
+   * it is the plan question's twin, which is what it has always been in
+   * substance: nothing can run an agent here, so how would you like to get one.
+   *
+   * AND IT IS THE WHOLE OF WHAT IS LEFT HERE. The branch above returns the
+   * import card for every unblocked Mac, so the `fr-finish` panel under this
+   * was only ever drawn when blocked -- it was the gate, wearing the ending's
+   * clothes, which is exactly the roughness that was reported. There is no
+   * ending card to fall through to any more and `fr-finish` keeps its one real
+   * user, the practice band's sibling further down this file.
+   */
+  if (card.blocked) {
+    return (
+      <>
+        <Veil box={null} />
+        <div className="fr-stack fr-stack-folders" role="status">
+          <h1 className="fr-page">{card.head}</h1>
+          <p className="fr-lede">{card.line}</p>
+          {/* Get it opens the install page, and is a real link so the address
+              is in the page. Check again really searches again: the remembered
+              shell answer is thrown away first, so somebody who installs Claude
+              Code and presses this straight away is answered by a search and
+              not by a thirty second old memory (main/settings.mjs,
+              `recheckClaude`). Show me where it is opens the panel in the main
+              process, which is the half that means nobody waits for a release. */}
+          <AskList
+            rows={gateRows(claude.url, { checking, pointing })}
+            label={card.head}
+            busy={checking || pointing}
+            onPick={(key) => { if (key === 'check') void recheck(); else void point(); }}
+          />
+          {/* ONE LINE UNDERNEATH, the way the plan question has one. What it
+              says is the newest true thing: the panel's refusal, then "still
+              nothing here" after a search that missed, and otherwise the
+              reassurance. Repeating the headline's own sentence at somebody who
+              has just pressed something reads as a screen that did not notice. */}
+          <p className={refused ? 'fr-note fr-refused' : 'fr-note'}>
+            {refused ?? (tried && !checking ? COPY.gateStill : COPY.gateDo)}
+          </p>
+        </div>
+      </>
+    );
+  }
 
-            The line under them appears only after a press. Repeating the
-            headline's own sentence at somebody who has just pressed a button
-            reads as a screen that did not notice. */}
-        {card.blocked && (
-          <>
-            <p className="fr-gate-do">{COPY.gateDo}</p>
-            <div className="fr-gate-acts">
-              <a
-                className="fr-finish-go"
-                href={claude.url}
-                target="_blank"
-                rel="noreferrer"
-                autoFocus
-              >{COPY.missingLink}</a>
-              <button className="fr-gate-again" onClick={recheck} disabled={checking}>
-                {checking ? COPY.gateChecking : COPY.gateCheck}
-              </button>
-            </div>
-            {tried && !checking && <p className="fr-gate-still">{COPY.gateStill}</p>}
-          </>
-        )}
-      </div>
-    </>
-  );
 }
 
 /**
@@ -1913,13 +1948,31 @@ export function Onboarding({
   // welcome is on screen, because each tool's own status check takes a few
   // seconds and the welcome is where there is time to spare. Null until it
   // answers; Get started waits for it only if it has not.
-  const asked = useRef<Promise<boolean> | null>(null);
-  const askMac = () => {
-    if (!asked.current) {
+  //
+  // IT KEEPS THE READINGS, NOT THE BOOLEAN (w-ce8c1a9275, 2026-10-09). It used
+  // to reduce the two to `needsPlan` here and throw the rest away, and the
+  // plan question was then asked with no idea what was on the machine. The
+  // founder: "I would think this step is actually better fit also checking
+  // first at the same time. Otherwise they may select something we cant run."
+  // `afterCheck` tells three cases apart from these same two readings, and
+  // only one of them is a question worth asking -- so the readings are what is
+  // cached, `begin` reduces them where it needs a yes or no, and the question
+  // is handed the whole thing as `look`.
+  //
+  // `fresh` THROWS THE CACHE AWAY, for the one caller that has just changed
+  // what it is a reading of: pointing at a file on the plan question. Reading
+  // the cached answer after that press would report the machine as it was
+  // before it.
+  const asked = useRef<Promise<Array<{ engine: 'claude' | 'codex'; found: boolean; signedIn: boolean }>> | null>(null);
+  const askMac = (fresh = false) => {
+    if (fresh || !asked.current) {
       asked.current = import('../api').then(({ api }) => Promise.all([
         api.engineSetup('ready', 'claude'), api.engineSetup('ready', 'codex'),
-      ])).then((r) => needsPlan(r.map((x) => ({ found: !!x.found, signedIn: !!x.signedIn }))))
-        .catch(() => false);
+      ])).then((r) => r.map((x) => ({ engine: x.engine, found: !!x.found, signedIn: !!x.signedIn })))
+        // A probe that could not run says nothing about this machine, and the
+        // walk must not stop on it: an empty reading sends them to the
+        // question, which is the screen that can still get them out.
+        .catch(() => []);
     }
     return asked.current;
   };
@@ -1927,7 +1980,7 @@ export function Onboarding({
   // The plan they picked, once they have. Null on the question.
   const [plan, setPlan] = useState<Plan | null>(null);
   const begin = async () => {
-    if (await askMac()) { setPlan(null); onStep('plan'); }
+    if (needsPlan(await askMac())) { setPlan(null); onStep('plan'); }
     else onEvent({ t: 'start' });
   };
   const [now, setNow] = useState(() => Date.now());
@@ -2472,7 +2525,7 @@ export function Onboarding({
           screen, and so does Skip, because a walk that traps somebody without
           a plan is worse than one that lets them look around. */}
       {run.step === 'plan' && !plan && (
-        <PlanQuestion onPick={setPlan} onReady={() => onStep('folder')} />
+        <PlanQuestion onPick={setPlan} onReady={() => onStep('folder')} look={askMac} />
       )}
       {run.step === 'plan' && plan && (
         <PlanSetupCard plan={plan} onDone={() => onStep('folder')} onSkip={() => onStep('folder')} />

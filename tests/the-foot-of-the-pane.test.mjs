@@ -112,7 +112,7 @@ describe('the shortcuts are off the screen and the verbs are not', () => {
     // checks the row still exists rather than what it is called.
     expect(app).toContain("id: 'done'");
     expect(app).toContain('DONE.verb} Task');
-    expect(app).toContain("label: 'Remind Me (Snooze)'");
+    expect(app).toContain("id: 'snooze', label: 'Later'");
     expect(app).toContain('onResolve={() => markDone(focused)}');
   });
 });

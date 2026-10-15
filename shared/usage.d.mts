@@ -3,6 +3,9 @@
 // rule about which coding agent the corner is about, the zone primitives the
 // Claude reader is built on, and the words the panel prints.
 
+/** What a usage check that got nothing readable says, for any cause we have not named. */
+export const USAGE_UNREADABLE: string;
+
 export interface UsageLimit {
   span: 'session' | 'week';
   qualifier: string | null;

@@ -23,8 +23,8 @@ export function actWords(act: { verb: string; subject?: string }, name?: string 
     return { lead: name ? `${name} ${act.verb.replace(/^Undid/, 'undid')}` : act.verb, choice: subject || null, picked: false };
   }
   const picked = /^You picked option \d+$/.test(act.verb);
-  // "You snoozed it until …" says "it" about the only thing on the page.
-  let rest = picked ? 'picked' : act.verb.replace(/^You\s+/, '').replace(/^snoozed it$/, 'snoozed');
+  // "You moved it to Later until …" says "it" about the only thing on the page.
+  let rest = picked ? 'picked' : act.verb.replace(/^You\s+/, '').replace(/^moved it to Later$/, 'moved to Later');
   if (!picked && subject) rest += /^was\b/.test(subject) ? `, ${subject}` : ` ${subject}`;
   const lead = name ? `${name} ${rest}` : rest.charAt(0).toUpperCase() + rest.slice(1);
   return { lead, choice: picked ? subject : null, picked };

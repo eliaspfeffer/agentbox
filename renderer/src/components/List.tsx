@@ -3,14 +3,14 @@
 // end, on the title's line, the things that are not the message: priority, the
 // product, and when (or that an agent is on it, or that one stopped).
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type { Product, RepeatRule, RunningSession, ThreadCard, View, WorkItem } from '../types';
-import { ago, dayLabel, previewText, stamp } from '../format';
+import { ago, dayLabel, itemOptions, offerIsLive, previewText, stamp } from '../format';
 import { REST_HEADING, URGENT_HEADING, clickIntent, rowKeys, rowSummary, rowTitle, walkRowKeys } from '../list-rules';
 import { isUrgentRow } from '../interrupt';
 // THE SAME PREDICATE THE PANE USES, not a second copy of the rule. The row and
 // the pane disagreeing about one fact on one screen is what this import fixes.
-import { cameBackEmpty } from '../live-line';
+import { cameBackEmpty, liveLine } from '../live-line';
 import { agentAtWork, engineWordFor } from '../byline';
 import { DEFAULT_ENGINE } from '../../../shared/engines.mjs';
 import { isTroubleRow, TROUBLE_ID } from '../trouble-row';
@@ -20,8 +20,12 @@ import { splitHits } from '../search';
 import type { ThreadSearchDetails } from '../threads/search';
 import { clockLabel, isCleanRun, nextRunAt } from '../../../shared/repeats.mjs';
 import { Face, TeamRowEnd, type TeamView } from '../team/people';
-import { RepeatMark, RowCells, TableHead, ThreadCells } from '../threads/Pages';
+import { RepeatMark, RowCells, TableHead, ThreadCells, WaitingContext } from '../threads/Pages';
+import { toApproveWords } from '../threads-made';
 import type { MixedRow } from '../threads/people-rules';
+import { threadTldr } from '../../../shared/thread-tldr.mjs';
+import {RowHoverPreview} from './RowHoverPreview';
+import { useRowDrag } from '../threads/row-drag';
 import { heldByAPerson } from '../../../shared/team-rules.mjs';
 
 /**
@@ -137,7 +141,7 @@ export function dayGroups(
   return groups;
 }
 
-export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, searchDetails, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover, onAnswerImport, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd }: {
+export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, atLimit, retrying, shipping, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, searchDetails, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover: hoverTo, onAnswerImport, onReply, onPick, onDone, onLater, onProjectChange, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd, onReorder }: {
   items: WorkItem[];
   view: View;
   // WHICH VIEW'S KEYS THE ROW HINT PRINTS, which is not always the view this
@@ -169,6 +173,11 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
   stalled?: string[];
   queued?: string[];
   signInNeeded?: Record<string, string>;
+  /** `supervisor.atLimit`: rows held because every login of their tool is out of usage. */
+  atLimit?: Record<string, { tool: string; until: number }>;
+  retrying?: Record<string, boolean>;
+  /** `supervisor.shipping`: rows the app's ship queue still owes a ship. */
+  shipping?: string[];
   // A RUN ENDED ON THIS ROW AND WROTE NOTHING DOWN, keyed by id. The half of
   // it that matters most is that this is visible in the inbox without opening
   // anything. Not `stalled`, which is a worker that died and
@@ -217,6 +226,11 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
    * breaks. */
   walk?: { key: string | null; rows: string[] } | null;
   onHover?: (id: string | null) => void;
+  onProjectChange?: (item:WorkItem,project:string)=>Promise<boolean>;
+  onDone?: (item: WorkItem) => void;
+  onLater?: (item: WorkItem) => void;
+  onReply?: (item: WorkItem) => void;
+  onPick?: (item: WorkItem, n: number) => void;
   // THE YES OR NO ON A CODEX CONVERSATION'S ROW, and the Import on one she
   // declined. A click on the keycap sends the same word the key does.
   onAnswerImport?: (item: WorkItem, choice: ImportChoice) => void;
@@ -239,7 +253,17 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
   /** Called as the foot of the list comes near the screen, for the next page
    *  of old finished threads (w-fda2165ec6). Absent, there is no foot. */
   onEnd?: () => void;
+  /** A thread dragged up or down the table and let go in front of another
+   *  (null: at the foot), with every row's id as drawn, which App.tsx turns
+   *  into its place (w-6e5b532a95). Absent wherever the order is not yours to
+   *  set: Updated, Done, a search. */
+  onReorder?: (id: string, beforeId: string | null, drawn: string[]) => void;
 }) {
+  const waiting = useContext(WaitingContext);
+  const drag = useRowDrag(table ? onReorder : undefined);
+  // The hover does not move while a row is carried: each row crossed would
+  // redraw the whole app under the drag (w-6e5b532a95).
+  const onHover = (id: string | null) => { if (!drag.carrying()) hoverTo?.(id); };
   const rules = view === 'snoozed' ? (repeats ?? []) : [];
   // The keys the rows in THIS list offer, drawn on the row under the pointer.
   // One list, one set: they are a property of the view, not of the message.
@@ -355,7 +379,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
   const withPerson = table && !!mixed;
 
   return (
-    <div className={`list${table ? ' th-table' : ''}`}>
+    <div className={`list${table ? ' th-table' : ''}`} ref={drag.listRef}>
       {table && <TableHead person={withPerson} tab={view} />}
       {/* Repeating tasks sit above the deferred rows, in the tab that already
           holds work with a moment attached. They are RULES, not items, so they
@@ -440,10 +464,13 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
             // neither can honestly offer a select box, and both wear the rule
             // at the left edge instead.
             const made = isTroubleRow(item) || isUpdateRow(item);
+            // Only a thread in a ledger has a place to keep.
+            const movable = table && !!onReorder && !made && !isImportRow(item);
             const details = searchDetails?.get(item.id);
             return (
               <div
                 key={item.id}
+                {...(movable ? { 'data-drag-id': item.id, onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => drag.onPointerDown(item.id, e) } : {})}
                 /*
                  * The first run points its coaching ring at the row it made
                    itself, by id, rather than at whatever is drawn first
@@ -469,14 +496,38 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                    the hover in App, and only a pointer that actually moves
                    takes it back. */
                 onMouseMove={() => { if (hoveredId !== item.id) onHover?.(item.id); }}
-                onMouseLeave={() => { if (hoveredId === item.id) onHover?.(null); }}
+                onMouseLeave={(e) => { if (hoveredId === item.id && (!(e.relatedTarget instanceof Element) || !e.relatedTarget.closest('.row-hover-preview'))) onHover?.(null); }}
                 onClick={(e) => {
+                  if (drag.swallowsClick()) return;
                   const intent = clickIntent('row', { shift: e.shiftKey, meta: e.metaKey, ctrl: e.ctrlKey });
                   if (intent === 'range') { onRange(index); return; }
                   if (intent === 'toggle') { onToggle(index); return; }
                   onSelect(index); onOpen(item);
                 }}
               >
+                {hoveredId === item.id && !checked && !multiSel.size && !walk && !isImportRow(item) && (
+                  <RowHoverPreview id={item.id} onClose={() => onHover?.(null)}>
+                    <div className="row-hover-tldr"><strong>TL;DR</strong> {threadTldr(
+                      (['body', 'answer', 'note', 'result'] as const).map((field) => ({
+                        who: field === 'answer' || (field === 'body' && item.wrote?.body?.source === 'founder') ? 'you' : 'it',
+                        text: item[field], at: item.wrote?.[field]?.ts ?? 0,
+                      })), null, { running: running.some((r) => r.itemId === item.id), statusText: liveLine(item, { session: running.find(r => r.itemId === item.id), queued, signInNeeded, atLimit, retrying, paused, stalled: stalled?.includes(item.id), silent: silent?.[item.id], shipping: shipping?.includes(item.id), inProgress: view === 'progress', scheduledUntil: snoozes?.[item.id] })?.line },
+                    )?.text || rowSummary(item, view) || 'Noch kein Ergebnis.'}</div>
+                    <div className="row-hover-actions">
+                      <button type="button" className="row-key" onClick={() => {onSelect(index);onOpen(item)}}><kbd>↵</kbd><span>Open task</span></button>
+                      {(keyView ?? view) === 'inbox' && <><button type="button" className="row-key" disabled={!onDone} onClick={() => onDone?.(item)}><kbd>E</kbd><span>Mark done</span></button><button type="button" className="row-key" disabled={!onLater} onClick={() => onLater?.(item)}><kbd>L</kbd><span>Schedule for later</span></button></>}
+                      {offerIsLive(item) && !item.agent && !made && itemOptions(item).map((option) => (
+                        <button type="button" className="row-key" key={option.n}
+                          aria-label={`Option ${option.n}: ${option.text}`}
+                          onClick={() => onPick?.(item, option.n)}>
+                          <kbd>{option.n}</kbd><span>{option.text}</span>
+                        </button>
+                      ))}
+                      {(keyView ?? view) === 'inbox' && <button type="button" className="row-key"
+                        aria-label="Antworten (R)" onClick={() => onReply?.(item)}><kbd>R</kbd><span>Antworten</span></button>}
+                    </div>
+                  </RowHoverPreview>
+                )}
                 {/* THE ONE THING THAT IS NOT A MESSAGE STANDS IN THE MESSAGE'S OWN
                    SELECT-BOX STRIP: a rule at the row's left edge, in the app's own faint
                    ink, beginning where the subject begins and ending where the preview
@@ -515,7 +566,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                   // THE TABLE ROW (the team version): the same row, its select
                   // box and its keys, with the approved columns instead of a
                   // title over a summary.
-                  <ThreadCells item={item} product={products.find((p) => p.slug === item.product)} now={Date.now()} tab={view}
+                  <ThreadCells item={item} products={products} onProjectChange={onProjectChange} product={products.find((p) => p.slug === item.product)} now={Date.now()} tab={view}
                     person={withPerson ? personCell?.(team?.me ?? null) : undefined} />
                 ) : <>
                 <div className="row-main">
@@ -531,6 +582,8 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                       {details.people.length > 3 && <span className="th-faces-more">+{details.people.length - 3}</span>}
                     </span>}
                     <Hits text={details?.title ?? rowTitle(item)} terms={terms} phrase={phrase} />
+                    {/* The same faint words the table row carries (w-d2744c6daa). */}
+                    {waiting.get(`${item.product}/${item.id}`) ? <span className="th-aside">{toApproveWords(waiting.get(`${item.product}/${item.id}`))}</span> : null}
                   </div>
                   {/* On anything finished the RESULT is the news; the body is the
                       ask she already knows she made. Her own directives are often
@@ -746,6 +799,10 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                         ? <span className="time quiet" title="An agent ran on this and finished without writing anything back. Send it a message to find out what happened.">nothing came back · {ago(silent![item.id].endedAt || item.updatedAt)}</span>
                         : signInNeeded?.[item.id]
                           ? <span className="time" title={`${signInNeeded[item.id]} is signed out, so nothing can start. Sign in again and this starts on its own.`}>signed out</span>
+                        : atLimit?.[item.id]
+                          ? <span className="time" title={`${atLimit[item.id].tool} is at its usage limit, so this starts on its own when it resets.`}>at its limit</span>
+                        : shipping?.includes(item.id)
+                          ? <span className="time" title="The app is shipping this. It comes back to you once it is live, or goes back to its agent if it fails.">shipping</span>
                         : queued?.includes(item.id)
                           ? <span className="time">queued</span>
                           : paused && view === 'progress'

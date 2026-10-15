@@ -148,9 +148,10 @@ describe('the suggestion stops nobody', () => {
     // composition.
     expect(config).toMatch(/slotsForPlans\(plans, config\.machineSlots\)/);
     expect(config).not.toMatch(/Math\.min\(config\.maxConcurrentSessions, config\.machineSlots\)/);
-    // And still only for somebody who has set no number of their own.
+    // And still only for somebody who has set no number of their own, which
+    // is a number for the whole computer since w-ec27ff1a51.
     expect(config).toMatch(
-      /if \(typeof overrides\.maxConcurrentSessions !== 'number'\) \{\s*const plans = readPlans/,
+      /if \(typeof overrides\.agentsAtOnce !== 'number'\) \{\s*const plans = readPlans/,
     );
   });
 });

@@ -67,7 +67,11 @@ describe('a linux home needs no mac path', () => {
     }
   });
 
-  it('finds claude on disk and does not ask a shell or a keychain', () => {
+  // THE SHELL IS ASKED FIRST SINCE 2026-10-08 (w-ce8c1a9275), so the lookup
+  // handed in here is reached and blows up, which is the case this home is
+  // really about: a machine with no login shell the app can start still finds
+  // the file on disk. It takes no keychain either way.
+  it('finds claude on disk when no shell can be asked, and needs no keychain', () => {
     const bin = `${HOME}/.local/bin/claude`;
     const found = findClaudeBin({
       home: HOME,

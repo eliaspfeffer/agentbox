@@ -148,6 +148,8 @@ export function whenWords(when, now = Date.now()) {
 /** Where she was when she started it, in the two places she named. */
 export function startedIn(source) {
   if (source === 'codex') return 'in Codex';
+  // VS Code, Cursor or Windsurf: the extension says which family, not which one.
+  if (source === 'editor') return 'in your code editor';
   return source === 'desktop' ? 'in the Claude Code desktop app' : 'in a terminal';
 }
 

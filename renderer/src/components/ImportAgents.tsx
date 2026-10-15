@@ -32,7 +32,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { type AgentFile } from '../onboarding';
 import {
-  CARD, LIST, SECTION, canBring, destinations, folderOfProject, countKinds, importLines, nameOfProject,
+  CARD, LIST, SECTION, canBring, listLine, destinations, folderOfProject, countKinds, importLines, nameOfProject,
   projectAtOpen,
   type AgentFolder, type Project, type SessionThread,
 } from '../agent-import-card';
@@ -90,8 +90,9 @@ export interface WalkMode {
   folders: AgentFolder[] | null;
 }
 
-export function ImportAgents({ products, filter, walk, onDone, onNewProject, onProjectMade, onClose }: {
+export function ImportAgents({ products, filter, walk, chatsOnly = false, onDone, onNewProject, onProjectMade, onClose }: {
   products: Project[];
+  chatsOnly?: boolean;
   /** The project the inbox is filtered to, if any. */
   filter: string | null;
   /** Set only when this card IS the last screen of the first run. See WalkMode. */
@@ -123,6 +124,8 @@ export function ImportAgents({ products, filter, walk, onDone, onNewProject, onP
   // folders can both hold an agent called `code-reviewer`.
   const [unticked, setUnticked] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
+  const [query,setQuery]=useState('');
+  const [selectedChats,setSelectedChats]=useState<Set<string>>(()=>new Set());
   // Every folder on this Mac with agents in it, read once alongside the agents
   // themselves, because the answer does not change while a card is open.
   // NULL UNTIL THE SCAN COMES BACK, not an empty list. Measured 2026-08-26 with
@@ -198,12 +201,13 @@ export function ImportAgents({ products, filter, walk, onDone, onNewProject, onP
   // something to offer.
   useEffect(() => {
     let live = true;
-    (async () => {
-      const t = await api.agentThreads();
+    const scan=async () => {
+      const t = query.trim() ? await api.agentThreads({query:query.trim()}) : await api.agentThreads();
       if (live) setThreads(t);
-    })();
-    return () => { live = false; };
-  }, []);
+    };
+    const timer=setTimeout(()=>{void scan()},query?250:0);
+    return () => { live = false;clearTimeout(timer); };
+  }, [query]);
 
   // READ AGAIN WHENEVER THE PROJECT CHANGES, because the project side IS the
   // project's folder: `<repo>/.claude/agents`. A card that kept the first
@@ -230,9 +234,10 @@ export function ImportAgents({ products, filter, walk, onDone, onNewProject, onP
     [found, others, all, project, offered],
   );
 
-  const lines = useMemo(() => importLines(dests), [dests]);
-  const picked = useMemo(() => lines.map((l) => l.path).filter((p) => !unticked.has(p)), [lines, unticked]);
-  const flip = (path: string) => setUnticked((u) => {
+  const threadPaths=useMemo(()=>new Set(offered.map(t=>t.path)),[offered]);
+  const lines = useMemo(() => importLines(dests).filter(l=>(!chatsOnly||threadPaths.has(l.path))&&(!query.trim()||(threadPaths.has(l.path)&&l.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())))), [dests,query,chatsOnly,threadPaths]);
+  const picked = useMemo(() => lines.map((l) => l.path).filter((p) => chatsOnly?selectedChats.has(p):!unticked.has(p)), [lines, unticked,chatsOnly,selectedChats]);
+  const flip = (path: string) => (chatsOnly?setSelectedChats:setUnticked)((u) => {
     const next = new Set(u);
     if (next.has(path)) next.delete(path); else next.add(path);
     return next;
@@ -343,7 +348,7 @@ export function ImportAgents({ products, filter, walk, onDone, onNewProject, onP
       for (const f of fresh) {
         let slug: string | null = null;
         try {
-          const got = await api.createProduct({ name: f.name, repoPath: f.folder }) as { slug?: string } | null;
+          const got = await api.createProduct({ name: f.name, repoPath: f.folder, ofMany: true }) as { slug?: string } | null;
           slug = got?.slug ?? null;
         } catch { slug = null; }
         // A project the store refused is not silently dropped from the count:
@@ -356,6 +361,14 @@ export function ImportAgents({ products, filter, walk, onDone, onNewProject, onP
         await file(slug, f.load);
         landed = f.name;
       }
+      // ONE PRESS, ONE "A REPO WAS CONNECTED", WITH HOW MANY (w-1116fbb68a,
+      // 2026-10-08). `zero:create-product` counts a single connect itself and
+      // is told to stay quiet above, because nine folders in one press sent
+      // nine events and read as nine separate connections. `newly` is only
+      // pushed for a project the store really made, so a folder it refused is
+      // not in the number either. A name and a number is all the window may
+      // send, which is exactly what this is.
+      if (newly.length) { try { window.zero?.track?.('repo_connected', newly.length); } catch {} }
       // WHICH WORD THE TOAST USES FOR "THAT ONE ALREADY HAS A ROW". Only the
       // singular needs it, and only one kind can be in a press of one.
       const kinds = countKinds(dests, paths);
@@ -405,7 +418,7 @@ export function ImportAgents({ products, filter, walk, onDone, onNewProject, onP
    * ONE LINE: the tick, what it is, and where it came from and when. Nothing
    *  else, and no heading over any group of them. */
   const lineRow = (l: { path: string; title: string; meta: string }) => {
-    const kept = !unticked.has(l.path);
+    const kept = chatsOnly?selectedChats.has(l.path):!unticked.has(l.path);
     return (
       <button key={l.path} className={kept ? 'ia-agent ia-line-row on' : 'ia-agent ia-line-row'}
         aria-pressed={kept} onClick={() => flip(l.path)}>
@@ -420,15 +433,19 @@ export function ImportAgents({ products, filter, walk, onDone, onNewProject, onP
 
   return (
     // A BACKDROP THAT CLOSES IS A WAY OUT, so inside the walk it is not one.
-    // Same scrim, same card, and a click beside it does nothing.
-    <div className="modal-backdrop compose-backdrop" onClick={walk ? undefined : onClose}>
+    // Same scrim, same card, and a click beside it does nothing. `in-walk` lifts
+    // it over setup's veil, which otherwise lay on top of it and dimmed it.
+    <div className={`modal-backdrop compose-backdrop${walk ? ' in-walk' : ''}`} onClick={walk ? undefined : onClose}>
       <div className={`modal ia-card ia-one${walk ? ' in-walk' : ''}`} onClick={(e) => e.stopPropagation()}>
         {/* THE HEADLINE SAYS WHICH CARD THIS IS (2026-08-28): the offer when
             there is something to bring, the plain answer when there is not. */}
         <div className="ia-top">
-          <h1 className="ia-head">{read && !some ? (alreadyIn > 0 ? CARD.headAllIn : CARD.headNone) : LIST.head}</h1>
+          <h1 className="ia-head">{query.trim()&&read&&!some?'Keine passenden Chats':chatsOnly?'Bestehenden Chat hinzufügen':read && !some ? (alreadyIn > 0 ? CARD.headAllIn : CARD.headNone) : LIST.head}</h1>
         </div>
-        {read && some && <p className="ia-line">{LIST.line}</p>}
+        {!chatsOnly && <>{read && some && <p className="ia-line">{listLine(threads ?? [])}</p>}</>}
+        {chatsOnly && read && some && <p className="ia-line">Wähle die Chats aus, die du hinzufügen möchtest. Die Namenssuche findet auch ältere Chats.</p>}
+        {!walk && <input className="ia-search" type="search" aria-label="Search existing chats by name" placeholder="Chatname suchen …" value={query} onChange={e=>setQuery(e.target.value)} maxLength={160}/>}
+        {!walk && <p className="ia-line">Suche nach lokal vorhandenen Codex- und Claude-Chats.</p>}
 
         {!read && <div className="ia-empty">{CARD.reading}</div>}
 

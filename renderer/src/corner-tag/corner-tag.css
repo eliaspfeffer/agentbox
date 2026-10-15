@@ -1,0 +1,264 @@
+/* THE CORNER TAG (w-dafae58a23). Each window is exactly its tag or its list,
+   clear and unrounded (main/corner-tag.mjs), so this page draws everything:
+   the glass, its small corners, and the words.
+
+   ONE GLASS, WHATEVER THE MAC IS SET TO (2026-10-13). It used to follow the
+   Mac's dark and light mode. Her Mac is dark and the pages she works in are
+   white, so in a screenshot she sent the tray was a black blob on a white
+   webinar page: "we want one more neutral, liquid glass feel... just a single
+   one." There is no light-or-dark branch left in this file, and there must not
+   be one again: a frosted chip with ink words reads on a white
+   page, on a black app and over video alike. What changes between the two
+   states is the glass's weight — working sits back, waiting comes forward.
+
+   NO OUTER SHADOW, EVER. The window is exactly the glass. Padding it for a
+   drawn shadow is what let a real first click fall through to the app beneath
+   (main/corner-tag.mjs says so at length), so the chip is held off a white
+   page by its edge instead: a hairline out and a bright line in.
+
+   ONE NUMBER IS THE SIZE. --ct-s multiplies everything; the main process sets
+   it from the width of the screen the tag rests on (shared/corner-tag.mjs,
+   tagScale), so the tray is bigger on a 32" than on a laptop.
+
+   Approved over rounds of drawings in the product's designs folder
+   (designs/w-0343005ce4); change it there first. */
+
+:root {
+  --ct-s: 1.1;
+  /* The list's own scale. It follows the tag less than a third of the way,
+     because a tag is glanced at from across a desk and a list is read: at the
+     tag's full size on a 32" the rows came out bigger than anything else on
+     the screen. The page sets it (shared/corner-tag.mjs, cardScale). */
+  --ct-cs: 1.03;
+  --ct-ink: #1d1d1f;
+  --ct-dim: rgba(29, 29, 31, 0.74);
+  --ct-faint: rgba(29, 29, 31, 0.50);
+  --ct-rule: rgba(29, 29, 31, 0.12);
+  --ct-press: rgba(29, 29, 31, 0.07);
+  /* The glass, and the edge that stands in for a shadow. It is thin on
+     purpose: against a dark screen a solid white chip was "so visible/high
+     contrast" (2026-10-13), and what the screen behind lends it is exactly
+     what keeps it quiet there while it stays legible on a white page. The
+     hairline does the work the fill no longer does.
+
+     IT WAS THINNED ONCE, NOT TWICE. A thinner glass still looked better on a
+     dark screen, but "it's a bit hard to see in light mode... the white is
+     blending in with white backgrounds": a chip that is mostly the page
+     behind it has nothing left to be on a page that is already white. This is
+     her pick, the one she sent back in a picture of her own. */
+  --ct-tint: linear-gradient(180deg, rgba(252, 252, 253, 0.76), rgba(238, 240, 245, 0.72));
+  --ct-tint-quiet: linear-gradient(180deg, rgba(252, 252, 253, 0.58), rgba(238, 240, 245, 0.55));
+  /* Pointing at it firms the glass up, because that is when it is being read. */
+  --ct-tint-hover: linear-gradient(180deg, rgba(255, 255, 255, 0.93), rgba(246, 247, 251, 0.90));
+  /* THE BORDER IS A REAL BORDER, one whole pixel, on all four sides. It was a
+     half-pixel inset ring, which the top and sides survived and the bottom did
+     not: "the bottom border isn't really visible and the bottom-left corner
+     looks a little messed up". A border follows the corner radius exactly and
+     lands on whole pixels, which is also why the heights are whole numbers
+     (shared/corner-tag.mjs). The bottom carries a shade more than the rest,
+     the way anything lit from above does.
+
+     It is faint. Drawn dark enough to count the pixels it was "a bit too
+     prominent/visible": this line is meant to tell the chip from the page it
+     sits on and nothing else, so it reads as an edge rather than a frame. */
+  --ct-line: rgba(16, 18, 24, 0.16);
+  --ct-line-bottom: rgba(16, 18, 24, 0.23);
+  --ct-line-quiet: rgba(16, 18, 24, 0.12);
+  --ct-line-quiet-bottom: rgba(16, 18, 24, 0.18);
+  --ct-edge: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --ct-edge-quiet: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  /* The mark: the launch film's soft apricot, in both states, carried half a
+     step deeper for the app — "the orange is a little hard to see so might
+     want it to be very slightly more intense" (2026-10-13). The film's own
+     #f3a27a sat on a 1400pt screen filling your view; this one has to carry
+     on a 32" from across a desk.
+
+     On a dark screen the chip is a pale grey pane and a half-lit apricot
+     disappears into it ("orange is a bit hard to see in dark"), so the
+     resting dots sit high: the working mark is dim by being small and few,
+     not by being washed out. */
+  --ct-lat: #ec8d55;
+  --ct-lat-rest: 0.66;
+  --ct-lat-peak: 0.92;
+}
+
+html, body, #root { margin: 0; padding: 0; background: transparent; overflow: hidden; height: 100%; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; -webkit-font-smoothing: antialiased; user-select: none; cursor: default; color: var(--ct-ink); }
+
+/* THE CLEAR BAND AROUND THE GLASS. The window is the tag plus this, so the
+   resize arrows can sit ON its corners, half over the glass and half outside
+   it, the way a window's own corner handle does. Nothing is drawn in the band:
+   a click there is not the tag's, and main/corner-tag.mjs lets it through to
+   whatever is underneath. */
+.ct-frame {
+  position: absolute; left: 0; top: 0; display: inline-block;
+  padding: calc(10px * var(--ct-s)); box-sizing: content-box;
+}
+.ct-frame.is-demo { position: relative; }
+.ct-tag { position: relative; }
+
+.ct-glass {
+  color: var(--ct-ink); background: var(--ct-tint);
+  backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--ct-line); border-bottom-color: var(--ct-line-bottom);
+  box-shadow: var(--ct-edge);
+}
+
+/* ---- the tag ---- */
+.ct-tag {
+  height: calc(28px * var(--ct-s)); padding: 0 calc(9px * var(--ct-s)) 0 calc(10px * var(--ct-s));
+  border-radius: calc(6px * var(--ct-s)); box-sizing: border-box;
+  display: flex; align-items: center; gap: calc(7px * var(--ct-s));
+  font-size: calc(12.5px * var(--ct-s)); white-space: nowrap;
+  transition: background 120ms ease;
+}
+/* Both states are the same words in the same weight and grey; the mark says
+   which one it is. */
+.ct-tag .ct-words { font-weight: 500; color: var(--ct-dim); }
+/* Working sits back at about three quarters of the glass, waiting comes
+   forward. */
+.ct-tag.working {
+  background: var(--ct-tint-quiet); box-shadow: var(--ct-edge-quiet);
+  border-color: var(--ct-line-quiet); border-bottom-color: var(--ct-line-quiet-bottom);
+}
+.ct-tag:hover, .ct-tag.is-open {
+  background: var(--ct-tint-hover); box-shadow: var(--ct-edge);
+  border-color: var(--ct-line); border-bottom-color: var(--ct-line-bottom);
+}
+.ct-tag.is-dragging { cursor: grabbing; }
+
+/* The way into the app, always at the tag's end: a hairline and a chevron
+   (she kept both, 2026-10-08, picking the chevron over an arrow on full-screen
+   pictures for how it sits). A click anywhere on the tag opens the app; the
+   chevron says so. */
+/* THE RESIZE GRIP: the tag's bottom-left corner, drawn only while the pointer
+   is on the tag so nothing is added to the corner of her screen at rest. It is
+   inside the glass, because the window is exactly the glass and padding it is
+   what once let a first click fall through (main/corner-tag.mjs). */
+/* THE CORNERS STILL TAKE A DRAG, AND DRAW NOTHING. A glyph that appears as
+   the pointer crosses a corner reads as a glitch rather than a handle ("you
+   accidentally see something flash... it really kills the vibes"), so the
+   affordance is the pointer itself: the system's resize arrow over a patch
+   big enough to aim at. Discovering that it resizes at all is a question
+   still open; nothing in the corner of her screen answers it by flashing. */
+.ct-grip {
+  position: absolute; width: calc(20px * var(--ct-s)); height: calc(20px * var(--ct-s));
+}
+.ct-grip-tl { left: calc(2.4px * var(--ct-s)); top: calc(2.4px * var(--ct-s)); cursor: nwse-resize; }
+.ct-grip-tr { right: calc(2.4px * var(--ct-s)); top: calc(2.4px * var(--ct-s)); cursor: nesw-resize; }
+.ct-grip-bl { left: calc(2.4px * var(--ct-s)); bottom: calc(2.4px * var(--ct-s)); cursor: nesw-resize; }
+.ct-grip-br { right: calc(2.4px * var(--ct-s)); bottom: calc(2.4px * var(--ct-s)); cursor: nwse-resize; }
+
+.ct-go { display: flex; align-items: center; gap: calc(8px * var(--ct-s)); margin-left: 1px; color: var(--ct-faint); }
+.ct-go::before { content: ''; width: 1px; height: calc(14px * var(--ct-s)); background: var(--ct-rule); }
+.ct-go svg { display: block; width: calc(7px * var(--ct-s)); height: calc(10px * var(--ct-s)); }
+
+/* ---- the nine-dot lattice (renderer/src/corner-tag/lattice.tsx) ----
+   ONE DRAWING, NOT NINE BOXES. It was a grid of nine boxes, and twice the fix
+   for a crooked mark was whole pixels for the dot and the gap. That holds only
+   where a point is a whole device pixel, and on a Mac in a scaled mode it is
+   1.5 of one: each box snaps on its own and the gaps round apart. An svg's
+   nine circles are rasterised together, so they cannot.
+
+   The launch film's geometry, exactly: dots 2.7, gaps 0.95, a 10 box whose
+   centre lands where the old single dot centred, so nothing else in the tag
+   moved when it arrived. */
+.ct-lat {
+  /* the drawing sets its own width and height: they are whole device pixels,
+     which is the one thing a stylesheet cannot work out */
+  flex: none; display: block; overflow: visible;
+  transform-origin: 50% 50%;
+}
+.ct-lat circle { fill: var(--ct-lat); opacity: var(--ct-lat-rest); transform-box: fill-box; transform-origin: 50% 50%; }
+/* The centre dot is always filled, lit or resting: a mark with a heart rather
+   than a gap. */
+.ct-lat .ct-heart { opacity: 1; animation: none; }
+/* Waiting: every dot lit, and still. */
+.ct-lat.is-waiting circle { opacity: 1; }
+
+/* It turns twice and settles, and only when something has changed. The dots
+   never reach full while turning, because this corner is read out of the side
+   of an eye: the film's 0.26 to 1.0 was for a film. */
+@keyframes ct-orbit {
+  0%, 62%, 100% { opacity: var(--ct-lat-rest); }
+  18%, 42% { opacity: var(--ct-lat-peak); }
+}
+.ct-lat.is-turning circle:not(.ct-heart) {
+  animation: ct-orbit 1856ms cubic-bezier(0.77, 0, 0.175, 1) 2 both;
+  animation-delay: calc(var(--p) * 232ms);
+}
+
+/* A count arriving: one pop, the dots landing one after another. The only
+   motion the waiting state ever has. */
+@keyframes ct-pop { from { transform: scale(1.12); } to { transform: scale(1); } }
+@keyframes ct-land { from { transform: scale(0.45); } to { transform: scale(1); } }
+.ct-lat.is-popping { animation: ct-pop 420ms cubic-bezier(0.18, 1.4, 0.4, 1) both; }
+.ct-lat.is-popping circle { animation: ct-land 380ms cubic-bezier(0.18, 1.6, 0.4, 1) both; animation-delay: calc(var(--r) * 28ms); }
+
+/* Nothing moves for anyone who has asked for less motion: both states are the
+   still marks, and a change is carried by the words and by brightness alone. */
+@media (prefers-reduced-motion: reduce) {
+  .ct-lat, .ct-lat circle { animation: none; transition: opacity 200ms linear; }
+}
+
+/* ---- the list ---- */
+/* The list is firmer glass than the tag: it is only there while you are
+   pointing at it, and it is read a line at a time. */
+.ct-card {
+  /* the list's window is the list, with no band around it */
+  position: absolute; left: 0; top: 0;
+  background: var(--ct-tint-hover);
+  border-radius: calc(8px * var(--ct-cs)); padding: calc(9px * var(--ct-cs)) calc(8px * var(--ct-cs)) calc(8px * var(--ct-cs));
+  box-sizing: border-box; width: max-content; max-width: calc(440px * var(--ct-cs)); min-width: calc(240px * var(--ct-cs));
+}
+.ct-line {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: calc(9px * var(--ct-cs)); width: 100%;
+  font-size: calc(13px * var(--ct-cs)); white-space: nowrap; padding: calc(5px * var(--ct-cs)) calc(6px * var(--ct-cs));
+  border-radius: calc(4px * var(--ct-cs)); cursor: pointer; color: var(--ct-ink);
+}
+.ct-line:hover { background: var(--ct-press); }
+.ct-line .ct-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; max-width: calc(220px * var(--ct-cs)); }
+.ct-line .ct-says { color: var(--ct-dim); }
+.ct-line .ct-when { margin-left: auto; padding-left: calc(14px * var(--ct-cs)); font-size: calc(12px * var(--ct-cs)); color: var(--ct-faint); }
+.ct-quiet { font-size: calc(12.5px * var(--ct-cs)); color: var(--ct-faint); }
+.ct-line.ct-quiet { color: var(--ct-faint); }
+.ct-static { padding: calc(5px * var(--ct-cs)) calc(6px * var(--ct-cs)); }
+.ct-mark-sp { width: calc(10px * var(--ct-cs)); flex: none; }
+/* A row's own mark: one apricot dot, the lattice's colour, so the list reads
+   as the tag's family. */
+.ct-pip { width: calc(7px * var(--ct-cs)); height: calc(7px * var(--ct-cs)); border-radius: 50%; flex: none; background: var(--ct-lat); }
+
+/* Hide it for a while, or go and turn it off. Small and last, so the list
+   reads first. */
+.ct-foot {
+  display: flex; align-items: center; gap: 2px; margin: calc(6px * var(--ct-cs)) 0 0;
+  padding: calc(7px * var(--ct-cs)) calc(6px * var(--ct-cs)) 0; border-top: 1px solid var(--ct-rule);
+  font-size: calc(11.5px * var(--ct-cs)); color: var(--ct-faint); white-space: nowrap;
+}
+.ct-foot > span:first-child { margin-right: 2px; }
+.ct-foot button { all: unset; cursor: pointer; padding: calc(2px * var(--ct-cs)) calc(6px * var(--ct-cs)); border-radius: calc(5px * var(--ct-cs)); color: var(--ct-dim); }
+.ct-foot button:hover { background: var(--ct-press); color: var(--ct-ink); }
+.ct-foot .ct-sep { flex: 1; min-width: calc(16px * var(--ct-cs)); }
+
+/* ---- sizing the tray, from the foot of its own list ----
+   Her pick over a handle on the tag itself: nothing is drawn on the tag, the
+   list only opens when she asks for it, and the tag stays in plain sight
+   beside it while she decides. Two halves of one pill, joined by a hairline,
+   with the signs drawn rather than typed — a minus and a plus as characters
+   never sit on the same baseline and that is what made it ugly. */
+.ct-foot .ct-size { display: flex; align-items: center; gap: calc(5px * var(--ct-cs)); margin-left: calc(4px * var(--ct-cs)); }
+.ct-foot .ct-size-name { color: var(--ct-faint); }
+.ct-foot .ct-steps {
+  display: flex; align-items: stretch; overflow: hidden;
+  border: 1px solid var(--ct-rule); border-radius: 999px;
+}
+.ct-foot .ct-steps button {
+  all: unset; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  width: calc(20px * var(--ct-cs)); height: calc(15px * var(--ct-cs)); color: var(--ct-dim);
+}
+.ct-foot .ct-steps button + button { border-left: 1px solid var(--ct-rule); }
+.ct-foot .ct-steps button:hover { background: var(--ct-press); color: var(--ct-ink); }
+.ct-foot .ct-steps svg {
+  width: calc(9px * var(--ct-cs)); height: calc(9px * var(--ct-cs)); display: block;
+  fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round;
+}

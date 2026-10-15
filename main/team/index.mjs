@@ -17,6 +17,7 @@ import { listSharedProjects, joinSharedProject, markShared, makeDirect } from '.
 import { firstSentence } from '../../shared/thread-cards.mjs';
 import { cardsFor } from '../../shared/thread-cards.mjs';
 import fs from 'node:fs';
+import { saveAttachments, attachmentMarkdown } from '../save-attachments.mjs';
 import { hasLapsed, statusEnds } from '../../shared/team-status.mjs';
 
 // `signingIn` is { url } while a Google sign-in waits on the browser, so the
@@ -168,6 +169,7 @@ export function createTeamService({
     sync = createTeamSync({
       backend,
       disk,
+      log,
       state: kept(),
       // ARCHIVED ONES COUNT AS HERE. Asked of the visible list, a shared
       // project you archived read as missing and was joined again beside it.
@@ -372,7 +374,7 @@ export function createTeamService({
      * later is not a chance to lift it. Nothing picked means nothing sent, so
      * the row keeps composeItem's 0, which the inbox reads as Medium.
      */
-    async message(toIn, body, priority) {
+    async message(toIn, body, priority, files = []) {
       if (!backend || !state.team || !state.me) throw new Error('start or join a team first');
       const me = state.me.id;
       // One person or a few: the same conversation for the same people.
@@ -381,8 +383,9 @@ export function createTeamService({
       if (others.length > 11) throw new Error('a message goes to at most eleven people');
       if (others.some((p) => !state.people.some((q) => q.id === p))) throw new Error('that person is not on your team');
       const to = others.length === 1 ? others[0] : others;
-      const text = String(body ?? '').trim();
-      if (!text) throw new Error('a message needs some words');
+      const words = String(body ?? '').trim();
+      const carried = (Array.isArray(files) ? files : []).filter((f) => f && (f.dataBase64 || f.srcPath));
+      if (!words && !carried.length) throw new Error('a message needs some words');
       // THE RECORD IS REUSED ONLY IF IT IS EXACTLY THE TWO OF YOU AND ONE OF
       // YOU MADE IT. Found by review 2026-10-01: a teammate could make a
       // "direct" record holding you and somebody else, and the next message
@@ -404,6 +407,10 @@ export function createTeamService({
         }
         product = products().find((p) => p.dir === made.dir) ?? { slug: made.slug, dir: made.dir };
       }
+      // ITS FILES, saved into the conversation now that there is one, and
+      // linked under the words the way the reply box links them. The sync
+      // sends each one on before the line that names it (./sync.mjs).
+      const text = [words, attachmentMarkdown(saveAttachments(product.dir, carried))].filter(Boolean).join('\n\n');
       // ONE CONVERSATION PER PERSON (decided 2026-10-01 from user research:
       // people expect to click a name and see what was said before, and a
       // subject line on every message between two coworkers makes talking
@@ -411,7 +418,8 @@ export function createTeamService({
       // conversation the two of you already have, reopened if it was put away,
       // and only the first message ever starts one. Work stays in threads; this
       // is talk.
-      const title = firstSentence(text, 90) || text.slice(0, 90);
+      // Named by its words; a message that is only files is named by them.
+      const title = firstSentence(words, 90) || words.slice(0, 90) || (carried.length === 1 ? String(carried[0].name ?? 'A file') : `${carried.length} files`);
       const convo = conversationIn(product.slug);
       if (convo) {
         store.answerItem(product.slug, convo.id, { answer: text });

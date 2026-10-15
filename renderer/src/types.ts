@@ -7,6 +7,14 @@ export interface WorkItem {
   id: string;
   product: string;
   productName: string;
+  displayProject?: string;
+  // WHERE SHE DRAGGED IT IN THE LIST (w-6e5b532a95), on the scale of the score
+  // it would otherwise sort by, which it replaces. Kept by the supervisor, on
+  // this Mac; absent on every row nobody has dragged.
+  place?: number;
+  // PINNED TO THE TOP OF THE LIST (w-20323283e6). Kept by the supervisor, on
+  // this Mac, like the place; absent on every row nobody has pinned.
+  pinned?: boolean;
   // WHAT PEOPLE PUT ON EACH MESSAGE IN A CONVERSATION (w-560647d4db): by the
   // message's line uid, then by emoji, then the people on it. Folded out of the
   // presses the ledger holds (shared/work-items.mjs); absent on every row
@@ -50,7 +58,7 @@ export interface WorkItem {
   // written down and deliberately not begun: it waits for a person rather than
   // a clock, lives in Later, and nothing runs on it. 'now' is how it is
   // started; absent is an ordinary thread that began when it was sent.
-  start?: 'later' | 'now';
+  start?: 'later' | 'manual' | 'now';
   // Which model this runs on, when she chose one on the card: a Claude Code
   // alias, depending on the engine beside it. The two vocabularies do not
   // overlap, which is why the pair only means anything read together
@@ -156,6 +164,9 @@ export interface Person {
 }
 
 /** What every team call answers: the team as it now stands, or why not. */
+/** A file a message to a person carries: pasted bytes or a path on this Mac. */
+export interface TeamMessageFile { name: string; dataBase64?: string; srcPath?: string }
+
 export interface TeamCallResult {
   ok: boolean;
   team?: TeamState;
@@ -216,6 +227,7 @@ export interface TeamState {
 }
 
 export interface RunningSession {
+  starting?: boolean;
   itemId: string;
   product: string;
   startedAt: number;
@@ -242,6 +254,9 @@ export interface RunningSession {
   // (main/supervisor.mjs). Absent whenever there are none, which is every
   // ordinary run, so the mark at the foot of a task keeps its one word.
   helpers?: number;
+  /** 'cloud' while this run is in a cloud sandbox (docs/cloud/PLAN.md);
+   *  absent for a run on this Mac. */
+  where?: 'cloud';
 }
 
 /**
@@ -326,9 +341,11 @@ export interface Usage {
   engine: string;
   limits: UsageLimit[];
   at: number;
+  profile?: string;
 }
 
 export interface SupervisorStatus {
+  retrying?: Record<string, boolean>;
   paused: boolean;
   running: RunningSession[];
   // Items whose answer was marked delivered but whose worker stopped without
@@ -341,6 +358,12 @@ export interface SupervisorStatus {
   // Rows nothing can start because their tool is signed out, id -> the tool's
   // name. Said instead of "queued", which would promise an agent that cannot come.
   signInNeeded?: Record<string, string>;
+  // Rows nothing can start because every login of their tool is out of usage,
+  // id -> the tool's name and when it resets (0 when no login said).
+  atLimit?: Record<string, { tool: string; until: number }>;
+  // Rows the app's ship queue still owes a ship (main/ship-queue.mjs). Waiting
+  // on the app, not on a person: In progress, reading "Shipping".
+  shipping?: string[];
   // Of those, the ones pushed with Run now from the three-dot menu: next to
   // start, ahead of every project and tag (supervisor.runNow).
   runNow?: string[];
@@ -398,8 +421,12 @@ export interface SupervisorStatus {
 // is an account that IS signed in and whose organization has Claude Code
 // turned off. It is apart from 'signed-out' because the remedy has a different
 // person in it: no login she can type will end it, and being told to type one
-// can cost an afternoon.
-export type TroubleCause = 'signed-out' | 'org-blocked' | 'at-limit' | 'workspace' | 'interrupted' | 'unknown';
+// can cost an afternoon. 'subscription-ended' is refused in the same words as
+// 'org-blocked', and told apart by the login's own file (refineCause in
+// shared/spawn-trouble.mjs): its owner renews it, no admin is involved.
+// 'model-not-on-plan' is a Codex login whose plan lacks the model the task asks
+// for; the fix is another model or another login, not this login.
+export type TroubleCause = 'signed-out' | 'org-blocked' | 'subscription-ended' | 'at-limit' | 'workspace' | 'interrupted' | 'model-not-on-plan' | 'unknown';
 
 // A worker frozen mid-action, waiting on the user's allow/deny.
 export interface Approval {
@@ -524,6 +551,8 @@ export interface AgentTurn {
 // others there were.
 export interface AgentWork {
   kind: 'work';
+  // Thread status is a separate event, never part of a group of tool calls.
+  standalone?: true;
   at: number;
   verb: string;
   subject: string;
@@ -606,6 +635,14 @@ export interface UpdateState {
   changes?: string[];
   behind?: number | null;
   installing?: boolean;
+  // WHERE THIS COPY IS RUNNING FROM, when that is a place macOS will not let
+  // it update itself (shared/where-it-runs-from.mjs). `canMove` is the one
+  // question the screens ask, `place` is which read-only place it is, and
+  // `moveError` is why the last move did not work. All absent, and `canMove`
+  // false, on every copy that can update itself, which is nearly all of them.
+  canMove?: boolean;
+  place?: string | null;
+  moveError?: string | null;
 }
 
 export interface Snapshot {
@@ -621,6 +658,9 @@ export interface Snapshot {
   // and is not running. ⌘R will not pick it up, only a restart will, and the
   // renderer says so. Null when the running app IS the app on disk.
   restartNeeded?: { files: string[]; since: number } | null;
+  /** Where threads run and this month's cloud use, for the cloud button
+   *  (renderer/src/cloud-menu.ts). Absent from an older main process. */
+  cloud?: import('./cloud-menu').CloudStatus | null;
   /**
    * What was left of her rate limit at the last reading, or null before the
    * first one lands. It rides the snapshot for the same reason `restartNeeded`
@@ -830,12 +870,19 @@ export interface WorkspaceSettings {
     reading?: {
       heavy: number | null; waiting: number | null; pressure: string | null; usedPct: number | null;
       asked: number | null; waited: number | null; refused: number | null;
+      /** New agents are waiting for memory to free up (main/start-hold.mjs). */
+      holding?: boolean;
     };
   };
   /**
    * STOP WHAT FINISHED AGENTS LEAVE RUNNING (main/leftovers.mjs). `now` is one
    * sentence about what is left right now, null while it is off. */
   leftovers?: { on: boolean; now: string | null };
+  /**
+   * COPIES OF A PROJECT THE APP DID NOT MAKE (main/task-folders.mjs). Null, and
+   * so no row at all, whenever there are none: the app shows these and never
+   * removes one, so there is nothing on the row to decide. */
+  strayFolders?: { count: number; now: string } | null;
   capacity: number;
   running: number;
   model: string | null;
@@ -887,6 +934,8 @@ export interface WorkspaceSettings {
    *  altogether when nobody is signed in (main/codex-account.mjs). */
   codex?: {
     found: boolean; certain: boolean; bin: string; url: string; trouble: string | null;
+    /** Whether somebody pointed at this file themselves. See `claudeChosen`. */
+    chosen?: boolean;
     account?: { email: string | null; name: string | null; plan: string | null; planNamed?: boolean; mode: string | null; accountId: string | null } | null;
     /**
      * EVERY Codex login on this Mac, one per `codexProfiles` word. The
@@ -911,6 +960,8 @@ export interface WorkspaceSettings {
   // Whether the ADHD mode rules ride under "How agents write to you". Off
   // unless she turned it on (w-5737fe67cf).
   adhdMode?: boolean;
+  // The corner tag over other apps (w-dafae58a23). On unless she turned it off.
+  cornerTag?: boolean;
   outsideAgents: AgentMode;
   accounts: AccountSetting[];
   /**
@@ -927,8 +978,12 @@ export interface WorkspaceSettings {
   // Whether the search for Claude Code got an answer at all, as opposed to
   // failing to reach the machine. Nothing may say "missing" without it.
   claudeCertain: boolean;
-  // Where to send someone who does not have it. One copy, in main/claude-bin.mjs.
+  // Where to send someone who does not have it. One copy, in main/engine-bin.mjs.
   claudeInstallUrl: string;
+  // Whether somebody pointed at this file themselves rather than it being
+  // found. A chosen path is never searched around, so the row that offers the
+  // search back has to know. Optional so an older main process typechecks.
+  claudeChosen?: boolean;
   // The same two facts about Codex. Either engine is enough to run the app, so
   // the walk's last card shuts the inbox only when both are missing for sure.
   // Optional so an older main process still typechecks.
@@ -970,6 +1025,7 @@ export interface RepeatRule {
   id: string;
   product: string;
   productName: string;
+  displayProject?: string;
   title: string;
   body?: string;
   priority?: number;
@@ -989,10 +1045,37 @@ export interface RepeatRule {
   lastOccurrence?: string;
 }
 
+/** Which address the phone QR code carries (main/phone-link.mjs). */
+export type PhoneRoute = 'wifi' | 'tailscale' | 'anywhere';
+export type PhoneDevice = { id: string; name: string; ip: string | null; firstSeen: number; lastSeen: number; live: boolean; alerts: boolean; alertError: string | null };
+export type PhoneLink = {
+  on: boolean;
+  listening: boolean;
+  error: string | null;
+  port: number;
+  /** The code carries an https address (Tailscale's certificate). */
+  secure: boolean;
+  /** Tailscale is still putting the https address up. */
+  settingUp: boolean;
+  /** Through the relay: whether this Mac is connected to it now. */
+  relay?: { connected: boolean; host: string } | null;
+  via: PhoneRoute | null;
+  routes: Array<{ via: PhoneRoute; host: string }>;
+  url: string | null;
+  /** The QR code as an svg document. */
+  qr: string | null;
+  devices: PhoneDevice[];
+};
+
 declare global {
   interface Window {
     zero?: {
       snapshot(): Promise<Snapshot>;
+      refreshUsage?(): Promise<{ ok: boolean; reading?: Usage; error?: string }>;
+      // Whether a screen reader is running, which is what decides xterm's
+      // accessibility tree. Optional: a preload from before this channel
+      // existed has no such function, and `api.assistiveTech` reads that as no.
+      assistiveTech?(): Promise<boolean>;
       olderItems?(p: { offset: number; limit: number }): Promise<{ items: WorkItem[]; more: boolean }>;
       crash?(p: { name: string; message: string; stack: string }): Promise<unknown>;
       // A count. The name is checked against the approved list in the main
@@ -1002,8 +1085,11 @@ declare global {
       agentReveal(p: { pid: number }): Promise<{ ok: boolean; name?: string; reason?: string }>;
       agentConversation(p: { pid: number; sessionId: string | null; cwd: string }): Promise<AgentConversation>;
       dashboard(slug: string): Promise<any>;
-      terminal(p: {product:string;id:string;action:'open'|'read'|'write'|'resize'|'close';data?:string;cols?:number;rows?:number;offset?:number}): Promise<any>;
+      terminal(p: {product:string;id:string;action:'open'|'read'|'write'|'resize'|'close';data?:string;cols?:number;rows?:number;offset?:number;wait?:number}): Promise<any>;
       agentUpdate?(p:{engine:string;action:'check'|'recheck'|'start'|'status'|'refresh'}):Promise<any>;
+      transcribeAudio(p:{audio:ArrayBuffer;mime:string}):Promise<{text:string}>;
+      desktopLive(p: {sdp: string}): Promise<{transport: {sdp: string}}>;
+      composerCatalog(p: {product: string; id: string; engine?: string}): Promise<{kind: string; name: string; description: string; insert: string; icon: string | null}[]>;
       commandCatalog(p: {product: string; id: string}): Promise<string[]>;
       command(p: {product: string; id: string; text: string}): Promise<{state: string; at: number; text?: string; name?: string}>;
       compact(p: { product: string; id: string }): Promise<{state: string; at: number}>;
@@ -1012,8 +1098,10 @@ declare global {
       answer(p: { product: string; id: string; answer?: string; status?: string; priority?: number; permissionMode?: string | null; model?: string | null; effort?: string | null; now?: boolean; inReplyTo?: string }): Promise<WorkItem>;
       sendNow(p: { product: string; id: string }): Promise<{ ok: boolean; interrupted: boolean }>;
       setProductOrder(p: { order: string[] }): Promise<unknown>;
+      setThreadPlaces(p: { places: Record<string, number | null> }): Promise<unknown>;
+      setThreadPins?(p: { pins: Record<string, true | null> }): Promise<unknown>;
       setProductHidden(p: { product: string; hidden: boolean }): Promise<unknown>;
-      compose(p: { product: string; title: string; body?: string; kind?: string; priority?: number; runAt?: number; start?: 'later' | 'now'; labels?: string[]; model?: string; engine?: string; effort?: string; assignee?: string; due?: string; visibility?: 'team' | 'people' | 'private'; visibleTo?: string[] }): Promise<WorkItem>;
+      compose(p: { product: string; title: string; body?: string; kind?: string; priority?: number; runAt?: number; start?: 'later' | 'manual' | 'now'; labels?: string[]; model?: string; engine?: string; effort?: string; assignee?: string; due?: string; visibility?: 'team' | 'people' | 'private'; visibleTo?: string[] }): Promise<WorkItem>;
       // Feedback to the Agentbox team (main/feedback.mjs). Optional: an older
       // main process under a newer window has no such door.
       sendFeedback?(p: { text: string; files: { name: string; type: string; size: number; data: string }[] }): Promise<{ ok: boolean; error?: string }>;
@@ -1036,7 +1124,7 @@ declare global {
       teamSync(): Promise<TeamCallResult>;
       teamRoute(p: { product: string; id: string; route: 'agent' | 'me' | 'back' }): Promise<TeamCallResult>;
       teamReact(p: { product: string; id: string; on: string; emoji: string; off?: boolean }): Promise<TeamCallResult>;
-      teamMessage(p: { to: string | string[]; body: string; priority?: number }): Promise<TeamCallResult>;
+      teamMessage(p: { to: string | string[]; body: string; priority?: number; files?: TeamMessageFile[] }): Promise<TeamCallResult>;
       threadEdit(p: { product: string; id: string; patch: ThreadEditPatch }): Promise<{ ok: boolean; error?: string }>;
       schedule(p: { product: string; id: string; runAt: number }): Promise<WorkItem>;
       snooze(p: { product: string; id: string; snoozedUntil: number }): Promise<WorkItem>;
@@ -1045,7 +1133,7 @@ declare global {
       setRepeat(p: { product: string; id: string; rule: Partial<RepeatShape & { title: string; body: string; priority: number }> }): Promise<RepeatRule>;
       endRepeat(p: { product: string; id: string }): Promise<RepeatRule>;
       pauseSupervisor(paused: boolean): Promise<SupervisorStatus>;
-      createProduct(p: { name: string; repoPath?: string | null }): Promise<{ slug: string }>;
+      createProduct(p: { name: string; repoPath?: string | null; codexFolder?: boolean }): Promise<{ slug: string }>;
       // THE FIRST RUN. Both optional for the same reason chooseFolder is: a
       // page kept alive by ⌘R can be attached to a main process built before
       // either channel existed, and the walk has to fall back rather than
@@ -1105,6 +1193,13 @@ declare global {
       // itself, which is the only way the page hears about the chord at all.
       onApprovalAnswered?(fn: (a: { id: string; allow: boolean }) => void): () => void;
       badge?(count: number): Promise<void>;
+      // The corner tag over other apps (main/corner-tag.mjs).
+      cornerTag?(state: {
+        ready: { id: string; title: string; says: string; since?: number; open?: string | null }[];
+        working: number;
+      }): Promise<void>;
+      // The corner tag's "Turn off…": open Settings on this page.
+      onOpenSettings?(fn: (p: { pane?: string }) => void): () => void;
       // screenDetail is which set of theme pictures this screen wants, 'soft' or
       // 'sharp' (main/screen-detail.mjs). It rides here rather than being
       // pushed because the answer is needed on the first paint.
@@ -1113,6 +1208,7 @@ declare global {
       // onto the version that already downloaded itself.
       updateCheck(): Promise<UpdateState>;
       updateInstall(): Promise<{ started: boolean }>;
+      updateMove(): Promise<{ moved: boolean; error: string | null }>;
       // The window moved to a screen that wants the other set.
       onScreenDetail?(fn: (s: { detail: string }) => void): () => void;
       // The wake sweep's one line: agents put back on the work the lid
@@ -1129,6 +1225,8 @@ declare global {
         title: string;
         product?: string | null;
         productName?: string | null;
+        // An approval's thread, by its list name, which heads the phone's alert.
+        thread?: string | null;
         kind: string;
       }>): Promise<void>;
       // She clicked the banner: open this row.
@@ -1158,8 +1256,10 @@ export type FolderListing = {
 /** What a person may change on a thread from its summary (main/store.mjs threadEdit). */
 export type ThreadEditPatch = Partial<{
   problem: string; progress: string; solution: string;
+  /** A rename: the name every row shows. The title stays the message. */
+  label: string;
   /** 'now' is how a thread leaves Later and starts (w-afb66e6661). */
-  start: 'later' | 'now';
+  start: 'later' | 'manual' | 'now';
   visibility: 'team' | 'people' | 'private'; visibleTo: string[]; priority: number;
-  blockedBy: string[]; blocks: string[];
+  blockedBy: string[]; blocks: string[]; displayProject: string;
 }>;

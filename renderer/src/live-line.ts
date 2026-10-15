@@ -29,6 +29,7 @@
 // reading).
 
 import { spanLabel } from './notes';
+import { Name } from '../../shared/product-name.mjs';
 import type { RunningSession, WorkItem } from './types';
 
 // THE FIFTH STATE, AND IT IS THE ONE SOMEBODY OUTSIDE THIS BUILDING ASKED FOR.
@@ -50,7 +51,7 @@ import type { RunningSession, WorkItem } from './types';
 // would be worse than the silence it replaces.
 // `next` is a queued task she pushed with Run now (w-87ff499077): still
 // waiting, but first in line, and the word changing is how the press shows.
-export type LiveState = 'working' | 'next' | 'queued' | 'signin' | 'paused' | 'silent' | 'idle';
+export type LiveState = 'starting' | 'retrying' | 'working' | 'shipping' | 'next' | 'queued' | 'signin' | 'limit' | 'paused' | 'silent' | 'idle';
 
 export interface LiveLine {
   state: LiveState;
@@ -59,6 +60,7 @@ export interface LiveLine {
 }
 
 export interface LiveFacts {
+  retrying?: Record<string, boolean>;
   /** Non-null while a worker is on this row in this window. */
   session?: RunningSession | null;
   /** `supervisor.queued`: the ids a tick will spawn as soon as a slot frees. */
@@ -67,6 +69,13 @@ export interface LiveFacts {
    * `supervisor.signInNeeded`: rows nothing can start because the tool they run
    *  on is signed out, each with that tool's name ("Claude Code", "Codex"). */
   signInNeeded?: Record<string, string>;
+  /**
+   * `supervisor.atLimit`: rows nothing can start because every login of their
+   *  tool is out of usage, each with the tool's name and when it resets (0 when
+   *  no login said). */
+  atLimit?: Record<string, { tool: string; until: number }>;
+  /** The id is on `supervisor.shipping`: the app's ship queue still owes it a ship. */
+  shipping?: boolean;
   /** `supervisor.runNow`: the queued ids she pushed with Run now. */
   runNow?: string[];
   /** `supervisor.stalled`: a worker died on it. The stalled bar owns this. */
@@ -132,10 +141,14 @@ export function shortWord(state: LiveState, helpers = 0): string {
   if (state === 'working' && helpers > 0) {
     return helpers === 1 ? '1 Subagent Working' : `${helpers} Subagents Working`;
   }
+  if (state === 'starting') return 'Starting';
+  if (state === 'retrying') return 'Reconnecting';
   if (state === 'working') return 'Working';
+  if (state === 'shipping') return 'Shipping';
   if (state === 'next') return 'Up next';
   if (state === 'queued') return 'Queued';
   if (state === 'signin') return 'Signed out';
+  if (state === 'limit') return 'At its limit';
   if (state === 'paused') return 'Paused';
   // "NOTHING CAME BACK", AND THE PLAINNESS IS THE POINT.
   //
@@ -199,8 +212,8 @@ export function cameBackEmpty(
 
 export function liveLine(item: WorkItem, facts: LiveFacts = {}): LiveLine | null {
   const {
-    session = null, queued = [], runNow = [], stalled = false, paused = false, silent = null, signInNeeded = {},
-    inProgress = false, scheduledUntil = 0, now = Date.now(),
+    session = null, queued = [], runNow = [], stalled = false, paused = false, silent = null, signInNeeded = {}, atLimit = {},
+    inProgress = false, scheduledUntil = 0, now = Date.now(), shipping = false,
   } = facts;
 
   // An imported Claude Code session is not one of ours and has no place in any
@@ -211,6 +224,7 @@ export function liveLine(item: WorkItem, facts: LiveFacts = {}): LiveLine | null
   if (item.status === 'done') return null;
 
   if (session) {
+    if (session.starting) return { state: 'starting', line: 'Codex is opening this conversation. The turn has not started yet.' };
     const elapsed = Math.max(0, now - session.startedAt);
     const helpers = session.helpers ?? 0;
     // The spoken sentence says the same fact at length. It has to move with
@@ -277,7 +291,18 @@ export function liveLine(item: WorkItem, facts: LiveFacts = {}): LiveLine | null
     };
   }
 
+  if (facts.retrying?.[item.id]) return { state: 'retrying', line: `The Codex connection stopped. ${Name} is reconnecting and will resume this conversation automatically.` };
   if (!inProgress) return null;
+
+  // THE APP IS SHIPPING IT (w-0c1ba766eb). No agent is on it and none is
+  // coming, so "Nothing running" would read as forgotten. The sentence says
+  // when it is the person's again.
+  if (shipping) {
+    return {
+      state: 'shipping',
+      line: `${Name} is shipping this. It comes back to you once it is live, or goes back to its agent if it fails.`,
+    };
+  }
 
   // SIGNED OUT IS NOT QUEUED (2026-10-04). "An agent starts on it as soon as
   // one is free" could sit on screen for half an hour while no agent could
@@ -291,6 +316,19 @@ export function liveLine(item: WorkItem, facts: LiveFacts = {}): LiveLine | null
       line: tool === 'Codex'
         ? 'Codex is signed out. Open a terminal and run codex login, and this starts on its own.'
         : `${tool} is signed out. Open a terminal, run claude, and type /login, and this starts on its own.`,
+    };
+  }
+
+  // The same for a tool whose every login is out of usage: no agent is coming
+  // until the reset, so "as soon as one is free" would be the same lie.
+  const limit = atLimit[item.id];
+  if (limit) {
+    const at = limit.until > now
+      ? new Date(limit.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s/g, '').toLowerCase()
+      : null;
+    return {
+      state: 'limit',
+      line: `${limit.tool} is at its usage limit, so this starts on its own when it resets${at ? ` at ${at}` : ''}.`,
     };
   }
 

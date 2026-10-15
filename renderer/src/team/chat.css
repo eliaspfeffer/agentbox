@@ -328,21 +328,36 @@ body.chat-thread-dragging * { cursor: col-resize !important; }
 /* The reply box, on the same line as the chat's and in the same plate. */
 .chat-thread-foot { flex: none; padding: 0 28px 24px; }
 .chat-thread-box {
-  display: flex; align-items: flex-end; gap: 8px;
+  display: flex; flex-direction: column;
   background: var(--wash); border: 1px solid var(--line); border-radius: 0;
   transition: border-color .18s, background .18s;
 }
 .chat-thread-box:focus-within { border-color: var(--line-strong); background: var(--surface); }
+/* Room for three lines, growing to 240px as you write (ThreadPanel.tsx). */
 .chat-thread-box textarea {
-  flex: 1 1 auto; min-width: 0; resize: none; box-sizing: border-box; min-height: 43px; max-height: 200px;
-  padding: 11px 0 11px 16px; border: 0; outline: none; background: none;
+  width: 100%; resize: none; box-sizing: border-box; min-height: 82px; max-height: 240px;
+  padding: 12px 16px 6px; border: 0; outline: none; background: none;
   font: inherit; font-size: 14.5px; line-height: 1.45; color: var(--text);
 }
 .chat-thread-box textarea::placeholder { color: var(--text-faint); }
-.chat-thread-send {
-  flex: none; margin: 0 8px 8px 0; height: 27px; padding: 0 12px;
-  appearance: none; border: 1px solid var(--line-strong); border-radius: 0; background: none; cursor: pointer;
-  font: inherit; font-size: 12.5px; color: var(--text);
+/* What is attached sits under the words, small, and the box grows to hold
+   it; full-size thumbnails took over a panel this narrow. */
+.chat-thread-box .attach-row { padding: 2px 16px 10px; }
+.chat-thread-box .attach-thumb img { height: 48px; max-width: 120px; }
+/* THE FOOTER IS THE CHAT'S OWN (.compose-sentence): the formatting bar on the
+   left, Send in the bottom-right corner. */
+.chat-thread-box { container-type: inline-size; }
+.chat-thread-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px 8px 12px; border-top: 1px solid var(--line);
 }
-.chat-thread-send:hover:not(:disabled) { background: var(--wash-strong); }
-.chat-thread-send:disabled { color: var(--text-faint); border-color: var(--line); cursor: default; }
+.chat-thread-bar .fmt-bar { margin-right: 0; min-width: 0; }
+.chat-thread-bar .dock-send { padding: 4px 12px; }
+.chat-thread-bar .dock-send:disabled { color: var(--text-faint); background: none; border-color: var(--line-strong); cursor: default; }
+.chat-thread-bar .dock-send:disabled:hover { background: none; }
+/* A PANEL DRAGGED NARROW keeps what puts something INTO the message (@, the
+   paperclip, the emoji) and lets the marks go, rather than pushing Send off
+   the edge. The marks are the buttons before the bar's gap. */
+@container (max-width: 400px) {
+  .chat-thread-bar .fmt-btn:has(~ .fmt-gap), .chat-thread-bar .fmt-gap { display: none; }
+}

@@ -334,7 +334,7 @@ const plainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
  * result -- see `sayUnasked` below -- so a flag that stops working is a line on
  * the run rather than a silence.
  */
-export function workerThreadParams({ cwd, model = null, instructions = null, mcpServers = [], storeServer = null, mode = null } = {}) {
+export function workerThreadParams({ cwd, model = null, instructions = null, mcpServers = [], storeServer = null, mode = null, plugins = false } = {}) {
   // THE MODE SHE PICKED, OR THE PAIR OF CONSTANTS. `mode` is one of the three in
   // shared/codex-modes.mjs, and it decides BOTH the sandbox and the approval
   // policy, because on this engine those two are one choice rather than two
@@ -354,8 +354,8 @@ export function workerThreadParams({ cwd, model = null, instructions = null, mcp
       mcp_servers: mcpIsolation(mcpServers, storeServer),
       projects: projectIsolation(cwd),
       // Plugins can contribute MCP servers outside config.mcp_servers.
-      // Keep this worker on the same explicit integration boundary.
-      features: { apps: false, plugins: false, remote_plugin: false },
+      // Load installed integrations only when the workspace explicitly requests them.
+      features: { apps: plugins === true, plugins: plugins === true, remote_plugin: plugins === true },
     },
   };
   if (model) params.model = model;
@@ -395,7 +395,7 @@ export function workerThreadParams({ cwd, model = null, instructions = null, mcp
  */
 export function resumeThreadParams(threadId, params = {}) {
   const { ephemeral, ...rest } = params ?? {};
-  return { threadId, ...rest };
+  return { threadId, ...rest, excludeTurns: true };
 }
 
 /**
@@ -491,6 +491,7 @@ export function createCodexWorker({
   const stderr = new EventEmitter();
   worker.stderr = stderr;
   worker.threadId = resumeThreadId ?? null;
+  let reattached = false;
   worker.turnId = null;
 
   let ended = false;
@@ -683,7 +684,7 @@ export function createCodexWorker({
     // failure against the Codex account, because a broken app-server IS evidence
     // about Codex on this Mac. Only the DELIVERY attempt is spared.
     onClosed: (gone) => {
-      say(gone?.stderr);
+      say(`Codex connection stopped: ${gone?.reason ?? 'unknown'}: ${gone?.note ?? gone?.error?.message ?? `exit ${gone?.code ?? 'unknown'}`}\n${String(gone?.stderr ?? '').slice(-300)}`);
       end(1, null, { transportFault: true });
     },
   };
@@ -713,7 +714,15 @@ export function createCodexWorker({
       // gets her own MCP servers back and no store at all (measured; see
       // `resumeThreadParams`), and a reply is the commonest thing this app does.
       return resumeThreadId
-        ? server.resumeThread(resumeThreadParams(resumeThreadId, params), handlers).then(() => ({ threadId: resumeThreadId }))
+        ? server.resumeThread(resumeThreadParams(resumeThreadId, params), handlers).then(async result => {
+          // Long histories can exceed the shared connection's frame bound and stop every worker.
+          let activeTurn = result?.thread?.turns?.find(turn => turn.status === 'inProgress');
+          if (!activeTurn && result?.thread?.status?.type === 'active' && turnParams.additionalContext?.agentbox_resume) {
+            const page = await server.request('thread/turns/list', { threadId: resumeThreadId, limit: 1, sortDirection: 'desc', itemsView: 'summary' });
+            activeTurn = page?.data?.find(turn => turn.status === 'inProgress');
+          }
+          return { threadId: resumeThreadId, activeTurn };
+        })
         : server.startThread(params, handlers);
     })
     .then((started) => {
@@ -730,11 +739,18 @@ export function createCodexWorker({
         return null;
       }
       worker.threadId = threadId;
+      // Reconnect to live work without posting another recovery turn.
+      if (turnParams.additionalContext?.agentbox_resume && started.activeTurn) {
+        reattached = true;
+        worker.turnId = started.activeTurn.id;
+        worker.emit('spawn');
+        return null;
+      }
       if (!worker.threadId) throw new Error('codex app-server started a thread with no id');
       return storeReady();
     })
     .then((up) => {
-      if (ended) return null;
+      if (ended || reattached) return null;
       if (!up) {
         // The loudest thing this file can do, on the pipe `troubleCause` reads.
         // A run that stops here has written nothing and spent nothing, which is

@@ -150,8 +150,10 @@ describe('the line under a message with replies', () => {
 });
 
 describe('the panel width', () => {
-  it('starts at the drawn width', () => {
-    expect(THREAD_WIDTH.start).toBe(440);
+  // 440 in the drawing; 480 since w-140ac855b1 asked for "a little bigger",
+  // so the reply box holds the chat's formatting bar and Send.
+  it('starts a little wider than the drawn width', () => {
+    expect(THREAD_WIDTH.start).toBe(480);
   });
 
   it('holds what you dragged it to when there is room', () => {

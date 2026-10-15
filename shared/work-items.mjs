@@ -109,7 +109,7 @@ export const CLAUDE_PERMISSION_MODES = [
 export const WORK_ITEM_FIELDS = [
   'title', 'label', 'body', 'kind', 'labels', 'priority', 'parent',
   'status', 'result', 'note', 'answer', 'product', 'runAt', 'snoozedUntil', 'answeredThrough',
-  'engine', 'model', 'effort',
+  'engine', 'model', 'effort', 'displayProject',
   // WHETHER THIS HAS BEEN STARTED AT ALL. 'later' is a thread written down and
   // deliberately not begun: it waits for a person, not for a clock, and
   // `isDue` below is where that becomes true of the whole app. 'now' is how it
@@ -366,6 +366,14 @@ function str(value, max) {
   return trimmed.slice(0, lo) + mark(trimmed.length - lo);
 }
 
+// A text field whose empty string MEANS something: nothing chosen. Only a
+// string may clear it, so a `null` that reached here without going through
+// `answerItem` is still dropped rather than guessed at.
+function clearable(value, max) {
+  if (typeof value !== 'string') return undefined;
+  return value.trim() ? str(value, max) : '';
+}
+
 function coerceField(field, value) {
   switch (field) {
     case 'title': return str(value, MAX_TITLE);
@@ -374,6 +382,7 @@ function coerceField(field, value) {
     // rule about how the app writes, and it lives with the writer in
     // main/row-label.mjs. This module holds no taxonomy, only storage.
     case 'label': return str(value, MAX_TITLE);
+    case 'displayProject': return typeof value==='string' && value.trim() && value.length<=160 ? value.trim() : undefined;
     case 'body': case 'result': case 'note': case 'answer': return str(value, MAX_TEXT_BYTES);
     // kind and product are free strings on purpose: the taxonomy of work is the
     // caller's to invent and change without a migration here.
@@ -388,7 +397,23 @@ function coerceField(field, value) {
     // shared/effort-levels.mjs, and the spawn gates on them, so a value this
     // module does not recognise is a run at Claude Code's own choice rather
     // than a row that never runs.
-    case 'kind': case 'product': case 'parent': case 'engine': case 'model': case 'effort': return str(value, MAX_SHORT);
+    case 'kind': case 'product': case 'parent': case 'engine': return str(value, MAX_SHORT);
+    // THESE TWO ARE CLEARED BY WRITING '' AND SO '' IS A REAL VALUE, exactly
+    // as runAt's 0 and start's 'now' are, and for the same reason: a field that
+    // coerces to undefined is dropped by the fold, so without a falsy value
+    // that survives, a model could be chosen and never unchosen.
+    //
+    // They used to sit on the line above, which cost us the most common crash
+    // of launch week. The reply box's drawer hands a pick back as null for
+    // "nothing chosen" and sends `{ model, effort }` whenever it was touched at
+    // all; `answerItem` turns null into '' because `modelForEngine` reads the
+    // empty string as nothing chosen. `str()` then dropped it, `pickFields`
+    // answered null, and `buildLine` threw — before the answer was written,
+    // because the model is written first on purpose. So opening the drawer,
+    // picking a model and pressing send lost the message, with nothing on
+    // screen to say so. Five of the 14 crashes since the Oct 6 launch, on two
+    // installs (PostHog, 2026-10-08).
+    case 'model': case 'effort': return clearable(value, MAX_SHORT);
     case 'status': return WORK_ITEM_STATUSES.includes(value) ? value : undefined;
     case 'priority': return Number.isFinite(value) ? Math.trunc(value) : undefined;
     // When this item may next be acted on, in epoch ms. 0 means unscheduled,
@@ -401,7 +426,7 @@ function coerceField(field, value) {
     // 'later' or 'now', and 'now' is the falsy sentinel for the same reason
     // runAt keeps 0: a field that coerces to undefined is dropped by the fold,
     // so without a real value for "started" nothing could ever clear it.
-    case 'start': return value === 'later' || value === 'now' ? value : undefined;
+    case 'start': return value === 'later' || value === 'manual' || value === 'now' ? value : undefined;
     // WHICH ANSWER A SESSION HAS ALREADY ACTED ON, as that answer's own ts.
     //
     // An answer had two states and the ledger recorded one. A worker finishes
@@ -705,11 +730,14 @@ export function threadOf(lines, id) {
   // and re-sends an unchanged body is the ordinary case, and the second copy is
   // not a turn: it is the store's shape leaking into what reads as a transcript.
   const out = [];
-  const seen = new Set();
+  const seen = new Map(THREAD_FIELDS.map(field => [field, new Set()]));
   for (const turn of turns) {
-    const key = `${turn.field}:${turn.text}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    // The same words after the other speaker replies are a new turn.
+    if (turn.field === 'answer') seen.get('result').clear();
+    if (turn.field === 'result') seen.get('answer').clear();
+    const fieldSeen = seen.get(turn.field);
+    if (fieldSeen.has(turn.text)) continue;
+    fieldSeen.add(turn.text);
     out.push(turn);
   }
   return out;
@@ -755,7 +783,7 @@ function beats(incoming, held, field) {
 // what a future moment means and never arrives on its own: not claimable, no
 // session, not in the inbox. Pressing start on the thread writes 'now'.
 export function isDue(item, now = Date.now()) {
-  if (item?.start === 'later') return false;
+  if (item?.start === 'later' || item?.start === 'manual') return false;
   return !item?.runAt || item.runAt <= now;
 }
 

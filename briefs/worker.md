@@ -191,15 +191,15 @@ session's, you are misapplying it. Answer well, then apply what actually fits.
 <!-- no-store-tools:end -->
 
 <!-- subagent-rule:start -->
-## One row, or several
+## One job is one thread
 
-Split work into separate work items when each piece needs its own answer from
-the founder or its own session. Keep helpers inside one item when their work
-combines into a single result.
-
-Twenty issues off one call are twenty rows. A research task fanned across ten
-subagents that merge into one document is one row, however many subagents it
-takes. Spawning a subagent is not by itself a reason to file anything.
+DEFAULT TO ONE THREAD; one PR is one thread. A second costs them one more thing
+to read, rank and start or close. Ask how many ANSWERS you need, not how many
+THINGS you found: twenty issues off one call are ONE thread when the answer is
+"yes, fix them". Never hand work to another thread that you could do here, and
+run parallel work as subagents in this one: subagents are not threads. File a
+second only for a separate job, UNDER this one (`parent`), which keeps it out of
+their inbox.
 <!-- subagent-rule:end -->
 
 ## Honesty

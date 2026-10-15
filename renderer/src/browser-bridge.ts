@@ -18,6 +18,10 @@
 
 import { REQUEST_CHANNELS, PUSH_CHANNELS, WRAPPED_ARGS, DESKTOP_ONLY } from '../../shared/bridge-map.mjs';
 import { Name } from '../../shared/product-name.mjs';
+import { setIconCount, startPhoneAlerts } from './phone-alerts';
+import { installPhoneFiles, installPictureWatch } from './phone-files';
+import { installPhoneScreen } from './phone-screen';
+import { atMostEvery, PHONE_PUSH_MS } from './phone-polls';
 
 type Push = (payload: unknown) => void;
 
@@ -36,12 +40,54 @@ const TOKEN_KEY = 'agentbox-token';
  *  not want it in a screenshot, and it would otherwise ride along into every
  *  link somebody copies out of here.
  */
+// THE PHONE DOOR IS THE OTHER CASE (main/phone-link.mjs). Its address is not
+// this computer's own, and there the key stays in the address bar on purpose:
+// a phone's home-screen icon is saved from that address, and on a phone the
+// icon gets storage of its own, so a key kept anywhere else is lost to it.
+const LOOPBACK = /^(127\.\d+\.\d+\.\d+|localhost|\[::1\])$/;
+export const onPhoneDoor = (host = location.hostname) => !LOOPBACK.test(host);
+
+/** A made-up name for this browser, so Settings can list the phones. */
+function deviceId(): string {
+  const KEY = 'agentbox-device';
+  try {
+    const had = localStorage.getItem(KEY);
+    if (had) return had;
+    const made = Array.from(crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem(KEY, made);
+    return made;
+  } catch {
+    return 'private-tab';
+  }
+}
+
+/** The key was reset on the computer: say so, rather than leave a dead inbox. */
+function showLockedOut() {
+  if (document.getElementById('phone-locked-out')) return;
+  const box = document.createElement('div');
+  box.id = 'phone-locked-out';
+  box.setAttribute('role', 'alert');
+  box.innerHTML = `<div><strong>This phone is disconnected.</strong><p>The key was reset on the computer. Open ${Name} there, go to Settings, then Phone, and scan the new code.</p></div>`;
+  document.body.appendChild(box);
+}
+
 function takeToken(): string | null {
   const url = new URL(location.href);
-  const fromUrl = url.searchParams.get('token');
+  // THROUGH THE RELAY the key is after the # (relay/phone/), which a browser
+  // never sends, so the relay never sees it.
+  const fromHash = onPhoneDoor() ? /(?:^#|&)k=([A-Za-z0-9_-]{24,})/.exec(url.hash)?.[1] ?? null : null;
+  const fromUrl = url.searchParams.get('token') ?? fromHash;
+  if (fromUrl && onPhoneDoor()) {
+    try { localStorage.setItem(TOKEN_KEY, fromUrl); } catch { /* private mode */ }
+    return fromUrl;
+  }
+  if (!fromUrl && onPhoneDoor()) {
+    try { const kept = localStorage.getItem(TOKEN_KEY); if (kept) return kept; } catch { /* private mode */ }
+  }
   if (fromUrl) {
     url.searchParams.delete('token');
-    history.replaceState(null, '', url.toString());
+    // The entry's own mark stays: on a phone it may be the floor (./phone-screen).
+    history.replaceState(history.state, '', url.toString());
     // Kept for the life of the tab only. A reload without the url is a reload
     // that cannot talk, and sessionStorage is what makes ⌘R survivable while
     // still being gone when the tab closes.
@@ -57,12 +103,40 @@ export function installBrowserBridge(): boolean {
   const token = takeToken();
   if (!token) return false;
 
+  const device = deviceId();
+  const phone = onPhoneDoor();
+  if (phone) {
+    const manifest = document.createElement('link');
+    manifest.rel = 'manifest';
+    manifest.href = `/manifest.webmanifest?token=${encodeURIComponent(token)}`;
+    document.head.appendChild(manifest);
+    document.documentElement.dataset.door = 'phone';
+    // After a turn sideways and back, iOS can leave the page scrolled by the
+    // status bar's height (phone.css says why). Put it back once it settles.
+    const unscroll = () => requestAnimationFrame(() => { if (scrollX || scrollY) scrollTo(0, 0); });
+    addEventListener('orientationchange', () => { unscroll(); setTimeout(unscroll, 350); });
+    addEventListener('resize', unscroll);
+    visualViewport?.addEventListener('resize', unscroll);
+    // The keyboard, the colour Safari paints round the page, and the
+    // home-screen swipe back (phone-screen.ts).
+    installPhoneScreen();
+    // A picture holds its place while it loads (phone-files.ts).
+    installPictureWatch();
+    // Pictures and design pages, from this computer under the file key, which
+    // reads files and nothing else (main/serve.mjs fileKey).
+    fetch('/file-key', { headers: { [TOKEN_HEADER]: token } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((said) => { if (said?.key) installPhoneFiles(said.key); })
+      .catch(() => { /* pictures stay blank; everything else still works */ });
+  }
+
   const ask = async (channel: string, payload?: unknown) => {
     const res = await fetch(`/api/${encodeURIComponent(channel)}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', [TOKEN_HEADER]: token },
+      headers: { 'content-type': 'application/json', [TOKEN_HEADER]: token, 'x-agentbox-device': device },
       body: JSON.stringify(payload ?? null),
     });
+    if (res.status === 403 && phone) showLockedOut();
     if (!res.ok) {
       // The screen shows what comes back from a channel, so this has to read as
       // a sentence rather than a status code.
@@ -83,6 +157,10 @@ export function installBrowserBridge(): boolean {
 
   for (const name of DESKTOP_ONLY) bridge[name] = () => null;
 
+  // ON A PHONE THE COUNT GOES ON THIS APP'S OWN ICON, not the computer's Dock.
+  // The computer's alerts carry it while the app is closed (phone-alerts.ts).
+  if (phone) bridge.badge = (count: unknown) => { setIconCount(Number(count) || 0); return Promise.resolve(null); };
+
   // The other direction. One event stream carries all eight channels, and each
   // `onSomething` is a subscription to its own name within it. The return value
   // is the unsubscribe function, because that is what preload.cjs returns and
@@ -99,17 +177,38 @@ export function installBrowserBridge(): boolean {
 
   // EventSource reconnects on its own, which is why the server sends a retry
   // hint and a heartbeat. A closed laptop lid is the ordinary case here.
-  const stream = new EventSource(`/events?token=${encodeURIComponent(token)}`);
+  const stream = new EventSource(`/events?token=${encodeURIComponent(token)}&device=${encodeURIComponent(device)}`);
+  // A refused stream is closed for good, where a dropped one only reconnects.
+  // On a phone the one refusal there is is a key that was reset.
+  stream.onerror = () => { if (phone && stream.readyState === EventSource.CLOSED) showLockedOut(); };
+  const deliver = (channel: string, payload: unknown) => {
+    for (const fn of listeners.get(channel) ?? []) {
+      try { fn(payload); } catch { /* one listener's fault is its own */ }
+    }
+  };
+  // "SOMETHING CHANGED" COMES UP TO 2.5 TIMES A SECOND while an agent writes,
+  // and each one has the screen ask for the inbox and the thread again. On a
+  // phone each of those is a paid request through the relay, so it reaches
+  // the screen at most every 2 seconds, the last one always (./phone-polls).
+  const changed = atMostEvery(PHONE_PUSH_MS, (payload: unknown) => deliver(PUSH_CHANNELS.onChanged, payload));
   stream.onmessage = (event) => {
     let message: { channel?: string; args?: unknown[] };
     try { message = JSON.parse(event.data); } catch { return; }
     if (!message.channel) return;
-    for (const fn of listeners.get(message.channel) ?? []) {
-      try { fn(message.args?.[0]); } catch { /* one listener's fault is its own */ }
-    }
+    if (phone && message.channel === PUSH_CHANNELS.onChanged) { changed(message.args?.[0]); return; }
+    deliver(message.channel, message.args?.[0]);
   };
 
   (window as any).zero = bridge;
+  // A tapped alert opens its thread, the way the desktop's notification does.
+  if (phone) {
+    startPhoneAlerts({ token, device }, (id) => {
+      const set = listeners.get(PUSH_CHANNELS.onOpenItem);
+      if (!set?.size) return false;
+      for (const fn of set) { try { fn({ id }); } catch { /* its own fault */ } }
+      return true;
+    });
+  }
   // A tab has no title bar to clear, so the window's top inset can match its
   // bottom one (renderer/src/threads/pages.css reads this).
   if (typeof document !== 'undefined') document.documentElement.dataset.shell = 'tab';

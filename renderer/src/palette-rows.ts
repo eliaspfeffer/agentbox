@@ -68,9 +68,14 @@ export function matchesQuery(query: string, row: Searchable): boolean {
 // with nothing typed opens on the same row it always did.
 //
 // One letter more still reaches Remote Control on its own, because "remo" is in
-// neither "remind me (snooze)" nor its keywords. So this costs the other command
-// a keystroke and nothing else.
+// neither "Later" nor its keywords. So this costs the other command a keystroke
+// and nothing else.
 const FIRST_AMONG_MATCHES = ['snooze'];
+
+// THE ROW IS CALLED LATER, after the key (w-66e3ece93d). It said "Remind Me
+// (Snooze)", so typing "later" never found it. The old words stay here, where
+// they are searched and never drawn, for whoever still reaches for them.
+export const LATER_KEYWORDS = 'remind me snooze put off defer schedule';
 
 export function rankMatches<T extends { id: string }>(query: string, rows: T[]): T[] {
   if (!query.trim()) return rows;

@@ -101,6 +101,56 @@ export function createItem(product, fields = {}, { source = 'agent', from = [] }
 }
 
 /*
+ * ONE JOB IS ONE THREAD, AND A RUN THAT FILES A SECOND ONE IS TOLD SO
+ * (w-31b2eb82ba).
+ *
+ * "I want you to fix all of those in one thread, feels unecessary to create
+ * multiple threads and a bit confusing. I feel like my inbox has been getting
+ * super cluttered with agents separating into multiple threads when I don't
+ * want them to."
+ *
+ * A QA campaign had found four things and had ONE question in it — do you want
+ * these fixed — and filed four threads, which is four things to read, rank and
+ * either start or close that did not exist until it filed them. The brief is
+ * rewritten (briefs/worker.md, "One job is one thread") and the brief alone is
+ * not enough: all four went in from one session in 53 seconds at the end of a
+ * long run, and nothing anywhere counted them or pushed back.
+ *
+ * So the filing tool answers with the count. It does NOT refuse, because a
+ * refusal at this moment loses a finding an agent has already measured, and
+ * the judgement it is asking for is one only the agent can make. It is said
+ * where the session reads it while it can still fold the thread back.
+ *
+ * The group is the parent, because that is the question being asked: how many
+ * live threads now hang off the one conversation. A finished sibling is not
+ * counted; nobody is waiting on it. A thread filed under NOTHING is grouped by
+ * the run instead and says so in harder words, because a thread with no parent
+ * is not a proposal waiting in Later: it is a row in their inbox
+ * (`isProposal`, renderer/src/list-rules.ts).
+ */
+function alsoOnThisThread(beside, parent) {
+  const n = beside.length + 1;
+  const where = parent ? `under ${parent}` : 'under no thread at all';
+  const fold = parent
+    ? `fold it into ${parent}`
+    : 'put it in the thread you are already on, under what is left to do';
+  return `${n} live threads are now filed ${where}, counting this one (${beside.join(', ')}). `
+    + 'ONE JOB IS ONE THREAD: if they would answer all of these in one breath, they are one thread, so '
+    + `${fold} and close this one with a note saying where the work went. Keep it separate only if two `
+    + 'agents could genuinely run these at the same time, and then say in your answer why there is more '
+    + 'than one.';
+}
+
+/** The live threads already filed under the same parent, this one aside. */
+function besideIt(product, item) {
+  let items = [];
+  try { items = readWorkItems(resolveProduct(product).dir, Date.now()); } catch { return []; }
+  return items
+    .filter((i) => i.id !== item.id && i.parent === item.parent && i.status !== 'done')
+    .map((i) => i.id);
+}
+
+/*
  * A TASK AN AGENT FILES IS SEEN BY NO MORE PEOPLE THAN THE TASKS IT CAME FROM
  * (w-e053ed3581). The agent asked into a private chat holds a task seen only
  * by the chat, and what it files from there is written out of that chat; with
@@ -244,6 +294,9 @@ export function createClaimRegistry({ heartbeatMs = HEARTBEAT_MS, holder } = {})
   // epoch: the founder replies to finished rows constantly, and the session she
   // is replying to has to be able to answer her.
   const held = new Map(); // workItemId -> { dir, epoch, pending, live }
+  // The threads this run has filed under no parent at all, so that the second
+  // loose one is counted even though the store cannot group them.
+  const loose = [];
   let timer = null;
   const liveCount = () => [...held.values()].filter((h) => h.live).length;
 
@@ -458,8 +511,12 @@ export function createClaimRegistry({ heartbeatMs = HEARTBEAT_MS, holder } = {})
 
     // Filing from this session: what it files is kept as private as every row
     // it has held, finished ones too, since it may still be answering on them.
+    // And it is counted: `alsoOnThisThread` above says why.
     file(product, fields) {
-      return createItem(product, fields, { from: [...held.keys()] });
+      const item = createItem(product, fields, { from: [...held.keys()] });
+      const beside = item.parent ? besideIt(product, item) : [...loose];
+      if (!item.parent) loose.push(item.id);
+      return beside.length ? { ...item, alsoFiled: alsoOnThisThread(beside, item.parent) } : item;
     },
 
     holding: () => [...held.entries()].filter(([, h]) => h.live).map(([id]) => id),
