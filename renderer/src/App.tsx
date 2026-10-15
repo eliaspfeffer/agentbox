@@ -346,7 +346,7 @@ export default function App() {
   // that made them. A failed live reply reads it to decide whether she is
   // still on that conversation or has gone somewhere else.
   const focusedNow = useRef<WorkItem | null>(null);
-  const liveState = useRef<{current: WorkItem | null; rows: WorkItem[]}>({current:null,rows:[]});
+  const liveState = useRef<{current: WorkItem | null; rows: WorkItem[]; all: WorkItem[]; projects: {slug:string;name:string}[]}>({current:null,rows:[],all:[],projects:[]});
   focusedNow.current = focused;
   // THE ROW SHE IS WATCHING A COMMAND ANSWER ON. Set when she sends one of
   // Claude Code's eight from an open task, cleared when she leaves it. It is
@@ -5090,9 +5090,10 @@ export default function App() {
     }
   };
 
-  liveState.current = {current: focused ? items.find(i => i.id === focused.id && i.product === focused.product) ?? focused : null, rows: desktopLiveRows(inbox,progress)};
+  liveState.current = {current: focused ? items.find(i => i.id === focused.id && i.product === focused.product) ?? focused : null, rows: desktopLiveRows(inbox,progress),all:items,projects:(snap?.products??[]).map(p=>({slug:p.slug,name:p.name}))};
   const liveExecute = desktopLiveActions({
     state: () => liveState.current,
+    createTodo: async (product: string,text: string) => {if(!snap?.products.some(p=>p.slug===product))throw Error('Projekt nicht gefunden.');return api.compose({product,title:taskTitle(text),body:text,start:'manual'});},
     open: (item: WorkItem | null) => { liveState.current.current = item; setFocused(item); if(item)markSeen(item); },
     details: async (item: WorkItem) => ({result: item.result, history: await api.itemHistory({product:item.product,id:item.id})}),
     done: async (item: WorkItem) => {await markDone(item, {stay:true});await flushPending();if(!item.agent){const snapshot=await api.snapshot();if(snapshot.items.find(i=>i.id===item.id&&i.product===item.product)?.status!=='done')throw Error('Die Aufgabe wurde nicht als erledigt gespeichert.');}},

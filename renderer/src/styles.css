@@ -1935,11 +1935,13 @@ body {
    without the last, a task with the 61 lines open reads at two sizes down one
    column. */
 .focus-body, .focus-body .markdown, .focus-body .msg-body { font-size: 16px; }
-.markdown h2, .markdown h3 {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-faint);
+.markdown :is(h1,h2,h3,h4,h5,h6) {
+  font-size: 2em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-transform: none;
+  letter-spacing: normal;
+  color: inherit;
   margin: 24px 0 7px;
   font-weight: 600;
 }

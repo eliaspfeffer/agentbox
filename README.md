@@ -209,8 +209,11 @@ matter:
   `POST /api/live-session` with `{sdp, desktop: true}`, authenticate the
   `agentbox_session` cookie from the access file's `session` field, and return
   `{transport: {sdp}}`. Its delegated `agentbox_action` tool supports `read`,
-  `review`, `details`, `open`, `next`, `previous`, `done`, `reply`, and `later`
-  (minutes from now in `text`). API keys and service credentials stay outside
+  `review`, `details`, `open`, `next`, `previous`, `done`, `reply`, `later`,
+  `search`, `todo`, and `end`. `search` takes a query in `text` and includes
+  completed chats; `todo` takes `product` and `text` and saves a manual todo
+  without starting an agent. `later` takes minutes from now in `text`.
+  The companion must expose these same actions in its desktop tool schema. API keys and service credentials stay outside
   the renderer and repository. The companion service is deployed separately.
 - `maxConcurrentSessions`: how many agents run at once. The queue absorbs the
   rest, in priority order.
