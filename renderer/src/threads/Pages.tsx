@@ -77,6 +77,7 @@ export function StateGlyph({ state, live = false }: { state: ThreadStateWord; li
 }
 
 /** The threads an agent is on right now, by id (App.tsx provides it). */
+export const LimitContext = createContext<Record<string, { tool: string; until: number }>>({});
 export const LiveContext = createContext<Set<string>>(new Set());
 
 /** How many tasks each thread filed are waiting for a yes, by `product/id`
@@ -413,12 +414,13 @@ export const RepeatMark = () => <svg className="th-repeat" width="13" height="13
   <path d="M13 6.5A5.5 5.5 0 0 0 3.2 4.8M3 2.5v2.6h2.6" /><path d="M3 9.5a5.5 5.5 0 0 0 9.8 1.7M13 13.5v-2.6h-2.6" />
 </svg>;
 
-export function RowCells({ transcribing = false, live = false, lead, title, hidden = false, lock = false, shared = false, chosen = 0, held = false, pinned = false, aside, where, person, priority, updatedAt, when, now, action }: {
+export function RowCells({ limit, transcribing = false, live = false, lead, title, hidden = false, lock = false, shared = false, chosen = 0, held = false, pinned = false, aside, where, person, priority, updatedAt, when, now, action }: {
   /** Pinned to the top of the list (w-20323283e6): a faint pin after the title. */
   pinned?: boolean;
   /** An agent is on this thread right now: a turning mark before its name. */
   live?: boolean;
   transcribing?: boolean;
+  limit?: { tool: string; until: number };
   title: ReactNode; hidden?: boolean; lock?: boolean; shared?: boolean; where: ReactNode; person?: ReactNode;
   /** How many people a thread shared with chosen people reaches; 0 for the team. */
   chosen?: number;
@@ -433,11 +435,12 @@ export function RowCells({ transcribing = false, live = false, lead, title, hidd
   when?: string;
 }) {
   const id = priority === null ? null : priorityIdOf(priority);
+  const limitText = limit ? `${limit.tool}-Limit · ${limit.until > now ? `Weiter ab ${new Date(limit.until).toLocaleString([], {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}` : limit.until > 0 ? "Wiederaufnahme wird geprüft" : "Resetzeit unbekannt"}` : null;
   return <div className={`row-main th-grid${person !== undefined ? ' with-person' : ''}`}>
     {/* THE MARK SAYS WHICH KIND OF SHARED, QUIETLY (w-41ff964775): the two
         people with a small count beside them for a thread only a few people
         see. The whole team, the default, carries nothing (2026-10-02). */}
-    <div className={`th-cell-title subject${hidden ? ' hidden' : ''}`}>{transcribing ? <svg role="img" aria-label="Wird transkribiert" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" style={{flexShrink:0}}><title>Wird transkribiert</title><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg> : live ? <StateGlyph state="running" live /> : lead}{title}{aside && <span className="th-aside">{aside}</span>}{held && <span className="th-aside">not started</span>}{shared && <SharedMark label={chosen ? `Visible to ${chosen} ${chosen === 1 ? 'person' : 'people'}` : 'Visible to the team'} />}{chosen > 0 && <span className="th-shared-n" aria-hidden="true">{chosen}</span>}{lock && <LockMark />}{pinned && <PinMark size={13} className="th-pin" />}</div>
+    <div className={`th-cell-title subject${hidden ? ' hidden' : ''}`}>{transcribing ? <svg role="img" aria-label="Wird transkribiert" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" style={{flexShrink:0}}><title>Wird transkribiert</title><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg> : live ? <StateGlyph state="running" live /> : limitText ? <span title={limitText} aria-label={limitText} role="img" style={{display:"inline-flex",alignItems:"center",gap:4,marginRight:8,flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg><small>{limit && limit.until > now ? new Date(limit.until).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) : "Limit"}</small></span> : lead}{title}{aside && <span className="th-aside">{aside}</span>}{held && <span className="th-aside">not started</span>}{shared && <SharedMark label={chosen ? `Visible to ${chosen} ${chosen === 1 ? 'person' : 'people'}` : 'Visible to the team'} />}{chosen > 0 && <span className="th-shared-n" aria-hidden="true">{chosen}</span>}{lock && <LockMark />}{pinned && <PinMark size={13} className="th-pin" />}</div>
     <div className="th-cell-proj">{where}</div>
     {person !== undefined && <div className="th-cell-person">{person}</div>}
     <div className={`th-cell-prio${id === 'urgent' ? ' urgent' : ''}`}>{id && <><PriorityMark id={id} />{priorityLabelOf(id)}</>}</div>
@@ -475,6 +478,7 @@ export function ThreadCells({ item, product, now, person, tab, products, onProje
   const when = tab === 'done' ? finishedAt(item) : item.updatedAt;
   const jobs = useSyncExternalStore(watchDictations,dictationJobs,dictationJobs);
   const transcribing = jobs.some(job => job.running && job.chatKey === `${item.product}:${item.id}`);
+  const limits = useContext(LimitContext);
   const liveIds = useContext(LiveContext);
   const waiting = useContext(WaitingContext);
   const team = useContext(TeamContext);
@@ -510,7 +514,7 @@ export function ThreadCells({ item, product, now, person, tab, products, onProje
   // which is why it is handed your teammates' first names.
   const said = messageLine(item, product, team?.me ?? null, (id) => firstName(team?.byId.get(id) ?? null));
   if (said) {
-    return <RowCells transcribing={transcribing} live={liveIds.has(item.id)} title={<MessageTitle people={said.people} fromMe={said.fromMe} text={said.text} />} pinned={!!item.pinned && item.status !== 'done'} where="Message" person={person}
+    return <RowCells limit={item.status === 'open' ? limits[item.id] : undefined} transcribing={transcribing} live={liveIds.has(item.id)} title={<MessageTitle people={said.people} fromMe={said.fromMe} text={said.text} />} pinned={!!item.pinned && item.status !== 'done'} where="Message" person={person}
       priority={messagePriority(item)} updatedAt={when} now={now} action={action} />;
   }
   // ONLY THE UNUSUAL CASE WEARS A MARK (2026-10-02). Shared with the team is
@@ -523,7 +527,7 @@ export function ThreadCells({ item, product, now, person, tab, products, onProje
   // AND HOW MANY TASKS IT FILED STILL WAIT FOR A YES (w-d2744c6daa), in the
   // faint words a repeating task uses for its schedule: "a little bit of text
   // that gives you extra information if you need to know."
-  return <RowCells transcribing={transcribing} live={liveIds.has(item.id)} title={rowTitle(item)} aside={toApproveWords(waiting.get(`${item.product}/${item.id}`))} shared={seen === 'people'} chosen={chosen} lock={lock} held={notStarted(item)} pinned={!!item.pinned && item.status !== 'done'} where={projectCell} person={person}
+  return <RowCells limit={item.status === 'open' ? limits[item.id] : undefined} transcribing={transcribing} live={liveIds.has(item.id)} title={rowTitle(item)} aside={toApproveWords(waiting.get(`${item.product}/${item.id}`))} shared={seen === 'people'} chosen={chosen} lock={lock} held={notStarted(item)} pinned={!!item.pinned && item.status !== 'done'} where={projectCell} person={person}
     priority={item.priority ?? 0} updatedAt={when} now={now} action={action} />;
 }
 
