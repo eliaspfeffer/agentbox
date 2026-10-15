@@ -2875,7 +2875,7 @@ function DockComposer({ item, runningMode, runningEngine: initialEngine, engineC
             rather than sitting side by side. A stop next to a live Send is two
             things to choose between; a stop INSTEAD of a dead Send is one
             thing that is always the thing she can do. */}
-        {!talkTo?.length && <DictationButtons target={item.label || item.title || 'Chat'} onNotice={onNotice}
+        {!talkTo?.length && <DictationButtons chatKey={`${item.product}:${item.id}`} target={item.label || item.title || 'Chat'} onNotice={onNotice}
           onDraft={(spoken)=>{const words=[readDraft(item),spoken].filter(Boolean).join('\n\n');saveDraft(item,words);if(dictationItem.current===`${item.product}:${item.id}`)setText(words);}}
           onSend={(spoken)=>send([text,spoken].filter(Boolean).join('\n\n'),true)} onQueued={()=>{if(readDraft(item)===text)clearDraft(item);(onDictationQueued??onClose)();}} />}
         {stop && !hasDraft ? stop : (
