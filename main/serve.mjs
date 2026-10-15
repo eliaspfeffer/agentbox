@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
-import { mediaResponse, mediaType } from './img-scheme.mjs';
+import { mediaResponse, mediaType, svgHeaders } from './img-scheme.mjs';
 import { loadConfig } from './config.mjs';
 import { Store } from './store.mjs';
 import { Supervisor } from './supervisor.mjs';
@@ -272,6 +272,7 @@ async function answerFile(req, res, url, { token, files }) {
   res.writeHead(200, {
     'content-type': MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream',
     'content-length': String(stat.size),
+    ...(kind === 'img' ? svgHeaders(file) : {}),
     'cache-control': 'no-store',
   });
   fs.createReadStream(file).pipe(res);

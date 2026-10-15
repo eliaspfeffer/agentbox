@@ -44,7 +44,7 @@ import { createCornerTag } from './corner-tag.mjs';
 import { DOC_SCHEMES, DocGrants, docPath } from './doc-scheme.mjs';
 import { quietTheFramesScrollbars } from './frame-scrollbars.mjs';
 import { letLocalAppsShowInThePane } from './local-app-frames.mjs';
-import { IMG_SCHEMES, imgPath, mediaResponse, mediaType, servable } from './img-scheme.mjs';
+import { IMG_SCHEMES, imgPath, mediaResponse, mediaType, servable, svgHeaders } from './img-scheme.mjs';
 import { hotWindowVerdict, storeHasWork } from './dev-window.mjs';
 import { writeHeldThenReload } from './write-before-reload.mjs';
 import { IS_SHE_TYPING_IN_THE_PAGE, theAppKeepsThisInput, theAppKeepsThisLetterInAPage } from '../shared/artifact-keys.mjs';
@@ -1186,6 +1186,7 @@ if (!app.requestSingleInstanceLock()) {
         // screenshot an agent retakes under the same name is still a new picture.
         const out = noStore(res);
         out.headers.set('access-control-allow-origin', '*');
+        for (const [key, value] of Object.entries(svgHeaders(file))) out.headers.set(key, value);
         return out;
       } catch {
         return new Response('Not there.', { status: 404 });
