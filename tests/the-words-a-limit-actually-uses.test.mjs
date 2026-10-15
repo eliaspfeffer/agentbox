@@ -134,7 +134,7 @@ describe('nothing that already had a name lost it', () => {
 
   it('still has an honest generic for words we genuinely cannot place', () => {
     expect(troubleCause('Segmentation fault')).toBe('unknown');
-    expect(deadRunSentence({ cause: 'unknown', runs: 1 })).toMatch(/stopped before it did anything/);
+    expect(deadRunSentence({ cause: 'unknown', runs: 1 })).toMatch(/stopped unexpectedly before this run finished/);
   });
 
   it('keeps every first sentence inside the row budget of 112 characters', () => {

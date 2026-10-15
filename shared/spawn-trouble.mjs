@@ -478,7 +478,7 @@ const DEAD_RUN_OPENERS = {
   'at-limit': 'is at its usage limit, so nothing has been done on this task.',
   interrupted: 'was cut off in the middle, so nothing has been done on this task.',
   'model-not-on-plan': "could not use this task's model on that account's plan, so nothing has been done.",
-  unknown: 'stopped before it did anything, so this task has not been started.',
+  unknown: 'stopped unexpectedly before this run finished.',
 };
 
 /**
@@ -516,7 +516,9 @@ export function deadRunSentence({ engineWord = 'The agent', cause = 'unknown', r
   // THE TIME THE LIMIT PRINTED, when there is one. "when the limit resets"
   // leaves her with a question; "at 6pm" is an answer, and it is the CLI's own
   // word for it rather than anything we worked out.
-  const next = cause === 'signed-out'
+  const next = cause === 'unknown'
+    ? ` The cause is not yet known. ${Name} will retry automatically.`
+    : cause === 'signed-out'
     ? ' Sign that account back in and it picks straight up.'
     : cause === 'org-blocked'
       ? ' Only an admin of that Claude workspace can turn it back on.'
@@ -583,6 +585,8 @@ export function undeliveredAnswerSentence({ engineWord = 'The agent', attempts =
 export function deadRunCause(text) {
   const s = String(text ?? '');
   if (!s.trim()) return null;
+  // Keep recovery available for reports written by older builds.
+  if (s.includes('stopped before it did anything, so this task has not been started.')) return 'unknown';
   for (const [cause, opener] of Object.entries(DEAD_RUN_OPENERS)) {
     if (s.includes(opener)) return cause;
   }

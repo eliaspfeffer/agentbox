@@ -191,6 +191,6 @@ describe('the sentence reads back as the thing it says', () => {
     expect(deadRunSentence({ engineWord: 'Claude Code', cause: 'interrupted' }))
       .toBe(`Claude Code was cut off in the middle, so nothing has been done on this task. ${Name} runs it again on its own.`);
     expect(deadRunSentence({ engineWord: 'The agent' }))
-      .toBe(`The agent stopped before it did anything, so this task has not been started. ${Name} keeps trying, and it will keep failing the same way until this is fixed.`);
+      .toBe(`The agent stopped unexpectedly before this run finished. The cause is not yet known. ${Name} will retry automatically.`);
   });
 });
