@@ -141,7 +141,7 @@ export function dayGroups(
   return groups;
 }
 
-export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, atLimit, shipping, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, searchDetails, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover: hoverTo, onAnswerImport, onReply, onPick, onDone, onLater, onProjectChange, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd, onReorder }: {
+export function List({ items, view, keyView, hoveredId, selected, seen, running, engineChoice, engines, stalled, queued, signInNeeded, atLimit, retrying, shipping, silent, paused, multiSel, snoozes, repeats, allItems, terms, phrase, summaries, searchDetails, ranked, emptyText, walk, onSelect, onOpen, onOpenRepeat, onToggle, onRange, onHover: hoverTo, onAnswerImport, onReply, onPick, onDone, onLater, onProjectChange, team = null, table = false, products = [], mixed = null, personCell, onOpenCard, selectedCard = null, onEnd, onReorder }: {
   items: WorkItem[];
   view: View;
   // WHICH VIEW'S KEYS THE ROW HINT PRINTS, which is not always the view this
@@ -175,6 +175,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
   signInNeeded?: Record<string, string>;
   /** `supervisor.atLimit`: rows held because every login of their tool is out of usage. */
   atLimit?: Record<string, { tool: string; until: number }>;
+  retrying?: Record<string, boolean>;
   /** `supervisor.shipping`: rows the app's ship queue still owes a ship. */
   shipping?: string[];
   // A RUN ENDED ON THIS ROW AND WROTE NOTHING DOWN, keyed by id. The half of
@@ -510,7 +511,7 @@ export function List({ items, view, keyView, hoveredId, selected, seen, running,
                       (['body', 'answer', 'note', 'result'] as const).map((field) => ({
                         who: field === 'answer' || (field === 'body' && item.wrote?.body?.source === 'founder') ? 'you' : 'it',
                         text: item[field], at: item.wrote?.[field]?.ts ?? 0,
-                      })), null, { running: running.some((r) => r.itemId === item.id), statusText: liveLine(item, { session: running.find(r => r.itemId === item.id), queued, signInNeeded, atLimit, paused, stalled: stalled?.includes(item.id), silent: silent?.[item.id], shipping: shipping?.includes(item.id), inProgress: view === 'progress', scheduledUntil: snoozes?.[item.id] })?.line },
+                      })), null, { running: running.some((r) => r.itemId === item.id), statusText: liveLine(item, { session: running.find(r => r.itemId === item.id), queued, signInNeeded, atLimit, retrying, paused, stalled: stalled?.includes(item.id), silent: silent?.[item.id], shipping: shipping?.includes(item.id), inProgress: view === 'progress', scheduledUntil: snoozes?.[item.id] })?.line },
                     )?.text || rowSummary(item, view) || 'Noch kein Ergebnis.'}</div>
                     <div className="row-hover-actions">
                       <button type="button" className="row-key" onClick={() => {onSelect(index);onOpen(item)}}><kbd>↵</kbd><span>Open task</span></button>

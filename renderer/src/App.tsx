@@ -6003,6 +6003,7 @@ export default function App() {
                     queued: snap.supervisor.queued,
                     signInNeeded: snap.supervisor.signInNeeded,
                     atLimit: snap.supervisor.atLimit,
+                    retrying: snap.supervisor.retrying,
                     runNow: snap.supervisor.runNow,
                     paused: snap.supervisor.paused,
                     running: snap.supervisor.running.length,
@@ -6101,6 +6102,7 @@ export default function App() {
                   queued={snap.supervisor.queued}
                   signInNeeded={snap.supervisor.signInNeeded}
                   atLimit={snap.supervisor.atLimit}
+                  retrying={snap.supervisor.retrying}
                   shipping={snap.supervisor.shipping}
                   silent={snap.supervisor.silent}
                   paused={snap.supervisor.paused}

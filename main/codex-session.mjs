@@ -395,7 +395,7 @@ export function workerThreadParams({ cwd, model = null, instructions = null, mcp
  */
 export function resumeThreadParams(threadId, params = {}) {
   const { ephemeral, ...rest } = params ?? {};
-  return { threadId, ...rest };
+  return { threadId, ...rest, excludeTurns: true };
 }
 
 /**
@@ -684,7 +684,7 @@ export function createCodexWorker({
     // failure against the Codex account, because a broken app-server IS evidence
     // about Codex on this Mac. Only the DELIVERY attempt is spared.
     onClosed: (gone) => {
-      say(gone?.stderr);
+      say(`Codex connection stopped: ${gone?.reason ?? 'unknown'}: ${gone?.note ?? gone?.error?.message ?? `exit ${gone?.code ?? 'unknown'}`}\n${String(gone?.stderr ?? '').slice(-300)}`);
       end(1, null, { transportFault: true });
     },
   };
@@ -714,7 +714,15 @@ export function createCodexWorker({
       // gets her own MCP servers back and no store at all (measured; see
       // `resumeThreadParams`), and a reply is the commonest thing this app does.
       return resumeThreadId
-        ? server.resumeThread(resumeThreadParams(resumeThreadId, params), handlers).then(result => ({ threadId: resumeThreadId, activeTurn: result?.thread?.turns?.find(turn => turn.status === 'inProgress') }))
+        ? server.resumeThread(resumeThreadParams(resumeThreadId, params), handlers).then(async result => {
+          // Long histories can exceed the shared connection's frame bound and stop every worker.
+          let activeTurn = result?.thread?.turns?.find(turn => turn.status === 'inProgress');
+          if (!activeTurn && result?.thread?.status?.type === 'active' && turnParams.additionalContext?.agentbox_resume) {
+            const page = await server.request('thread/turns/list', { threadId: resumeThreadId, limit: 1, sortDirection: 'desc', itemsView: 'summary' });
+            activeTurn = page?.data?.find(turn => turn.status === 'inProgress');
+          }
+          return { threadId: resumeThreadId, activeTurn };
+        })
         : server.startThread(params, handlers);
     })
     .then((started) => {

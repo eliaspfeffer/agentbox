@@ -51,7 +51,7 @@ import type { RunningSession, WorkItem } from './types';
 // would be worse than the silence it replaces.
 // `next` is a queued task she pushed with Run now (w-87ff499077): still
 // waiting, but first in line, and the word changing is how the press shows.
-export type LiveState = 'working' | 'shipping' | 'next' | 'queued' | 'signin' | 'limit' | 'paused' | 'silent' | 'idle';
+export type LiveState = 'starting' | 'retrying' | 'working' | 'shipping' | 'next' | 'queued' | 'signin' | 'limit' | 'paused' | 'silent' | 'idle';
 
 export interface LiveLine {
   state: LiveState;
@@ -60,6 +60,7 @@ export interface LiveLine {
 }
 
 export interface LiveFacts {
+  retrying?: Record<string, boolean>;
   /** Non-null while a worker is on this row in this window. */
   session?: RunningSession | null;
   /** `supervisor.queued`: the ids a tick will spawn as soon as a slot frees. */
@@ -140,6 +141,8 @@ export function shortWord(state: LiveState, helpers = 0): string {
   if (state === 'working' && helpers > 0) {
     return helpers === 1 ? '1 Subagent Working' : `${helpers} Subagents Working`;
   }
+  if (state === 'starting') return 'Starting';
+  if (state === 'retrying') return 'Reconnecting';
   if (state === 'working') return 'Working';
   if (state === 'shipping') return 'Shipping';
   if (state === 'next') return 'Up next';
@@ -221,6 +224,7 @@ export function liveLine(item: WorkItem, facts: LiveFacts = {}): LiveLine | null
   if (item.status === 'done') return null;
 
   if (session) {
+    if (session.starting) return { state: 'starting', line: 'Codex is opening this conversation. The turn has not started yet.' };
     const elapsed = Math.max(0, now - session.startedAt);
     const helpers = session.helpers ?? 0;
     // The spoken sentence says the same fact at length. It has to move with
@@ -287,6 +291,7 @@ export function liveLine(item: WorkItem, facts: LiveFacts = {}): LiveLine | null
     };
   }
 
+  if (facts.retrying?.[item.id]) return { state: 'retrying', line: `The Codex connection stopped. ${Name} is reconnecting and will resume this conversation automatically.` };
   if (!inProgress) return null;
 
   // THE APP IS SHIPPING IT (w-0c1ba766eb). No agent is on it and none is

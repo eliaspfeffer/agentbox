@@ -6,3 +6,11 @@ it('rests only the busy row and keeps its reply owed without striking the accoun
 it('clears legacy writer-conflict cooldowns while preserving authentication failures',()=>{const {sup}=setup();sup._profileTrouble={'codex:default':{cause:'unknown',raw:'codex app-server refused thread/resume: thread example-thread already has an active writer'},other:{cause:'signed-out',raw:'sign in'}};sup._profileCooldown={'codex:default':Date.now()+1800000};sup._forgetRenewedSubscriptions();expect(sup._profileTrouble['codex:default']).toBeUndefined();expect(sup._profileCooldown['codex:default']).toBe(0);expect(sup._profileTrouble.other.cause).toBe('signed-out')});
 
 it('clears a legacy corrupt-protocol quarantine without clearing a real limit',()=>{const {sup}=setup();sup._profileTrouble={'codex:default':{cause:'unknown',raw:'config/read: the connection to codex app-server is corrupt, a frame passed 16777216 characters with no end to it'},other:{cause:'at-limit',raw:'usage limit'}};sup._profileCooldown={'codex:default':Date.now()+1800000};sup._forgetRenewedSubscriptions();expect(sup._profileTrouble['codex:default']).toBeUndefined();expect(sup._profileCooldown['codex:default']).toBe(0);expect(sup._profileTrouble.other.cause).toBe('at-limit')});
+it('reports a disconnected account as reconnecting, not a capacity queue',()=>{
+ const {sup,item}=setup();sup._engineFor=()=> 'codex';sup._profilesFor=()=>['default'];sup._liveProfilesFor=()=>[];
+ sup._profileTrouble={'codex:default':{cause:'interrupted'}};
+ expect(sup.status().retrying.busy).toBe(true);
+ item.start="manual";expect(sup.status().retrying.busy).toBeUndefined();delete item.start;
+ sup._profileTrouble['codex:default'].cause='at-limit';expect(sup.status().retrying.busy).toBeUndefined();
+ sup._profileTrouble['codex:default'].cause='interrupted';sup._liveProfilesFor=()=>['other'];expect(sup.status().retrying.busy).toBeUndefined();
+});

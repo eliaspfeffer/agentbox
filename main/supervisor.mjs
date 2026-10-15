@@ -4711,6 +4711,15 @@ export class Supervisor {
       atLimit = this._waitingOnLimit(this.store.listItems(Date.now())
         .filter((i) => mayRunHere(i, productBySlug.get(i.product), me)));
     } catch {}
+    let retrying = {};
+    try {
+      retrying = Object.fromEntries(this.store.listItems(Date.now()).filter(item => {
+        if (item.status !== 'open' || item.start === 'manual' || this.sessions.has(item.id) || this._engineFor(item) !== 'codex') return false;
+        const profiles = this._profilesFor('codex');
+        return profiles.length > 0 && !this._liveProfilesFor('codex').length
+          && profiles.every(p => this._profileTrouble?.[this._accountKey('codex', p)]?.cause === 'interrupted');
+      }).map(item => [item.id, true]));
+    } catch {}
     // ROWS THE SHIP QUEUE STILL OWES A SHIP (w-0c1ba766eb). Waiting on the
     // app and not on a person, so the window keeps them in In progress until
     // they have shipped or gone back to their agent.
@@ -4728,7 +4737,9 @@ export class Supervisor {
       // above, for the same reason: "Queued" over a Codex task while Codex
       // had no slot until the reset (found by the pre-deploy breaker).
       atLimit,
+      retrying,
       running: [...this.sessions.values()].filter(s => !s.remoteIdle).map((s) => ({
+        starting: engineOf(s.engine) === 'codex' && !s.child?.turnId,
         itemId: s.itemId,
         product: s.product,
         startedAt: s.startedAt,

@@ -227,6 +227,7 @@ export interface TeamState {
 }
 
 export interface RunningSession {
+  starting?: boolean;
   itemId: string;
   product: string;
   startedAt: number;
@@ -344,6 +345,7 @@ export interface Usage {
 }
 
 export interface SupervisorStatus {
+  retrying?: Record<string, boolean>;
   paused: boolean;
   running: RunningSession[];
   // Items whose answer was marked delivered but whose worker stopped without
