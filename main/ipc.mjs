@@ -599,7 +599,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
   // answered at once (supervisor.sendNow).
   ipcMain.handle('zero:send-now', (_e, { product, id }) => supervisor.sendNow(product, id));
 
-  ipcMain.handle('zero:answer', async (_e, { product, id, answer, status, priority, permissionMode, model, effort, engine, now, inReplyTo }) => {
+  ipcMain.handle('zero:answer', async (_e, { product, id, answer, status, priority, permissionMode, model, effort, engine, now, afterTurn, inReplyTo }) => {
     if (isAgentRow(id)) return { ok: false };
     // A level picked from ⌘K arrives here with no words, and gives way the
     // same as one picked on the summary (zero:thread-edit). A reply that
@@ -647,7 +647,7 @@ export function registerIpc({ store, supervisor, config, window, analytics = NO_
     // race the run usually wins, so she would pick a model and watch the old one
     // take the task. `answerItem` writes both, and it writes the model first.
     if (engine !== undefined && !supervisor.engineChoices().some((choice) => choice.id === engine)) throw Error('This agent is not available.');
-    const out = await submitReply(supervisor,{product,id,answer,status,permissionMode,engine,model,now:!!now},()=>store.answerItem(product, id, { answer, status, priority, permissionMode, model, effort, engine, inReplyTo: thread }));
+    const out = await submitReply(supervisor,{product,id,answer,status,permissionMode,engine,model,now:!!now,afterTurn:afterTurn===true},()=>store.answerItem(product, id, { answer, status, priority, permissionMode, model, effort, engine, inReplyTo: thread }));
     // A REPLY ON A ROW A TEAMMATE GAVE YOU HANDS IT BACK TO THEM, so the
     // conversation moves to their inbox instead of sitting in both
     // (shared/team-rules.mjs handedOnByReply). Archiving hands nothing on.

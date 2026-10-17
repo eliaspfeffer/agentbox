@@ -588,7 +588,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
   onResolve: () => void;
   onPick: (n: number) => void;
   onReply: () => void;
-  onReplySend: (text: string, priority?: number, repeat?: RepeatRuleValue | null, sent?: SentDraft, mode?: AnswerMode | null, pick?: { model: string | null; effort: string | null; engine?: string | null; background?: boolean }) => void;
+  onReplySend: (text: string, priority?: number, repeat?: RepeatRuleValue | null, sent?: SentDraft, mode?: AnswerMode | null, pick?: { model?: string | null; effort?: string | null; engine?: string | null; background?: boolean; afterTurn?: boolean; now?: boolean }) => void;
   onReplyClose: () => void;
   onDictationQueued?: () => void;
   onStop: () => void;
@@ -2094,7 +2094,7 @@ function DockComposer({ item, runningMode, runningEngine: initialEngine, engineC
    *  and the new-task card cannot show two different lists. */
   codexModels?: ModelChoice[];
   codexModelDefault?: string | null;
-  onSend: (text: string, priority?: number, repeat?: RepeatRuleValue | null, sent?: SentDraft, mode?: AnswerMode | null, pick?: { model: string | null; effort: string | null; engine?: string | null; background?: boolean }) => void;
+  onSend: (text: string, priority?: number, repeat?: RepeatRuleValue | null, sent?: SentDraft, mode?: AnswerMode | null, pick?: { model?: string | null; effort?: string | null; engine?: string | null; background?: boolean; afterTurn?: boolean; now?: boolean }) => void;
   onClose: () => void;
   onDictationQueued?: () => void;
   /**
@@ -2292,6 +2292,8 @@ function DockComposer({ item, runningMode, runningEngine: initialEngine, engineC
      runs, so reading `text` there would send the box as it stood BEFORE the
      pick. Every other caller passes nothing and sends the box, exactly as it
      always did. (w-5d1ad29efa, 2026-08-29.) */
+  const canChooseDelivery = !!stop && !item.agent;
+  const [delivery, setDelivery] = useState<'after' | 'now'>('after');
   const send = async (spoken?: string, background=false) => {
     if (!(spoken ?? text).trim() && !attachments.length) return;
     // AN AGENT WITH NO PROJECT DOES NOT GO OUT. The footer already says why;
@@ -2338,7 +2340,9 @@ function DockComposer({ item, runningMode, runningEngine: initialEngine, engineC
     // In a conversation, every agent mention goes out as its link, carrying the
     // project, model and effort the card holds (../team/agent-mentions.ts).
     onSend([chat.encode(words), attachedMd].filter(Boolean).join('\n\n'), prio ? priorityValueOf(prio) : undefined, repeat, sent, mode,
-      background ? { model, effort, engine: runningEngine, background } : touched ? { model, effort, engine: runningEngine } : undefined);
+      canChooseDelivery && !parsed && !operation
+        ? { model: touched ? model : undefined, effort: touched ? effort : undefined, engine: touched ? runningEngine : undefined, background, afterTurn: delivery === 'after', now: delivery === 'now' }
+        : background ? {model, effort, engine: runningEngine, background} : touched ? { model, effort, engine: runningEngine } : undefined);
   };
   const hasDraft = !!text.trim() || attachments.length > 0;
   // THE SLASH MENU, AND THE MODE THAT IS ALWAYS ON THE SCREEN.
@@ -2878,6 +2882,9 @@ function DockComposer({ item, runningMode, runningEngine: initialEngine, engineC
         {!talkTo?.length && <DictationButtons chatKey={`${item.product}:${item.id}`} target={item.label || item.title || 'Chat'} onNotice={onNotice}
           onDraft={(spoken)=>{const words=[readDraft(item),spoken].filter(Boolean).join('\n\n');saveDraft(item,words);if(dictationItem.current===`${item.product}:${item.id}`)setText(words);}}
           onSend={(spoken)=>send([text,spoken].filter(Boolean).join('\n\n'),true)} onQueued={()=>{if(readDraft(item)===text)clearDraft(item);(onDictationQueued??onClose)();}} />}
+        {canChooseDelivery && hasDraft && !text.trimStart().startsWith('/') && <select className="reply-delivery" aria-label="Nachricht zustellen" value={delivery} onChange={event=>setDelivery(event.target.value as 'after'|'now')}>
+          <option value="after">Nach Abschluss senden</option><option value="now">Jetzt unterbrechen</option>
+        </select>}
         {stop && !hasDraft ? stop : (
         <button
           className="dock-send"

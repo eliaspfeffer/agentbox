@@ -8813,3 +8813,8 @@ button.code-skip:hover::after, button.code-skip:hover::before { background: var(
 .model-usage { display: grid; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: normal; max-width: 310px; font-size: 12px; }
 .model-usage small { display: block; opacity: .7; font-size: 11px; line-height: 1.4; }
 .model-usage-limit { display: grid; gap: 2px; }
+
+/* Keep delivery controls usable when the reply card becomes narrow. */
+.compose-sentence:has(.reply-delivery) { flex-wrap: wrap; }
+.compose-sentence:has(.reply-delivery) > .compose-clauses { flex-basis: 100%; }
+.reply-delivery { max-width: 100%; min-width: 0; font: inherit; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--line-strong); padding: 5px; }

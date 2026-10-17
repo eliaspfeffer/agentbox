@@ -33,13 +33,14 @@ export function liveReplyBrief(answer) {
 }
 
 export function submitReply(supervisor, payload, commit) {
-  const { product, id, answer, status, permissionMode, engine, model, now = false } = payload;
+  const { product, id, answer, status, permissionMode, engine, model, now = false, afterTurn = false } = payload;
   const key = JSON.stringify([product, id]);
   const sends = supervisor._replySends ??= new Map();
   const previous = sends.get(key) ?? Promise.resolve();
   const session = supervisor.sessions?.get(id);
   const changedProvider = !!session && ((engine != null && engine !== session.engine) || (model !== undefined && model !== session.model));
-  const live = !changedProvider && session?.product === product && typeof session.child?.steer === 'function'
+  const deferred = afterTurn && session?.product === product && !session.remoteIdle;
+  const live = !deferred && !changedProvider && session?.product === product && typeof session.child?.steer === 'function'
     && status !== 'done' && typeof answer === 'string' && answer.trim() && answer !== '(withdrawn)';
   // Observe rejections immediately, including when an earlier reply is still
   // waiting. The ordered commit below rethrows them to their own caller.
@@ -50,7 +51,12 @@ export function submitReply(supervisor, payload, commit) {
     // A held Remote Control conversation is sitting idle rather than working,
     // and the slash commands it takes stop being commands once prose is wrapped
     // round them. Both reach it exactly as typed.
-    const taken = session.child.steer(session.remoteIdle ? answer : liveReplyBrief(answer));
+    let input = answer;
+    if (session.queuedAfterTurn) {
+      const pending = supervisor.store.readItem(product, id);
+      if (pending?.answer && !supervisor._answerDelivered(pending)) input = queuedReplyText(pending, supervisor.store.readHistory(product, id), row => supervisor._answerDelivered(row)) + '\n\n' + answer;
+    }
+    const taken = session.child.steer(session.remoteIdle ? input : liveReplyBrief(input));
     // SENT NOW: her words go in line first, then the step is cut, in the same
     // tick, so the cut turn's result can never close the input ahead of them.
     // A cut that fails leaves the message waiting its turn, which is still sent.
@@ -76,6 +82,7 @@ export function submitReply(supervisor, payload, commit) {
     }
     const item = saved ? { ...saved, product, id } : saved;
     if (steered && item) {
+      delete session.queuedAfterTurn;
       supervisor._handledAnswers.add(supervisor._answerKey(item));
       // Taken into this conversation, which a later stop does not undo.
       supervisor._noteHeard?.(item, session.sessionId);
@@ -87,11 +94,13 @@ export function submitReply(supervisor, payload, commit) {
       }
     }
     if (!steered && item && status !== 'done' && typeof answer === 'string' && answer.trim() && answer !== '(withdrawn)') {
-      supervisor.runNow?.(product, id);
+      if (deferred && supervisor.sessions?.get(id) === session) session.queuedAfterTurn = true;
+      else supervisor.runNow?.(product, id);
     }
     return item;
   });
   sends.set(key, operation);
+  if (deferred) void operation.then(() => flushAfterTurnReplies(supervisor, session)).catch(() => {});
   void operation.finally(() => { if (sends.get(key) === operation) sends.delete(key); }).catch(() => {});
   return operation;
 }
@@ -105,7 +114,7 @@ export function queuedReplyText(item, history, delivered) {
  for(let i=history.length-1;i>=0;i--){
   const line=history[i];
   if(line.heartbeat||line.release)continue;
-  if(line.patch?.result)break;
+  if(line.patch?.result && line.ts <= latestTs)break;
   const answer=line.patch?.answer;
   if(typeof answer!=='string'||!answer.trim())continue;
   if(answer==='(withdrawn)')break;
@@ -116,4 +125,15 @@ export function queuedReplyText(item, history, delivered) {
   pending.unshift(answer);
  }
  return pending.length>1 ? pending.join('\n\n') : item.answer;
+}
+
+// Remote Control keeps its process alive after a result; drain saved replies then.
+export async function flushAfterTurnReplies(supervisor, session) {
+ if (!session.queuedAfterTurn || !session.remoteIdle || session.resultIsError) return;
+ delete session.queuedAfterTurn;
+ const item = supervisor.store.readItem(session.product, session.itemId);
+ if (!item?.answer || item.answer === '(withdrawn)' || supervisor._answerDelivered(item)) return;
+ const answer = queuedReplyText(item, supervisor.store.readHistory(item.product, item.id), row => supervisor._answerDelivered(row));
+ try { await submitReply(supervisor, {...item, answer}, () => item); }
+ catch (error) { session.queuedAfterTurn = true; throw error; }
 }

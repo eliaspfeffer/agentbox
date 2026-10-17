@@ -346,7 +346,7 @@ export default function App() {
   // that made them. A failed live reply reads it to decide whether she is
   // still on that conversation or has gone somewhere else.
   const focusedNow = useRef<WorkItem | null>(null);
-  const liveState = useRef<{current: WorkItem | null; rows: WorkItem[]; all: WorkItem[]; projects: {slug:string;name:string}[]}>({current:null,rows:[],all:[],projects:[]});
+  const liveState = useRef<{current: WorkItem | null; rows: WorkItem[]; all: WorkItem[]; atLimit?: Record<string, {tool:string;until:number}>; projects: {slug:string;name:string}[]}>({current:null,rows:[],all:[],projects:[]});
   focusedNow.current = focused;
   // THE ROW SHE IS WATCHING A COMMAND ANSWER ON. Set when she sends one of
   // Claude Code's eight from an open task, cleared when she leaves it. It is
@@ -3656,7 +3656,7 @@ export default function App() {
   // lives in `leaveResolved` above and still covers every way a row leaves her
   // inbox.
 
-  const answerWith = useCallback(async (item: WorkItem, text: string, priority?: number, sent?: SentDraft, mode?: AnswerMode | null, engine?: string | null, pick?: { model: string | null; effort: string | null; engine?: string | null; background?: boolean }) => {
+  const answerWith = useCallback(async (item: WorkItem, text: string, priority?: number, sent?: SentDraft, mode?: AnswerMode | null, engine?: string | null, pick?: { model?: string | null; effort?: string | null; engine?: string | null; background?: boolean; afterTurn?: boolean; now?: boolean }) => {
     // AN AGENT ROW IS NOT WORK OF HERS TO CLOSE, DEFER OR RESTART. It stands
     // for a session running outside Agentbox; the only two things that mean
     // anything to it are a reply and being taken to its window.
@@ -3767,7 +3767,7 @@ export default function App() {
       // it off again, because then nothing was sent and the message is back in
       // the box.
       const alreadyGone = {
-        label: 'Your message is already with the agent. Send another one to add to it.',
+        label: pick?.afterTurn ? 'Deine Nachricht wartet auf das aktuelle Ergebnis.' : 'Your message is already with the agent. Send another one to add to it.',
         // Z cannot un-send this one, so what it offers is the way back to the
         // conversation, and the phrase promises that and nothing more.
         undoes: 'go back to that conversation',
@@ -3784,7 +3784,7 @@ export default function App() {
         setSending((q) => q.map((s) => (s === mine ? gone : s)));
         pushUndo(alreadyGone);
         await deliverReply({
-        send: () => api.answer({ product: item.product, id: item.id, answer: text,
+        send: () => api.answer({ product: item.product, id: item.id, answer: text, now: pick?.now, afterTurn: pick?.afterTurn,
           ...(priority != null ? { priority } : {}),
           ...(mode !== undefined ? { permissionMode: mode } : {}),
           // A MODEL PICKED WHILE A RUN IS UP BELONGS TO THE CONVERSATION, NOT
@@ -5090,7 +5090,7 @@ export default function App() {
     }
   };
 
-  liveState.current = {current: focused ? items.find(i => i.id === focused.id && i.product === focused.product) ?? focused : null, rows: desktopLiveRows(inbox,progress),all:items,projects:(snap?.products??[]).map(p=>({slug:p.slug,name:p.name}))};
+  liveState.current = {current: focused ? items.find(i => i.id === focused.id && i.product === focused.product) ?? focused : null, rows: desktopLiveRows(inbox,progress,snap?.supervisor.atLimit),atLimit:snap?.supervisor.atLimit,all:items,projects:(snap?.products??[]).map(p=>({slug:p.slug,name:p.name}))};
   const liveExecute = desktopLiveActions({
     state: () => liveState.current,
     createTodo: async (product: string,text: string) => {if(!snap?.products.some(p=>p.slug===product))throw Error('Projekt nicht gefunden.');return api.compose({product,title:taskTitle(text),body:text,start:'manual'});},
@@ -5362,7 +5362,7 @@ export default function App() {
           the sidebar for the single-player launch (w-1b574413db, 2026-10-04).
           `onInvite` is still handed in, for the account menu. */}
       {workspaceNavigation && <WorkspaceNavigation
-        live={<DesktopLive execute={liveExecute} context={desktopLiveView(liveState.current.current,liveState.current.rows)} onNotice={showToast}/>}
+        live={<DesktopLive execute={liveExecute} context={desktopLiveView(liveState.current.current,liveState.current.rows,snap.supervisor.atLimit)} onNotice={showToast}/>}
         update={announcesUpdate(snap?.update, { walking, closed: '' }) ? { installing: !!snap?.update?.installing, version: snap?.update?.newVersion, changes: snap?.update?.changes, behind: snap?.update?.behind, error: snap?.update?.error } : null}
         onUpdate={() => { void api.updateInstall(); }}
         /* AND THE COPY THAT CANNOT UPDATE ITSELF FROM WHERE IT IS

@@ -99,7 +99,7 @@ describe('after the window, when Z cannot reach it', () => {
 
   it('says the message is already gone rather than implying it came back', () => {
     const branch = liveBranch();
-    expect(branch).toMatch(/label: 'Your message is already with the agent\. Send another one to add to it\.'/);
+    expect(branch).toMatch(/label: pick\?\.afterTurn \? 'Deine Nachricht wartet auf das aktuelle Ergebnis\.' : 'Your message is already with the agent\. Send another one to add to it\.'/);
     // No `restore`, because undo() reads one as "her words came back" and
     // appends a sentence saying which box to look in. By now they are in
     // neither box and the message is in the thread.

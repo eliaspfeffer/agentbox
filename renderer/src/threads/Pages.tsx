@@ -514,7 +514,7 @@ export function ThreadCells({ item, product, now, person, tab, products, onProje
   // which is why it is handed your teammates' first names.
   const said = messageLine(item, product, team?.me ?? null, (id) => firstName(team?.byId.get(id) ?? null));
   if (said) {
-    return <RowCells limit={item.status === 'open' ? limits[item.id] : undefined} transcribing={transcribing} live={liveIds.has(item.id)} title={<MessageTitle people={said.people} fromMe={said.fromMe} text={said.text} />} pinned={!!item.pinned && item.status !== 'done'} where="Message" person={person}
+    return <RowCells limit={item.status === 'open' || item.status === 'blocked' ? limits[item.id] : undefined} transcribing={transcribing} live={liveIds.has(item.id)} title={<MessageTitle people={said.people} fromMe={said.fromMe} text={said.text} />} pinned={!!item.pinned && item.status !== 'done'} where="Message" person={person}
       priority={messagePriority(item)} updatedAt={when} now={now} action={action} />;
   }
   // ONLY THE UNUSUAL CASE WEARS A MARK (2026-10-02). Shared with the team is
@@ -527,7 +527,7 @@ export function ThreadCells({ item, product, now, person, tab, products, onProje
   // AND HOW MANY TASKS IT FILED STILL WAIT FOR A YES (w-d2744c6daa), in the
   // faint words a repeating task uses for its schedule: "a little bit of text
   // that gives you extra information if you need to know."
-  return <RowCells limit={item.status === 'open' ? limits[item.id] : undefined} transcribing={transcribing} live={liveIds.has(item.id)} title={rowTitle(item)} aside={toApproveWords(waiting.get(`${item.product}/${item.id}`))} shared={seen === 'people'} chosen={chosen} lock={lock} held={notStarted(item)} pinned={!!item.pinned && item.status !== 'done'} where={projectCell} person={person}
+  return <RowCells limit={item.status === 'open' || item.status === 'blocked' ? limits[item.id] : undefined} transcribing={transcribing} live={liveIds.has(item.id)} title={rowTitle(item)} aside={toApproveWords(waiting.get(`${item.product}/${item.id}`))} shared={seen === 'people'} chosen={chosen} lock={lock} held={notStarted(item)} pinned={!!item.pinned && item.status !== 'done'} where={projectCell} person={person}
     priority={item.priority ?? 0} updatedAt={when} now={now} action={action} />;
 }
 

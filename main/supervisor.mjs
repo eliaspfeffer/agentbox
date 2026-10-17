@@ -9,7 +9,7 @@ import { taskFolderPath, real, restoreTaskFolder } from './task-folders.mjs';
 import { SHIP_LABEL, ShipQueue, readShipSettings, shipScriptFor } from './ship-queue.mjs';
 import { folderJob } from './task-folders-offthread.mjs';
 import { gitJob } from './git-change-offthread.mjs';
-import { queuedReplyText } from './live-replies.mjs';
+import { queuedReplyText, flushAfterTurnReplies } from './live-replies.mjs';
 import { taskCommand } from './task-commands.mjs';
 import { providerCommand, reviewTarget, nativeCommandNames } from '../shared/provider-commands.mjs';
 import {agentInstructionsUnified, readSystemTemplate, writeInstruction} from './instruction-settings.mjs';
@@ -4989,7 +4989,7 @@ export class Supervisor {
       return held.get(engine);
     };
     for (const i of rows ?? []) {
-      if (i.status !== 'open' || this.sessions.has(i.id)) continue;
+      if ((i.status !== 'open' && !(i.status === 'blocked' && (deadRunCause(i.result) === 'at-limit' || i.result === 'This run stopped because the account hit its usage limit.'))) || this.sessions.has(i.id)) continue;
       const engine = engineOf(this._engineFor(i));
       const until = heldUntil(engine);
       if (until !== null) out[i.id] = { tool: engineLabel(engine), until };
@@ -7825,6 +7825,7 @@ export class Supervisor {
               this._remoteControls?.set(JSON.stringify([item.product,item.id]),{state:'failed',at:Date.now(),mayBeActive:true,text:String(event.result || 'Claude could not complete the remote turn.')});
             }
             this._saveState(); this.onChange?.();
+            void flushAfterTurnReplies(this, session).catch(error => console.warn('zero: queued reply delivery failed:', error.message));
           }
         } catch(error) { console.warn('zero: remote turn writeback failed:',error.message); }
       }

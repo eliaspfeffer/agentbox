@@ -98,6 +98,11 @@ describe('which rows are held by a usage limit', () => {
   });
 });
 
+it('includes blocked account failures but not real answers', () => {
+ outOfUsage('claude');
+ expect(sup._waitingOnLimit([{id:'held',status:'blocked',engine:'claude',result:'This run stopped because the account hit its usage limit.'},{id:'answer',status:'blocked',engine:'claude',result:'Please review the work.'}])).toEqual({held:{tool:'Claude Code',until:RESET}});
+});
+
 describe('what the row says', () => {
   const row = { id: 'w-codex', status: 'open' };
 

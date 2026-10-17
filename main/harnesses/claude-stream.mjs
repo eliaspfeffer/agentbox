@@ -9,9 +9,14 @@ export function captureStream(session, line) {
   try {
     const obj = JSON.parse(line);
     if (obj.session_id) session.sessionId = obj.session_id;
+    if (obj.type === 'assistant' && obj.isApiErrorMessage && obj.apiError === 'usage_limit_reached') {
+      session.usageRejection = (obj.message?.content ?? []).filter(b => b.type === 'text').map(b => b.text).join('\n') || 'Usage limit reached';
+      session.result = session.usageRejection; session.resultIsError = true;
+    }
     if (obj.type === 'result') {
-      session.result = String(obj.result ?? '');
-      session.resultIsError = !!obj.is_error;
+      session.result = session.usageRejection || String(obj.result ?? '');
+      session.resultIsError = !!session.usageRejection || !!obj.is_error;
+      delete session.usageRejection;
       // A run cannot end with helpers still out. Cleared here as well as on
       // exit so the number can never outlive the thing it counts. Unless
       // something is still out in the background: then this was a turn
