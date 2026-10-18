@@ -34,6 +34,7 @@ import { Name, possessive } from '../shared/product-name.mjs';
 const CAPABILITIES = [
   'products', 'documents (read and write, any path in the product)',
   'personas and transcripts (they are documents)', 'skills', 'work items', 'past chats (read only)',
+  'recurring tasks (list, create, edit and end user-authorized schedules with the computer-local timezone)',
   'looking at a page running on this machine (look_at_page, local addresses only)',
 ];
 const MISSING = [

@@ -144,6 +144,11 @@
       "package.json"
     ],
     "asarUnpack": [
+      "mcp/**",
+      "main/**",
+      "shared/**",
+      "package.json",
+      "node_modules/**",
       "worker-permissions.json",
       "scripts/approval-server.sh",
       "scripts/memory-gate-hook.sh",
