@@ -108,7 +108,7 @@ describe('the thread page', () => {
     expect(focus).toContain("data-summary={summaryShown ? 'open' : summaryOffered ? 'rail' : undefined}");
   });
   it('says the state under the title only when neither the panel nor the rail is there to say it', () => {
-    expect(focus).toContain('lead={summarised && !summaryOffered ? <ThreadStateMark item={item} /> : null}');
+    expect(focus).toContain('lead={summarised && !summaryOffered ? <ThreadStateMark item={item} running={!!session} /> : null}');
     expect(focus).toContain('stateShown={summarised && summaryOffered}');
   });
 });
@@ -155,4 +155,13 @@ describe('the rail’s room', () => {
     expect(css).toMatch(/\.ts-rail:hover[^{]*\{[^}]*background: var\(--wash\)/);
     expect(css).not.toMatch(/\.ts-sumbtn/);
   });
+});
+
+it('shows the live worker instead of a previous waiting result in every summary shape',()=>{
+ for(const Component of [SummaryRail,SummaryPanel]) {
+  const html=draw(React.createElement(Component,{item:item({status:'blocked'}),team,running:true,onOpen:()=>{}}));
+  expect(html).toContain('ts-st-run');
+  expect(html).not.toContain('>Waiting<');
+ }
+ expect(rail({status:'blocked'})).toContain('ts-st-need');
 });

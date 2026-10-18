@@ -1186,7 +1186,7 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
          summary is closed and the Status row while it is open, so the line
          under the title leads with it only when neither is on screen, which
          is while a document fills the thread. */
-      lead={summarised && !summaryOffered ? <ThreadStateMark item={item} /> : null}
+      lead={summarised && !summaryOffered ? <ThreadStateMark item={item} running={!!session} /> : null}
       stateShown={summarised && summaryOffered}
       /* ADD PEOPLE, beside the faces (w-71e6af492d). A conversation only: the
          control decides that for itself off the record on screen, so nothing
@@ -1881,8 +1881,8 @@ export function Focus({ artifactView, previewSample, onOpenArtifact, artifactSlo
     {/* `onFinish` is the SAME ONE the three-dot menu's Mark done row takes
         (`canFinish ? onResolve : null` above), so the Status row's Done and
         that row and E are one action with one undo and one toast. */}
-    {summaryShown && <SummaryPanel item={item} team={teamCtx} onFinish={canFinish ? onResolve : null} onClose={toggleSummary} repeat={repeat} />}
-    {summaryOffered && !summaryOpen && <SummaryRail item={item} team={teamCtx} onOpen={toggleSummary} />}
+    {summaryShown && <SummaryPanel item={item} running={!!session} team={teamCtx} onFinish={canFinish ? onResolve : null} onClose={toggleSummary} repeat={repeat} />}
+    {summaryOffered && !summaryOpen && <SummaryRail item={item} running={!!session} team={teamCtx} onOpen={toggleSummary} />}
     {!direct && <TaskTerminal key={`${item.product}:${item.id}`} product={item.product} id={item.id} onOpenChange={setTerminalOpen}/>}
     </div>
     </TicketNavigation.Provider>

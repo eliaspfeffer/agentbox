@@ -352,6 +352,13 @@ describe('the command reaches the command line, and nothing else does', () => {
   });
 
 
+  it('reattaches a delivered goal reply after restart without resetting the goal',()=>{
+    const s=supervisor();
+    const plan=s.spawnPlan(row({answer:'/ziel Finish the page'}),acme(),{engine:'codex',continuation:true,resumeSessionId:'existing-thread'});
+    expect(plan.goal).toBeUndefined();
+    expect(s.codexTurnParamsFor(plan).additionalContext.agentbox_resume).toBeTruthy();
+  });
+
   it.each([false,true])('sets a Codex goal on a new task or reply (reply=%s)', continuation => {
     const s=supervisor({_engineFor:()=> 'codex'});
     const item=row(continuation ? {answer:'/ziel Finish the page'} : {body:'/ziel Finish the page'});

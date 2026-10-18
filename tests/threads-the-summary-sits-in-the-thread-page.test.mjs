@@ -29,7 +29,7 @@ describe('the top bar', () => {
   it('portals only the thread’s menu into the corner', () => {
     const portal = focus.slice(focus.indexOf('createPortal(<span className="ts-top">'));
     expect(portal.startsWith('createPortal(<span className="ts-top">{threadMenu}</span>, cornerHeaderTarget)')).toBe(true);
-    expect(focus).toContain('lead={summarised && !summaryOffered ? <ThreadStateMark item={item} /> : null}');
+    expect(focus).toContain('lead={summarised && !summaryOffered ? <ThreadStateMark item={item} running={!!session} /> : null}');
   });
   it('toggles with S only while focus is out of a text field', () => {
     expect(summary).toMatch(/useSummaryShortcut/);

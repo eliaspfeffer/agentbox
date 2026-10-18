@@ -645,6 +645,9 @@ export function createCodexWorker({
       // behind that response. `turn/interrupt` needs both ids, so the earliest
       // honest moment to know the second one is here.
       const id = params?.turn?.id ?? params?.turnId;
+      // Resuming can replay the previous turn's completion before new work starts.
+      if ((method === 'turn/completed' || method === 'turn/failed') && resumeThreadId
+        && (!worker.turnId || (id && worker.turnId !== id))) return;
       if (typeof id === 'string' && id) worker.turnId = id;
 
       if (method === 'turn/started') turnRunning = true;
@@ -736,6 +739,7 @@ export function createCodexWorker({
             try {
               const { goal } = await server.request('thread/goal/get', { threadId: resumeThreadId });
               goalStatus = goal?.status ?? null;
+              worker.emit('event', 'thread/goal/updated', { threadId: resumeThreadId, goal });
             } catch (error) {
               if (error?.code !== -32601 && !/method not found|unknown (method|variant)/i.test(error?.message ?? '')) throw error;
             }

@@ -63,3 +63,21 @@ it('preserves the selected reasoning effort for autonomous goal turns',()=>{
  const sup=Object.assign(Object.create(Supervisor.prototype),{config:{},_codexHome:()=>'/fixture',_codexModelWord:()=>'',codexModelRefusal:()=>null,codexEffortRefusal:()=>null,effectiveCodexMode:()=>null});
  expect(sup.codexThreadParamsFor({goal:{objective:'Test'},effort:'high'},'/tmp',[],null).config.model_reasoning_effort).toBe('high');
 });
+
+it.each(['active','paused','complete','budgetLimited'])('keeps the native goal status for restart recovery (%s)',status=>{
+ const session={};captureCodexEvent(session,'thread/goal/updated',{goal:{status}});
+ expect(session.goalStatus).toBe(status);
+ captureCodexEvent(session,'thread/goal/cleared',{});expect(session.goalStatus).toBeNull();
+});
+it('ignores the previous completed turn replayed while resuming before starting the new work',async()=>{
+ let handlers;
+ const server={resumeThread:vi.fn(async(p,h)=>{handlers=h;h.onNotification('turn/completed',{threadId:p.threadId,turn:{id:'old',status:'completed'}});return {thread:{id:p.threadId,turns:[]}};}),startTurn:vi.fn(async()=>({turn:{id:'new'}})),unwatch:vi.fn()};
+ const worker=createCodexWorker({server,resumeThreadId:'existing',turnParams:{input:[{type:'text',text:'Continue the test'}]}});
+ const exit=vi.fn();worker.on('exit',exit);await settle();
+ expect(exit).not.toHaveBeenCalled();expect(server.startTurn).toHaveBeenCalledOnce();
+ handlers.onNotification('turn/started',{turn:{id:'new'}});
+ handlers.onNotification('turn/completed',{turn:{id:'old',status:'completed'}});
+ expect(exit).not.toHaveBeenCalled();
+ handlers.onNotification('turn/completed',{turn:{id:'new',status:'completed'}});
+ expect(exit).toHaveBeenCalledOnce();
+});

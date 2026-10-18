@@ -180,6 +180,11 @@ export function captureCodexEvent(session, method, params) {
       return;
     }
 
+    if (method === 'thread/goal/updated' || method === 'thread/goal/cleared') {
+      session.goalStatus = p.goal?.status ?? null;
+      return;
+    }
+
     if (method === 'turn/started') {
       delete session.result;
       delete session.resultIsError;

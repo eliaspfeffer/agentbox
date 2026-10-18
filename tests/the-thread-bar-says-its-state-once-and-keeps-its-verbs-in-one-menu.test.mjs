@@ -133,7 +133,7 @@ describe('the state leads the line under the title, said once', () => {
   // with it while neither is on screen.
   it('is handed the mark by the thread page only while the summary cannot say it', () => {
     const focus = read('renderer/src/components/Focus.tsx');
-    expect(focus).toContain('lead={summarised && !summaryOffered ? <ThreadStateMark item={item} /> : null}');
+    expect(focus).toContain('lead={summarised && !summaryOffered ? <ThreadStateMark item={item} running={!!session} /> : null}');
   });
 });
 

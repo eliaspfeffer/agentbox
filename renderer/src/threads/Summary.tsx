@@ -125,9 +125,9 @@ export function useSummaryShortcut(onToggle: () => void, enabled = true) {
  * "Working" that said the same thing in other letters. Byline.tsx draws it
  * where it was handed it, in the line's own uppercase mono.
  */
-export function ThreadStateMark({ item }: { item: WorkItem }) {
+export function ThreadStateMark({ item, running = false }: { item: WorkItem; running?: boolean }) {
   const team = useContext(TeamContext);
-  const state = threadState(item);
+  const state = running ? 'running' : threadState(item);
   return <span className="ts-lead"><Glyph kind={stateGlyph(state, waitsOnYou(item, team?.me ?? null))} />{stateWordOf(item, state)}</span>;
 }
 
@@ -145,9 +145,9 @@ export function ThreadStateMark({ item }: { item: WorkItem }) {
  * word on hover. With a collapsed sidebar it mirrors the sidebar's own strip
  * of icons on the left. S still opens it, as the hover plate says.
  */
-export function SummaryRail({ item, team, onOpen }: { item: WorkItem; team: TeamView | null; onOpen: () => void }) {
+export function SummaryRail({ item, team, onOpen, running = false }: { item: WorkItem; running?: boolean; team: TeamView | null; onOpen: () => void }) {
   const me = team?.me ?? null;
-  const state = threadState(item);
+  const state = running ? 'running' : threadState(item);
   const prio = priorityIdOf(item.priority);
   const byId = team?.byId ?? new Map<string, Person>();
   const owner = ownerName(item, me, byId);
@@ -217,7 +217,8 @@ export interface RepeatHandle {
   onEnd: () => void;
 }
 
-export function SummaryPanel({ item, team, onFinish, onClose, repeat = null }: {
+export function SummaryPanel({ item, team, onFinish, onClose, repeat = null, running = false }: {
+  running?: boolean;
   item: WorkItem;
   team: TeamView | null;
   repeat?: RepeatHandle | null;
@@ -300,7 +301,7 @@ export function SummaryPanel({ item, team, onFinish, onClose, repeat = null }: {
   useEffect(() => { setMenu(null); }, [item.product, item.id]);
   const holdMenu = (which: Menu) => (el: HTMLElement | null) => { if (menu === which) menuRef.current = el; };
 
-  const state = threadState(item);
+  const state = running ? 'running' : threadState(item);
   const prio: PriorityId = priorityIdOf(valueOf<number>('priority'));
   // A thread from before you joined is yours until you share it, whatever it
   // says on disk (summary-rules.ts `whoSees`, the Team page's own rule).

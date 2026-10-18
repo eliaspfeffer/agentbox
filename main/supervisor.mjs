@@ -1072,7 +1072,7 @@ export class Supervisor {
       }
       // Gone, finished, archived, or parked waiting on her: there is no
       // stranded work here, so the memory of the session goes too.
-      if (!item || (item.status !== 'open' && item.status !== 'claimed')) {
+      if (!item || (item.status !== 'open' && item.status !== 'claimed' && !(item.status === 'blocked' && rec.engine === 'codex' && rec.goalStatus === 'active'))) {
         delete this._liveSessions[itemId];
         this._announcedRecovery.delete(itemId);
         dirty = true;
@@ -5769,7 +5769,7 @@ export class Supervisor {
      * `assistant` text event carrying the table and then result/success, so the
      * trace this app already
      * keeps puts it in the thread with nothing new written to show it. */
-    const goalInput = continuation ? item.answer : !resumeId ? item.body : null;
+    const goalInput = resumeSessionId ? null : continuation ? item.answer : !resumeId ? item.body : null;
     const goalCommand = providerCommand(goalInput, engine);
     const goalRequest = goalCommand?.name === 'goal' && goalCommand.args && !['pause','clear'].includes(goalCommand.args);
     const goal = engine === 'codex' && goalRequest
@@ -7632,6 +7632,7 @@ export class Supervisor {
     const session = {
       child, itemId: item.id, product: item.product, startedAt: Date.now(), tail: [], profile,
       command: !!plan.command, engine,
+      ...(plan.goal ? { goalStatus: 'active' } : {}),
       // Which model, so a plan that refuses it strikes that model off this login.
       ...(model ? { model } : {}),
       // AND THE FOLDER IT IS RUNNING IN, which is now the row's own rather than
@@ -7864,6 +7865,7 @@ export class Supervisor {
           // the row stranded waiting for her.
           engine,
           continuation: !!continuation,
+          ...(session.goalStatus ? { goalStatus: session.goalStatus } : {}),
           startedAt: session.startedAt,
           // A cloud run's transcript reaches this Mac only when its work is
           // brought home, so a restart that finds none waits for that rather
@@ -7876,6 +7878,11 @@ export class Supervisor {
         // across as many replies as she writes.
         this.rememberRowSession(item, { sessionId: session.sessionId, cwd, profile, engine, startedAt: session.startedAt });
         this._saveState();
+      }
+      if (engine === 'codex' && ['thread/goal/updated', 'thread/goal/cleared'].includes(frame[0])) {
+        const remembered = this._liveSessions[item.id];
+        if (remembered) { remembered.goalStatus = session.goalStatus; this._saveState(); }
+        this.onChange?.();
       }
       // THE SENTENCE BEING TYPED, WHILE IT IS BEING TYPED. This is the only
       // reader of the partial frames and it writes nothing to disk; a push

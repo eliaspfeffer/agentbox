@@ -235,3 +235,14 @@ describe('the one line she actually sees', () => {
     expect(recoveryToast(null)).toBe(null);
   });
 });
+
+describe('a native goal survives a stale waiting status',()=>{
+ it.each(['active','paused',undefined])('recovers only a recorded active goal (%s)',goalStatus=>{
+  const item={...ITEM,status:'blocked'};sup=build([item]);
+  sup.config.codexBin='codex';sup.transcriptFile=()=>'/fixture/transcript';
+  sup._roomFor=()=>true;
+  sup._liveSessions[item.id]={sessionId:'goal-thread',product:item.product,engine:'codex',goalStatus};
+  const out=sup.recoverInterrupted('startup');
+  expect(out.resumed).toBe(goalStatus==='active'?1:0);
+ });
+});
