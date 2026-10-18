@@ -5769,7 +5769,7 @@ export class Supervisor {
      * `assistant` text event carrying the table and then result/success, so the
      * trace this app already
      * keeps puts it in the thread with nothing new written to show it. */
-    const goalInput = continuation ? item.answer : item.body;
+    const goalInput = continuation ? item.answer : !resumeId ? item.body : null;
     const goalCommand = providerCommand(goalInput, engine);
     const goalRequest = goalCommand?.name === 'goal' && goalCommand.args && !['pause','clear'].includes(goalCommand.args);
     const goal = engine === 'codex' && goalRequest

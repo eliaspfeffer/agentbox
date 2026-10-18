@@ -346,6 +346,11 @@ describe('the command reaches the command line, and nothing else does', () => {
   });
 
   const promptOf = (args) => args[args.indexOf('-p') + 1];
+  it('does not replace the original goal when its conversation resumes',()=>{
+    const plan=supervisor().spawnPlan(row({body:'/ziel Finish the page'}),acme(),{engine:'codex',resumeSessionId:'existing-thread'});
+    expect(plan.goal).toBeUndefined();
+  });
+
 
   it.each([false,true])('sets a Codex goal on a new task or reply (reply=%s)', continuation => {
     const s=supervisor({_engineFor:()=> 'codex'});
