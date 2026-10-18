@@ -492,6 +492,7 @@ export function createCodexWorker({
   worker.stderr = stderr;
   worker.threadId = resumeThreadId ?? null;
   let reattached = false;
+  let acceptingTurns = !resumeThreadId;
   let goalStatus = turnParams.goal ? 'active' : null;
   let turnRunning = false;
   worker.turnId = null;
@@ -639,6 +640,8 @@ export function createCodexWorker({
 
   const handlers = {
     onNotification: (method, params) => {
+      // Resume replays old lifecycle events before this worker has requested work.
+      if (!acceptingTurns && (method.startsWith('turn/') || method.startsWith('item/'))) return;
       // The turn id arrives on the notification as well as on the `turn/start`
       // response, and this is the earlier of the two: `turn/start` resolves
       // when the turn is ACCEPTED, and the server can pack `turn/started` in
@@ -765,6 +768,7 @@ export function createCodexWorker({
       // Reconnect to live work without posting another recovery turn.
       if (turnParams.additionalContext?.agentbox_resume && (started.activeTurn || goalStatus === 'active')) {
         reattached = true;
+        acceptingTurns = true;
         worker.turnId = started.activeTurn?.id ?? worker.turnId;
         turnRunning = !!started.activeTurn || turnRunning;
         worker.emit('spawn');
@@ -785,6 +789,8 @@ export function createCodexWorker({
         return null;
       }
       worker.emit('spawn');
+      acceptingTurns = true;
+      worker.turnId = null;
       if (turnParams.goal) return server.request('thread/goal/set', { threadId: worker.threadId, ...turnParams.goal, status: 'active', origin: 'user' });
       return turnParams.reviewTarget
         ? server.request('review/start', { threadId: worker.threadId, target: turnParams.reviewTarget, delivery: 'inline' })

@@ -81,3 +81,9 @@ it('ignores the previous completed turn replayed while resuming before starting 
  handlers.onNotification('turn/completed',{turn:{id:'new',status:'completed'}});
  expect(exit).toHaveBeenCalledOnce();
 });
+
+it('does not mistake replayed start and completion notifications for the newly requested turn',async()=>{
+ const server={resumeThread:vi.fn(async(p,h)=>{h.onNotification('turn/started',{turn:{id:'previous'}});h.onNotification('turn/completed',{turn:{id:'previous',status:'completed'}});return {thread:{id:p.threadId,turns:[]}};}),startTurn:vi.fn(async()=>({turn:{id:'new'}})),unwatch:vi.fn()};
+ const worker=createCodexWorker({server,resumeThreadId:'existing',turnParams:{input:[{type:'text',text:'A fresh reply'}]}});const exit=vi.fn();worker.on('exit',exit);await settle();
+ expect(exit).not.toHaveBeenCalled();expect(server.startTurn).toHaveBeenCalledOnce();worker.kill();
+});
