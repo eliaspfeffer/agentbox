@@ -492,6 +492,8 @@ export function createCodexWorker({
   worker.stderr = stderr;
   worker.threadId = resumeThreadId ?? null;
   let reattached = false;
+  let goalStatus = turnParams.goal ? 'active' : null;
+  let turnRunning = false;
   worker.turnId = null;
 
   let ended = false;
@@ -645,6 +647,12 @@ export function createCodexWorker({
       const id = params?.turn?.id ?? params?.turnId;
       if (typeof id === 'string' && id) worker.turnId = id;
 
+      if (method === 'turn/started') turnRunning = true;
+      if (method === 'thread/goal/updated' || method === 'thread/goal/cleared') {
+        goalStatus = params?.goal?.status ?? null;
+        if (!turnRunning && goalStatus !== 'active' && worker.turnId) end(0, null);
+      }
+
       if (method === 'mcpServer/startupStatus/updated') readStoreStatus(params);
 
       worker.emit('event', method, params);
@@ -658,6 +666,9 @@ export function createCodexWorker({
         ? params.turn.status
         : (method === 'turn/failed' ? 'failed' : 'completed');
       if (status === 'inProgress') return;
+      turnRunning = false;
+      // Native goals schedule their own next turn; retain the watcher between turns.
+      if (status === 'completed' && goalStatus === 'active') return;
       if (status !== 'completed') say(troubleText(params?.turn));
       end(status === 'completed' ? 0 : 1, null);
     },
@@ -721,6 +732,14 @@ export function createCodexWorker({
             const page = await server.request('thread/turns/list', { threadId: resumeThreadId, limit: 1, sortDirection: 'desc', itemsView: 'summary' });
             activeTurn = page?.data?.find(turn => turn.status === 'inProgress');
           }
+          if (turnParams.additionalContext?.agentbox_resume && server.request) {
+            try {
+              const { goal } = await server.request('thread/goal/get', { threadId: resumeThreadId });
+              goalStatus = goal?.status ?? null;
+            } catch (error) {
+              if (error?.code !== -32601 && !/method not found|unknown (method|variant)/i.test(error?.message ?? '')) throw error;
+            }
+          }
           return { threadId: resumeThreadId, activeTurn };
         })
         : server.startThread(params, handlers);
@@ -740,9 +759,10 @@ export function createCodexWorker({
       }
       worker.threadId = threadId;
       // Reconnect to live work without posting another recovery turn.
-      if (turnParams.additionalContext?.agentbox_resume && started.activeTurn) {
+      if (turnParams.additionalContext?.agentbox_resume && (started.activeTurn || goalStatus === 'active')) {
         reattached = true;
-        worker.turnId = started.activeTurn.id;
+        worker.turnId = started.activeTurn?.id ?? worker.turnId;
+        turnRunning = !!started.activeTurn || turnRunning;
         worker.emit('spawn');
         return null;
       }
@@ -761,6 +781,7 @@ export function createCodexWorker({
         return null;
       }
       worker.emit('spawn');
+      if (turnParams.goal) return server.request('thread/goal/set', { threadId: worker.threadId, ...turnParams.goal, status: 'active', origin: 'user' });
       return turnParams.reviewTarget
         ? server.request('review/start', { threadId: worker.threadId, target: turnParams.reviewTarget, delivery: 'inline' })
         : server.startTurn(worker.threadId, turnParams);

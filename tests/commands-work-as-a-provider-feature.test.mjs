@@ -17,7 +17,7 @@ function setup(){return {server:{request:vi.fn(async(method)=> method==='thread/
 describe('Codex operations',()=>{
  it('reads goals on the same thread',async()=>{const t=setup();expect(await runCodexCommand({...t,name:'goal',args:''})).toContain('Ship');expect(t.server.request).toHaveBeenCalledWith('thread/goal/get',{threadId:'same-thread'});});
  it('refuses goal creation before it can start unmanaged work',async()=>{const t=setup();await expect(runCodexCommand({...t,name:'goal',args:'Ship $(not a shell)'})).rejects.toThrow('worker lifecycle');expect(t.server.request).not.toHaveBeenCalled();});
- it('pauses and clears through native operations',async()=>{const t=setup();await runCodexCommand({...t,name:'goal',args:'pause'});await runCodexCommand({...t,name:'goal',args:'clear'});expect(t.server.request).toHaveBeenCalledWith('thread/goal/set',{threadId:'same-thread',status:'paused'});expect(t.server.request).toHaveBeenCalledWith('thread/goal/clear',{threadId:'same-thread'});});
+ it('pauses and clears through native operations',async()=>{const t=setup();await runCodexCommand({...t,name:'goal',args:'pause'});await runCodexCommand({...t,name:'goal',args:'clear'});expect(t.server.request).toHaveBeenCalledWith('thread/goal/set',{threadId:'same-thread',status:'paused',origin:'user'});expect(t.server.request).toHaveBeenCalledWith('thread/goal/clear',{threadId:'same-thread',origin:'user'});});
  it('discovers skills for the task directory',async()=>{const t=setup();expect(await runCodexCommand({...t,name:'skills',args:''})).toContain('test');expect(t.server.request).toHaveBeenCalledWith('skills/list',{cwds:['/project'],forceReload:true});});
  it('refuses arguments that would otherwise silently do nothing',async()=>{const t=setup();await expect(runCodexCommand({...t,name:'skills',args:'delete all'})).rejects.toThrow('on its own');expect(t.server.request).not.toHaveBeenCalled();});
  it('does not implement permission changes or shell execution accidentally',async()=>{const t=setup();await expect(runCodexCommand({...t,name:'permissions',args:'full-access'})).rejects.toThrow();expect(t.server.request).not.toHaveBeenCalled();});
@@ -53,6 +53,12 @@ function taskFixture(engine='codex') {
  return {sup,item,writes,server};
 }
 describe('task command persistence and isolation',()=>{
+ it.each(['/ziel Finish the page','/goal Finish the page','/ziel resume'])('forwards %s to the tracked worker',async text=>{
+  const {sup}=taskFixture();
+  expect((await taskCommand(sup,'p','one',text)).state).toBe('forward');
+  expect(sup._codexServer).not.toHaveBeenCalled();
+ });
+
  it('persists model and effort through the store without sending an agent message',async()=>{
   const {sup,writes,item}=taskFixture('claude');
   expect((await taskCommand(sup,'p','one','/model opus')).state).toBe('done');

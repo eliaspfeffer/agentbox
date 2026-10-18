@@ -2,6 +2,7 @@
 // provider acknowledgement. Claude can batch several queued inputs at its next
 // tool boundary. Serialize acknowledgement + ledger commits separately so
 // neither an out-of-order response nor a rejected input reorders the history.
+import { commandPrompt } from '../shared/claude-commands.mjs';
 import { NAME } from '../shared/product-name.mjs';
 import { TURN_CLOSED } from './claude-input.mjs';
 // WHAT A WORKER IS TOLD WHEN THEY TYPE AT IT WHILE IT IS STILL WORKING.
@@ -56,7 +57,7 @@ export function submitReply(supervisor, payload, commit) {
       const pending = supervisor.store.readItem(product, id);
       if (pending?.answer && !supervisor._answerDelivered(pending)) input = queuedReplyText(pending, supervisor.store.readHistory(product, id), row => supervisor._answerDelivered(row)) + '\n\n' + answer;
     }
-    const taken = session.child.steer(session.remoteIdle ? input : liveReplyBrief(input));
+    const taken = session.child.steer(session.remoteIdle ? (commandPrompt(input, supervisor._nativeCommands?.[id]) ?? input) : liveReplyBrief(input));
     // SENT NOW: her words go in line first, then the step is cut, in the same
     // tick, so the cut turn's result can never close the input ahead of them.
     // A cut that fails leaves the message waiting its turn, which is still sent.

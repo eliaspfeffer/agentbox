@@ -347,6 +347,15 @@ describe('the command reaches the command line, and nothing else does', () => {
 
   const promptOf = (args) => args[args.indexOf('-p') + 1];
 
+  it.each([false,true])('sets a Codex goal on a new task or reply (reply=%s)', continuation => {
+    const s=supervisor({_engineFor:()=> 'codex'});
+    const item=row(continuation ? {answer:'/ziel Finish the page'} : {body:'/ziel Finish the page'});
+    const plan=s.spawnPlan(item,acme(),{continuation,engine:'codex'});
+    expect(plan.goal).toEqual({objective:'Finish the page'});
+    expect(s.codexTurnParamsFor(plan)).toEqual({goal:{objective:'Finish the page'}});
+  });
+
+
   it('sends the command as the whole prompt, with no brief around it', () => {
     // The brief would be discarded by Claude Code anyway (the 142-line
     // measurement at the top of this file). Sending it would only mean paying

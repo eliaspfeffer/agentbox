@@ -11,7 +11,7 @@ export const CODEX_COMMANDS = [
  command('usage','Show the account’s last reported usage'),
  command('skills','List skills available in this project'),
  command('mcp','Show this conversation’s connected MCP servers'),
- command('goal','View, pause, or clear this conversation’s goal','[pause | clear]'),
+ command('goal','Set a goal and keep working until it is complete','[objective | resume | pause | clear]', ['ziel']),
  command('diff','Show staged and unstaged changes'),
  command('rename','Rename this task','<name>'),
  command('copy','Copy the last assistant response'),

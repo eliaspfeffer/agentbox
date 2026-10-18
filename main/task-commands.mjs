@@ -87,8 +87,9 @@ export async function taskCommand(sup, productSlug, id, text) {
   catch(error) { return publish('failed',error.message,op.name); }
  }
  if(sup._compactionJobs?.has(key))return {state:'busy',text:'A command is already running on this task. Your draft has been kept.',at:Date.now()};
- const readOnly = ['status','usage','skills','diff','copy','help'].includes(op.name) || (['model','effort'].includes(op.name) && !op.args);
+ const readOnly = (op.name === 'goal' && (!op.args || ['pause','clear'].includes(op.args))) || ['status','usage','skills','diff','copy','help'].includes(op.name) || (['model','effort'].includes(op.name) && !op.args);
  if(sup.sessions.has(id) && !readOnly)return publish('busy',sup.sessions.get(id).remoteIdle?'Turn off Remote Control before changing this task’s local settings. Your draft has been kept.':'Wait for the current response to finish. Your draft has been kept.',op.name);
+ if(op.name === 'goal' && op.args && !['pause','clear'].includes(op.args)) return publish('forward', '', op.name);
  const product=sup.store.listProducts().find(p=>p.slug===productSlug);
  if(!product)return publish('failed','This project is no longer available.',op.name);
  const cwd=product.repoPath&&fs.existsSync(product.repoPath)?product.repoPath:product.dir;
@@ -141,7 +142,6 @@ export async function taskCommand(sup, productSlug, id, text) {
    const usage = home === sup._codexUsageHome() ? sup.codexUsage() : null;
    result=usage ? `Last reported ${new Date(usage.at).toLocaleString()} (may be stale)\n${usage.limits.map(l=>`${l.name}: ${l.percent}% used${l.resetsAt ? '; resets '+new Date(l.resetsAt).toLocaleString() : ''}`).join('\n')}` : 'No usage has been reported for this conversation’s account yet.';
   } else {
-   if(op.name==='goal' && op.args && !['pause','clear'].includes(op.args)) throw new Error(`Setting or resuming a Codex goal is not connected to ${NAME}’s worker lifecycle yet. Your draft has been kept.`);
    if(!rec?.sessionId&&op.name!=='skills')throw new Error('This task has no saved conversation yet. Send a message first.');
    result=await harness.runCommand(sup,{home,threadId:rec?.sessionId,cwd,...op});
    if(op.name==='status')result=`Task model: ${model||'provider default'}\nTask effort: ${item.effort||'provider default'}\n${result}`;

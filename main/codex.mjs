@@ -180,6 +180,13 @@ export function captureCodexEvent(session, method, params) {
       return;
     }
 
+    if (method === 'turn/started') {
+      delete session.result;
+      delete session.resultIsError;
+      delete session.codexFinalAnswer;
+      return;
+    }
+
     if (method === 'item/completed') {
       const item = p.item ?? {};
       if (item.type === 'exitedReviewMode' && typeof item.review === 'string' && item.review.trim()) {

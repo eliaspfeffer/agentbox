@@ -5,9 +5,9 @@ export async function runCodexCommand({server,threadId,cwd,name,args=''}) {
  if(['skills','mcp','status','copy'].includes(name)&&args)throw new Error(`Run /${name} on its own. Your draft has been kept.`);
  if(name==='goal') {
   if(!args){const {goal}=await server.request('thread/goal/get',{threadId});return goal?`${goal.objective}\nStatus: ${goal.status}\nTokens used: ${goal.tokensUsed}`:'This conversation has no goal.';}
-  if(args==='clear'){await server.request('thread/goal/clear',{threadId});return 'Goal cleared.';}
+  if(args==='clear'){await server.request('thread/goal/clear',{threadId,origin:'user'});return 'Goal cleared.';}
   if(args!=='pause')throw new Error(`Setting or resuming a Codex goal is not connected to ${NAME}’s worker lifecycle yet. Your draft has been kept.`);
-  await server.request('thread/goal/set',{threadId,status:'paused'});
+  await server.request('thread/goal/set',{threadId,status:'paused',origin:'user'});
   return 'Goal paused.';
  }
  if(name==='skills') {

@@ -5769,9 +5769,15 @@ export class Supervisor {
      * `assistant` text event carrying the table and then result/success, so the
      * trace this app already
      * keeps puts it in the thread with nothing new written to show it. */
+    const goalInput = continuation ? item.answer : item.body;
+    const goalCommand = providerCommand(goalInput, engine);
+    const goalRequest = goalCommand?.name === 'goal' && goalCommand.args && !['pause','clear'].includes(goalCommand.args);
+    const goal = engine === 'codex' && goalRequest
+      ? (goalCommand.args === 'resume' ? {} : { objective: goalCommand.args }) : null;
     const review = continuation && harnessFor(engine).capabilities.nativeReview && providerCommand(item.answer, engine)?.name === 'review' ? providerCommand(item.answer, engine) : null;
     const command = continuation && harnessFor(engine).capabilities.nativeCommands ? commandPrompt(item.answer, this._nativeCommands?.[item.id]) : review ? item.answer.trim() : null;
     if (command) prompt = command;
+    if (!continuation && goalRequest && harnessFor(engine).capabilities.nativeCommands) prompt = commandPrompt(goalInput);
     // WHICH MODEL. A model named on the task wins; absent that, the workspace
     // setting, which lives in the `--model` flag inside sessionArgs. A PERSONAL
     // SESSION IS NOT GIVEN A TASK'S MODEL: it runs on the workspace's own.
@@ -5899,7 +5905,7 @@ export class Supervisor {
        never noticed because it reads `item.answerMode` directly, a few hundred
        lines up.
      */
-    return { args, recovery: !!resumeId && !forkFrom && (!rowChat || (retryInterrupted && !continuation)) && !shipFailure && !command, command: !!command, ...(review ? { reviewTarget: reviewTarget(review.args) } : {}), resumeProfile, prompt, system, resumeId, model, effort, product: product?.slug ?? null, answerMode: item?.answerMode ?? null, ...(pictures.length ? { pictures } : {}) };
+    return { args, recovery: !!resumeId && !forkFrom && (!rowChat || (retryInterrupted && !continuation)) && !shipFailure && !command, command: !!command, ...(review ? { reviewTarget: reviewTarget(review.args) } : {}), ...(goal ? { goal } : {}), resumeProfile, prompt, system, resumeId, model, effort, product: product?.slug ?? null, answerMode: item?.answerMode ?? null, ...(pictures.length ? { pictures } : {}) };
   }
 
   async composerCatalog(product, id, engine = null) {
@@ -6889,7 +6895,7 @@ export class Supervisor {
     // protocol error or running at a level she did not pick.
     const level = this.codexEffortRefusal(word, plan?.effort, home);
     if (level) throw new Error(level);
-    return workerThreadParams({
+    const params = workerThreadParams({
       cwd,
       model: word || null,
       instructions: plan?.system ?? null,
@@ -6909,6 +6915,8 @@ export class Supervisor {
       mode: (isCodexMode(plan?.answerMode) ? plan.answerMode : null)
         || this.effectiveCodexMode(plan?.product ?? ''),
     });
+    if (plan?.goal && isEffortWord(plan.effort)) params.config.model_reasoning_effort = plan.effort;
+    return params;
   }
 
   /* Whether this * word IS one the model advertises was settled in `codexThreadParamsFor`,
@@ -6917,6 +6925,7 @@ export class Supervisor {
      line in her own config.toml decides, exactly as * her terminal does.
   */
   codexTurnParamsFor(plan) {
+    if (plan?.goal) return { goal: plan.goal };
     if (plan?.reviewTarget) return { reviewTarget: plan.reviewTarget };
     const effort = typeof plan?.effort === 'string' && isEffortWord(plan.effort) ? plan.effort : null;
     // AND THE PICTURES SHE ATTACHED, AS PICTURES (MP-09). `UserInput` is an

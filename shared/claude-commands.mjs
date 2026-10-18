@@ -38,9 +38,10 @@
 // Claude Code commands at all. modes.ts says all of that at length. The menu
 // draws both lists; they are two different verbs and the menu labels them so.
 
-import { CLAUDE_COMMANDS, READ_FROM, READ_AT } from './claude-commands.generated.mjs';
+import { CLAUDE_COMMANDS as NATIVE_COMMANDS, READ_FROM, READ_AT } from './claude-commands.generated.mjs';
 
-export { CLAUDE_COMMANDS, READ_FROM, READ_AT };
+export const CLAUDE_COMMANDS = NATIVE_COMMANDS.map(c => c.name === 'goal' ? { ...c, aliases: [...c.aliases, 'ziel'] } : c);
+export { READ_FROM, READ_AT };
 
 /**
  * Every spelling that reaches a command: its own name and the aliases Claude
